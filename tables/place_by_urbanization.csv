@@ -1,0 +1,64 @@
+table,urbanization,place_of_death,death_count_status,rows,lower,upper
+place of death by urbanization,Large Central Metro,Decedent's home,exact,1,4880.0,4880.0
+place of death by urbanization,Large Central Metro,Hospice facility,exact,1,788.0,788.0
+place of death by urbanization,Large Central Metro,Medical Facility - Dead on Arrival,exact,1,18.0,18.0
+place of death by urbanization,Large Central Metro,Medical Facility - Inpatient,exact,1,7321.0,7321.0
+place of death by urbanization,Large Central Metro,Medical Facility - Outpatient or ER,exact,1,1043.0,1043.0
+place of death by urbanization,Large Central Metro,Medical Facility - Status unknown,zero,1,0.0,0.0
+place of death by urbanization,Large Central Metro,Nursing home/long term care,exact,1,1747.0,1747.0
+place of death by urbanization,Large Central Metro,Other,exact,1,821.0,821.0
+place of death by urbanization,Large Central Metro,Place of death unknown,suppressed_1_9,1,1.0,9.0
+place of death by urbanization,Large Fringe Metro,Decedent's home,exact,1,3252.0,3252.0
+place of death by urbanization,Large Fringe Metro,Hospice facility,exact,1,834.0,834.0
+place of death by urbanization,Large Fringe Metro,Medical Facility - Dead on Arrival,exact,1,38.0,38.0
+place of death by urbanization,Large Fringe Metro,Medical Facility - Inpatient,exact,1,5185.0,5185.0
+place of death by urbanization,Large Fringe Metro,Medical Facility - Outpatient or ER,exact,1,673.0,673.0
+place of death by urbanization,Large Fringe Metro,Medical Facility - Status unknown,zero,1,0.0,0.0
+place of death by urbanization,Large Fringe Metro,Nursing home/long term care,exact,1,1479.0,1479.0
+place of death by urbanization,Large Fringe Metro,Other,exact,1,541.0,541.0
+place of death by urbanization,Large Fringe Metro,Place of death unknown,zero,1,0.0,0.0
+place of death by urbanization,Medium Metro,Decedent's home,exact,1,3830.0,3830.0
+place of death by urbanization,Medium Metro,Hospice facility,exact,1,895.0,895.0
+place of death by urbanization,Medium Metro,Medical Facility - Dead on Arrival,exact,1,19.0,19.0
+place of death by urbanization,Medium Metro,Medical Facility - Inpatient,exact,1,5148.0,5148.0
+place of death by urbanization,Medium Metro,Medical Facility - Outpatient or ER,exact,1,612.0,612.0
+place of death by urbanization,Medium Metro,Medical Facility - Status unknown,zero,1,0.0,0.0
+place of death by urbanization,Medium Metro,Nursing home/long term care,exact,1,1853.0,1853.0
+place of death by urbanization,Medium Metro,Other,exact,1,640.0,640.0
+place of death by urbanization,Medium Metro,Place of death unknown,suppressed_1_9,1,1.0,9.0
+place of death by urbanization,Micropolitan (Nonmetro),Decedent's home,exact,1,1820.0,1820.0
+place of death by urbanization,Micropolitan (Nonmetro),Hospice facility,exact,1,318.0,318.0
+place of death by urbanization,Micropolitan (Nonmetro),Medical Facility - Dead on Arrival,exact,1,29.0,29.0
+place of death by urbanization,Micropolitan (Nonmetro),Medical Facility - Inpatient,exact,1,2330.0,2330.0
+place of death by urbanization,Micropolitan (Nonmetro),Medical Facility - Outpatient or ER,exact,1,351.0,351.0
+place of death by urbanization,Micropolitan (Nonmetro),Medical Facility - Status unknown,zero,1,0.0,0.0
+place of death by urbanization,Micropolitan (Nonmetro),Nursing home/long term care,exact,1,1121.0,1121.0
+place of death by urbanization,Micropolitan (Nonmetro),Other,exact,1,279.0,279.0
+place of death by urbanization,Micropolitan (Nonmetro),Place of death unknown,suppressed_1_9,1,1.0,9.0
+place of death by urbanization,NonCore (Nonmetro),Decedent's home,exact,1,1205.0,1205.0
+place of death by urbanization,NonCore (Nonmetro),Hospice facility,exact,1,159.0,159.0
+place of death by urbanization,NonCore (Nonmetro),Medical Facility - Dead on Arrival,exact,1,16.0,16.0
+place of death by urbanization,NonCore (Nonmetro),Medical Facility - Inpatient,exact,1,1638.0,1638.0
+place of death by urbanization,NonCore (Nonmetro),Medical Facility - Outpatient or ER,exact,1,291.0,291.0
+place of death by urbanization,NonCore (Nonmetro),Medical Facility - Status unknown,zero,1,0.0,0.0
+place of death by urbanization,NonCore (Nonmetro),Nursing home/long term care,exact,1,723.0,723.0
+place of death by urbanization,NonCore (Nonmetro),Other,exact,1,177.0,177.0
+place of death by urbanization,NonCore (Nonmetro),Place of death unknown,suppressed_1_9,1,1.0,9.0
+place of death by urbanization,Not Available,Decedent's home,exact,1,88.0,88.0
+place of death by urbanization,Not Available,Hospice facility,exact,1,22.0,22.0
+place of death by urbanization,Not Available,Medical Facility - Dead on Arrival,suppressed_1_9,1,1.0,9.0
+place of death by urbanization,Not Available,Medical Facility - Inpatient,exact,1,313.0,313.0
+place of death by urbanization,Not Available,Medical Facility - Outpatient or ER,exact,1,24.0,24.0
+place of death by urbanization,Not Available,Medical Facility - Status unknown,zero,1,0.0,0.0
+place of death by urbanization,Not Available,Nursing home/long term care,exact,1,88.0,88.0
+place of death by urbanization,Not Available,Other,exact,1,17.0,17.0
+place of death by urbanization,Not Available,Place of death unknown,zero,1,0.0,0.0
+place of death by urbanization,Small Metro,Decedent's home,exact,1,1715.0,1715.0
+place of death by urbanization,Small Metro,Hospice facility,exact,1,382.0,382.0
+place of death by urbanization,Small Metro,Medical Facility - Dead on Arrival,suppressed_1_9,1,1.0,9.0
+place of death by urbanization,Small Metro,Medical Facility - Inpatient,exact,1,2211.0,2211.0
+place of death by urbanization,Small Metro,Medical Facility - Outpatient or ER,exact,1,284.0,284.0
+place of death by urbanization,Small Metro,Medical Facility - Status unknown,zero,1,0.0,0.0
+place of death by urbanization,Small Metro,Nursing home/long term care,exact,1,877.0,877.0
+place of death by urbanization,Small Metro,Other,exact,1,269.0,269.0
+place of death by urbanization,Small Metro,Place of death unknown,zero,1,0.0,0.0

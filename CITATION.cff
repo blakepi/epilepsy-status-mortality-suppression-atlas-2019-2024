@@ -1,0 +1,21 @@
+cff-version: 1.2.0
+message: "If you use this software or derived aggregate-data analysis, please cite it using the metadata from this file."
+title: "Suppression-Aware County-Level Epilepsy and Status Epilepticus Mortality in the United States, 2019-2024"
+version: "1.0.0"
+date-released: "2026-06-14"
+authors:
+  - family-names: "Pierpoint"
+    given-names: "Gregory"
+    name-particle: "B.S."
+    orcid: "https://orcid.org/0000-0001-8288-8549"
+    affiliation: "Macon & Joan Brock Virginia Health Sciences, Eastern Virginia Medical School at Old Dominion University"
+keywords:
+  - epilepsy
+  - status epilepticus
+  - mortality
+  - CDC WONDER
+  - small-cell suppression
+  - rural health
+  - ecological study
+license: MIT
+repository-code: "https://github.com/pierpogb/epilepsy-status-mortality-suppression-atlas-2019-2024"

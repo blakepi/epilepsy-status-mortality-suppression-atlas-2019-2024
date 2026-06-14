@@ -1,0 +1,85 @@
+table,urbanization,age_group,death_count_status,rows,lower,upper
+age group by urbanization,Large Central Metro,1-4 years,exact,1,203.0,203.0
+age group by urbanization,Large Central Metro,15-24 years,exact,1,954.0,954.0
+age group by urbanization,Large Central Metro,25-34 years,exact,1,1217.0,1217.0
+age group by urbanization,Large Central Metro,35-44 years,exact,1,1226.0,1226.0
+age group by urbanization,Large Central Metro,45-54 years,exact,1,1593.0,1593.0
+age group by urbanization,Large Central Metro,5-14 years,exact,1,489.0,489.0
+age group by urbanization,Large Central Metro,55-64 years,exact,1,2688.0,2688.0
+age group by urbanization,Large Central Metro,65-74 years,exact,1,3511.0,3511.0
+age group by urbanization,Large Central Metro,75-84 years,exact,1,2743.0,2743.0
+age group by urbanization,Large Central Metro,85+ years,exact,1,1854.0,1854.0
+age group by urbanization,Large Central Metro,< 1 year,exact,1,143.0,143.0
+age group by urbanization,Large Central Metro,Not Stated,zero,1,0.0,0.0
+age group by urbanization,Large Fringe Metro,1-4 years,exact,1,156.0,156.0
+age group by urbanization,Large Fringe Metro,15-24 years,exact,1,637.0,637.0
+age group by urbanization,Large Fringe Metro,25-34 years,exact,1,740.0,740.0
+age group by urbanization,Large Fringe Metro,35-44 years,exact,1,790.0,790.0
+age group by urbanization,Large Fringe Metro,45-54 years,exact,1,995.0,995.0
+age group by urbanization,Large Fringe Metro,5-14 years,exact,1,332.0,332.0
+age group by urbanization,Large Fringe Metro,55-64 years,exact,1,1933.0,1933.0
+age group by urbanization,Large Fringe Metro,65-74 years,exact,1,2578.0,2578.0
+age group by urbanization,Large Fringe Metro,75-84 years,exact,1,2246.0,2246.0
+age group by urbanization,Large Fringe Metro,85+ years,exact,1,1501.0,1501.0
+age group by urbanization,Large Fringe Metro,< 1 year,exact,1,94.0,94.0
+age group by urbanization,Large Fringe Metro,Not Stated,zero,1,0.0,0.0
+age group by urbanization,Medium Metro,1-4 years,exact,1,140.0,140.0
+age group by urbanization,Medium Metro,15-24 years,exact,1,600.0,600.0
+age group by urbanization,Medium Metro,25-34 years,exact,1,782.0,782.0
+age group by urbanization,Medium Metro,35-44 years,exact,1,878.0,878.0
+age group by urbanization,Medium Metro,45-54 years,exact,1,1177.0,1177.0
+age group by urbanization,Medium Metro,5-14 years,exact,1,337.0,337.0
+age group by urbanization,Medium Metro,55-64 years,exact,1,2251.0,2251.0
+age group by urbanization,Medium Metro,65-74 years,exact,1,2762.0,2762.0
+age group by urbanization,Medium Metro,75-84 years,exact,1,2458.0,2458.0
+age group by urbanization,Medium Metro,85+ years,exact,1,1524.0,1524.0
+age group by urbanization,Medium Metro,< 1 year,exact,1,88.0,88.0
+age group by urbanization,Medium Metro,Not Stated,suppressed_1_9,1,1.0,9.0
+age group by urbanization,Micropolitan (Nonmetro),1-4 years,exact,1,63.0,63.0
+age group by urbanization,Micropolitan (Nonmetro),15-24 years,exact,1,253.0,253.0
+age group by urbanization,Micropolitan (Nonmetro),25-34 years,exact,1,336.0,336.0
+age group by urbanization,Micropolitan (Nonmetro),35-44 years,exact,1,445.0,445.0
+age group by urbanization,Micropolitan (Nonmetro),45-54 years,exact,1,615.0,615.0
+age group by urbanization,Micropolitan (Nonmetro),5-14 years,exact,1,138.0,138.0
+age group by urbanization,Micropolitan (Nonmetro),55-64 years,exact,1,1155.0,1155.0
+age group by urbanization,Micropolitan (Nonmetro),65-74 years,exact,1,1364.0,1364.0
+age group by urbanization,Micropolitan (Nonmetro),75-84 years,exact,1,1159.0,1159.0
+age group by urbanization,Micropolitan (Nonmetro),85+ years,exact,1,680.0,680.0
+age group by urbanization,Micropolitan (Nonmetro),< 1 year,exact,1,41.0,41.0
+age group by urbanization,Micropolitan (Nonmetro),Not Stated,zero,1,0.0,0.0
+age group by urbanization,NonCore (Nonmetro),1-4 years,exact,1,49.0,49.0
+age group by urbanization,NonCore (Nonmetro),15-24 years,exact,1,174.0,174.0
+age group by urbanization,NonCore (Nonmetro),25-34 years,exact,1,206.0,206.0
+age group by urbanization,NonCore (Nonmetro),35-44 years,exact,1,283.0,283.0
+age group by urbanization,NonCore (Nonmetro),45-54 years,exact,1,402.0,402.0
+age group by urbanization,NonCore (Nonmetro),5-14 years,exact,1,103.0,103.0
+age group by urbanization,NonCore (Nonmetro),55-64 years,exact,1,767.0,767.0
+age group by urbanization,NonCore (Nonmetro),65-74 years,exact,1,985.0,985.0
+age group by urbanization,NonCore (Nonmetro),75-84 years,exact,1,790.0,790.0
+age group by urbanization,NonCore (Nonmetro),85+ years,exact,1,429.0,429.0
+age group by urbanization,NonCore (Nonmetro),< 1 year,exact,1,22.0,22.0
+age group by urbanization,NonCore (Nonmetro),Not Stated,zero,1,0.0,0.0
+age group by urbanization,Not Available,1-4 years,suppressed_1_9,1,1.0,9.0
+age group by urbanization,Not Available,15-24 years,exact,1,20.0,20.0
+age group by urbanization,Not Available,25-34 years,exact,1,35.0,35.0
+age group by urbanization,Not Available,35-44 years,exact,1,25.0,25.0
+age group by urbanization,Not Available,45-54 years,exact,1,40.0,40.0
+age group by urbanization,Not Available,5-14 years,exact,1,13.0,13.0
+age group by urbanization,Not Available,55-64 years,exact,1,76.0,76.0
+age group by urbanization,Not Available,65-74 years,exact,1,122.0,122.0
+age group by urbanization,Not Available,75-84 years,exact,1,125.0,125.0
+age group by urbanization,Not Available,85+ years,exact,1,89.0,89.0
+age group by urbanization,Not Available,< 1 year,suppressed_1_9,1,1.0,9.0
+age group by urbanization,Not Available,Not Stated,zero,1,0.0,0.0
+age group by urbanization,Small Metro,1-4 years,exact,1,77.0,77.0
+age group by urbanization,Small Metro,15-24 years,exact,1,287.0,287.0
+age group by urbanization,Small Metro,25-34 years,exact,1,341.0,341.0
+age group by urbanization,Small Metro,35-44 years,exact,1,403.0,403.0
+age group by urbanization,Small Metro,45-54 years,exact,1,562.0,562.0
+age group by urbanization,Small Metro,5-14 years,exact,1,138.0,138.0
+age group by urbanization,Small Metro,55-64 years,exact,1,984.0,984.0
+age group by urbanization,Small Metro,65-74 years,exact,1,1241.0,1241.0
+age group by urbanization,Small Metro,75-84 years,exact,1,1014.0,1014.0
+age group by urbanization,Small Metro,85+ years,exact,1,648.0,648.0
+age group by urbanization,Small Metro,< 1 year,exact,1,50.0,50.0
+age group by urbanization,Small Metro,Not Stated,zero,1,0.0,0.0

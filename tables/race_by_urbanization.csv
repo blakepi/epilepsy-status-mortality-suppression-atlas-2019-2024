@@ -1,0 +1,50 @@
+table,urbanization,race,death_count_status,rows,lower,upper
+race by urbanization,Large Central Metro,American Indian or Alaska Native,exact,1,105.0,105.0
+race by urbanization,Large Central Metro,Asian,exact,1,626.0,626.0
+race by urbanization,Large Central Metro,Black or African American,exact,1,5074.0,5074.0
+race by urbanization,Large Central Metro,More than one race,exact,1,206.0,206.0
+race by urbanization,Large Central Metro,Native Hawaiian or Other Pacific Islander,exact,1,50.0,50.0
+race by urbanization,Large Central Metro,Not Available,zero,1,0.0,0.0
+race by urbanization,Large Central Metro,White,exact,1,10560.0,10560.0
+race by urbanization,Large Fringe Metro,American Indian or Alaska Native,exact,1,49.0,49.0
+race by urbanization,Large Fringe Metro,Asian,exact,1,291.0,291.0
+race by urbanization,Large Fringe Metro,Black or African American,exact,1,2491.0,2491.0
+race by urbanization,Large Fringe Metro,More than one race,exact,1,89.0,89.0
+race by urbanization,Large Fringe Metro,Native Hawaiian or Other Pacific Islander,exact,1,13.0,13.0
+race by urbanization,Large Fringe Metro,Not Available,zero,1,0.0,0.0
+race by urbanization,Large Fringe Metro,White,exact,1,9069.0,9069.0
+race by urbanization,Medium Metro,American Indian or Alaska Native,exact,1,91.0,91.0
+race by urbanization,Medium Metro,Asian,exact,1,188.0,188.0
+race by urbanization,Medium Metro,Black or African American,exact,1,2482.0,2482.0
+race by urbanization,Medium Metro,More than one race,exact,1,112.0,112.0
+race by urbanization,Medium Metro,Native Hawaiian or Other Pacific Islander,exact,1,36.0,36.0
+race by urbanization,Medium Metro,Not Available,zero,1,0.0,0.0
+race by urbanization,Medium Metro,White,exact,1,10089.0,10089.0
+race by urbanization,Micropolitan (Nonmetro),American Indian or Alaska Native,exact,1,122.0,122.0
+race by urbanization,Micropolitan (Nonmetro),Asian,exact,1,28.0,28.0
+race by urbanization,Micropolitan (Nonmetro),Black or African American,exact,1,809.0,809.0
+race by urbanization,Micropolitan (Nonmetro),More than one race,exact,1,60.0,60.0
+race by urbanization,Micropolitan (Nonmetro),Native Hawaiian or Other Pacific Islander,suppressed_1_9,1,1.0,9.0
+race by urbanization,Micropolitan (Nonmetro),Not Available,zero,1,0.0,0.0
+race by urbanization,Micropolitan (Nonmetro),White,exact,1,5222.0,5222.0
+race by urbanization,NonCore (Nonmetro),American Indian or Alaska Native,exact,1,163.0,163.0
+race by urbanization,NonCore (Nonmetro),Asian,exact,1,10.0,10.0
+race by urbanization,NonCore (Nonmetro),Black or African American,exact,1,548.0,548.0
+race by urbanization,NonCore (Nonmetro),More than one race,exact,1,17.0,17.0
+race by urbanization,NonCore (Nonmetro),Native Hawaiian or Other Pacific Islander,suppressed_1_9,1,1.0,9.0
+race by urbanization,NonCore (Nonmetro),Not Available,zero,1,0.0,0.0
+race by urbanization,NonCore (Nonmetro),White,exact,1,3468.0,3468.0
+race by urbanization,Not Available,American Indian or Alaska Native,zero,1,0.0,0.0
+race by urbanization,Not Available,Asian,exact,1,10.0,10.0
+race by urbanization,Not Available,Black or African American,exact,1,97.0,97.0
+race by urbanization,Not Available,More than one race,suppressed_1_9,1,1.0,9.0
+race by urbanization,Not Available,Native Hawaiian or Other Pacific Islander,suppressed_1_9,1,1.0,9.0
+race by urbanization,Not Available,Not Available,zero,1,0.0,0.0
+race by urbanization,Not Available,White,exact,1,442.0,442.0
+race by urbanization,Small Metro,American Indian or Alaska Native,exact,1,85.0,85.0
+race by urbanization,Small Metro,Asian,exact,1,40.0,40.0
+race by urbanization,Small Metro,Black or African American,exact,1,756.0,756.0
+race by urbanization,Small Metro,More than one race,exact,1,51.0,51.0
+race by urbanization,Small Metro,Native Hawaiian or Other Pacific Islander,suppressed_1_9,1,1.0,9.0
+race by urbanization,Small Metro,Not Available,zero,1,0.0,0.0
+race by urbanization,Small Metro,White,exact,1,4808.0,4808.0

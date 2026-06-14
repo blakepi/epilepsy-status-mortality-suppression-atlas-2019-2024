@@ -1,0 +1,17 @@
+query_id,file_exists,raw_file_size,parse_success,n_rows,n_exact,n_suppressed,n_zero,n_aggregate_rows,n_location_categories,total_exact_deaths,total_population,has_notes,has_suggested_citation,warnings
+Q001_county_period_mc_g40_g41_2019_2024_zero_suppressed,True,220037,True,3143,1085,1722,335,1,3142,51388,3963296872,True,True,Connecticut county/county-equivalent rows present; verify 2022+ geography/rate caveats
+Q002_county_year_mc_g40_g41_2019_2024_zero_suppressed,True,1509636,True,18852,1350,9695,7807,0,3142,33217,1987012381,True,True,Connecticut county/county-equivalent rows present; verify 2022+ geography/rate caveats
+Q003_national_year_mc_g40_g41_2019_2024,True,6919,True,7,6,0,0,1,0,58380,3995861662,True,True,
+Q004_state_year_mc_g40_g41_2019_2024,True,26331,True,358,306,0,0,52,51,58380,5993792493,True,True,
+Q005_urbanization_year_mc_g40_g41_2019_2024,True,10846,True,50,42,0,0,8,7,58380,989617391,True,True,
+Q006_urbanization_place_mc_g40_g41_2019_2024,True,11690,True,63,47,6,10,0,7,58364,0,True,True,
+Q007_urbanization_age_mc_g40_g41_2019_2024,True,11725,True,84,75,3,6,0,7,58369,0,True,True,
+Q008_urbanization_sex_mc_g40_g41_2019_2024,True,8781,True,22,14,0,0,8,7,58380,0,True,True,
+Q009a_urbanization_race6_mc_g40_g41_2019_2024,True,12687,True,49,36,5,8,0,7,58357,0,True,True,
+Q009b_urbanization_hispanic_mc_g40_g41_2019_2024,True,10313,True,21,19,2,0,0,7,58370,0,True,True,
+Q010_urbanization_year_mc_g40_g41_and_u071_2019_2024,True,11111,True,50,30,5,7,8,7,1918,989617391,True,True,
+Q011_state_year_uc_g40_g41_2019_2024,True,24607,True,306,281,25,0,0,51,22124,1997930831,True,True,
+Q012_urbanization_year_uc_g40_g41_2019_2024,True,10822,True,50,42,0,0,8,7,22306,989617391,True,True,
+Q013_national_age_year_mc_g40_g41_2019_2024,True,11985,True,72,66,1,5,0,0,58379,1997930831,True,True,
+Q014_county_period_uc_g40_g41_2019_2024_zero_suppressed,True,223496,True,3143,504,1866,772,1,3142,16650,3963296872,True,True,Connecticut county/county-equivalent rows present; verify 2022+ geography/rate caveats
+Q015_state_period_mc_g40_g41_2019_2024,True,8856,True,52,51,0,0,1,51,58380,3995861662,True,True,

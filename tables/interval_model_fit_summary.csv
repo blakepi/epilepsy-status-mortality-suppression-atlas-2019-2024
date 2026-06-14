@@ -1,0 +1,3 @@
+model_family,n_rows,converged,message,interval_log_likelihood,alpha
+interval_nb_rurality_only,3131,True,CONVERGENCE: RELATIVE REDUCTION OF F <= FACTR*EPSMCH,-5172.037394127628,0.14461686104672375
+interval_nb_rurality_svi,3131,True,CONVERGENCE: RELATIVE REDUCTION OF F <= FACTR*EPSMCH,-5169.445416059827,0.14442093177236504

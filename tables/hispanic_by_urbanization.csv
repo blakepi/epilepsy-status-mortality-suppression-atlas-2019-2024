@@ -1,0 +1,22 @@
+table,urbanization,hispanic_origin,death_count_status,rows,lower,upper
+Hispanic origin by urbanization,Large Central Metro,Hispanic or Latino,exact,1,3032.0,3032.0
+Hispanic origin by urbanization,Large Central Metro,Not Hispanic or Latino,exact,1,13487.0,13487.0
+Hispanic origin by urbanization,Large Central Metro,Not Stated,exact,1,102.0,102.0
+Hispanic origin by urbanization,Large Fringe Metro,Hispanic or Latino,exact,1,987.0,987.0
+Hispanic origin by urbanization,Large Fringe Metro,Not Hispanic or Latino,exact,1,10992.0,10992.0
+Hispanic origin by urbanization,Large Fringe Metro,Not Stated,exact,1,23.0,23.0
+Hispanic origin by urbanization,Medium Metro,Hispanic or Latino,exact,1,1324.0,1324.0
+Hispanic origin by urbanization,Medium Metro,Not Hispanic or Latino,exact,1,11631.0,11631.0
+Hispanic origin by urbanization,Medium Metro,Not Stated,exact,1,43.0,43.0
+Hispanic origin by urbanization,Micropolitan (Nonmetro),Hispanic or Latino,exact,1,340.0,340.0
+Hispanic origin by urbanization,Micropolitan (Nonmetro),Not Hispanic or Latino,exact,1,5894.0,5894.0
+Hispanic origin by urbanization,Micropolitan (Nonmetro),Not Stated,exact,1,15.0,15.0
+Hispanic origin by urbanization,NonCore (Nonmetro),Hispanic or Latino,exact,1,168.0,168.0
+Hispanic origin by urbanization,NonCore (Nonmetro),Not Hispanic or Latino,exact,1,4033.0,4033.0
+Hispanic origin by urbanization,NonCore (Nonmetro),Not Stated,suppressed_1_9,1,1.0,9.0
+Hispanic origin by urbanization,Not Available,Hispanic or Latino,exact,1,66.0,66.0
+Hispanic origin by urbanization,Not Available,Not Hispanic or Latino,exact,1,488.0,488.0
+Hispanic origin by urbanization,Not Available,Not Stated,suppressed_1_9,1,1.0,9.0
+Hispanic origin by urbanization,Small Metro,Hispanic or Latino,exact,1,360.0,360.0
+Hispanic origin by urbanization,Small Metro,Not Hispanic or Latino,exact,1,5365.0,5365.0
+Hispanic origin by urbanization,Small Metro,Not Stated,exact,1,20.0,20.0

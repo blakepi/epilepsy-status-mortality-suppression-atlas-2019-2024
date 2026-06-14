@@ -1,0 +1,43 @@
+urbanization,year,mcod_lower,mcod_upper,ucd_lower,ucd_upper
+Large Central Metro,2019,2153,2153,917,917
+Large Central Metro,2020,2751,2751,1058,1058
+Large Central Metro,2021,2741,2741,1112,1112
+Large Central Metro,2022,3039,3039,1215,1215
+Large Central Metro,2023,2944,2944,1124,1124
+Large Central Metro,2024,2993,2993,1170,1170
+Large Fringe Metro,2019,1592,1592,686,686
+Large Fringe Metro,2020,1792,1792,691,691
+Large Fringe Metro,2021,2012,2012,781,781
+Large Fringe Metro,2022,2215,2215,869,869
+Large Fringe Metro,2023,2165,2165,870,870
+Large Fringe Metro,2024,2226,2226,842,842
+Medium Metro,2019,1628,1628,628,628
+Medium Metro,2020,1968,1968,721,721
+Medium Metro,2021,2213,2213,835,835
+Medium Metro,2022,2351,2351,865,865
+Medium Metro,2023,2353,2353,823,823
+Medium Metro,2024,2485,2485,931,931
+Micropolitan (Nonmetro),2019,844,844,305,305
+Micropolitan (Nonmetro),2020,1006,1006,359,359
+Micropolitan (Nonmetro),2021,1026,1026,375,375
+Micropolitan (Nonmetro),2022,1124,1124,387,387
+Micropolitan (Nonmetro),2023,1154,1154,424,424
+Micropolitan (Nonmetro),2024,1095,1095,367,367
+NonCore (Nonmetro),2019,527,527,212,212
+NonCore (Nonmetro),2020,686,686,237,237
+NonCore (Nonmetro),2021,673,673,246,246
+NonCore (Nonmetro),2022,755,755,265,265
+NonCore (Nonmetro),2023,766,766,265,265
+NonCore (Nonmetro),2024,803,803,294,294
+Not Available,2019,76,76,37,37
+Not Available,2020,67,67,30,30
+Not Available,2021,99,99,50,50
+Not Available,2022,91,91,43,43
+Not Available,2023,103,103,50,50
+Not Available,2024,119,119,56,56
+Small Metro,2019,763,763,315,315
+Small Metro,2020,877,877,336,336
+Small Metro,2021,969,969,348,348
+Small Metro,2022,1000,1000,354,354
+Small Metro,2023,1061,1061,401,401
+Small Metro,2024,1075,1075,412,412

@@ -1,0 +1,9 @@
+scenario,rows,modeled_deaths,suppressed_rows_included
+observed_exact_positive_only,1085,51388.0,0
+observed_exact_plus_zero,1420,51388.0,0
+suppressed_equals_1,3142,53110.0,1722
+suppressed_equals_5,3142,59998.0,1722
+suppressed_equals_9,3142,66886.0,1722
+population_scaled_residual_allocation,3142,58380.0,1722
+conservative_anti_rural_allocation,3142,58380.0,1722
+pro_rural_allocation,3142,58380.0,1722

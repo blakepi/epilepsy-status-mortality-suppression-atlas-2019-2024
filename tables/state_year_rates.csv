@@ -1,0 +1,307 @@
+query_id,row_type,year,state,state_fips,county,county_fips,urbanization,age_group,sex,race,hispanic_origin,place_of_death,deaths_raw,deaths,death_count_status,death_count_known,death_count_suppressed,death_count_zero,population,crude_rate,rate_status,notes,rate_per_100k
+Q004_state_year_mc_g40_g41_2019_2024,state,2019,Alabama,01,,,,,,,,,103,103,exact,True,False,False,4903185,2.1,known_or_blank,,2.100675377331265
+Q004_state_year_mc_g40_g41_2019_2024,state,2020,Alabama,01,,,,,,,,,120,120,exact,True,False,False,4921532,2.4,known_or_blank,,2.4382651580849215
+Q004_state_year_mc_g40_g41_2019_2024,state,2021,Alabama,01,,,,,,,,,137,137,exact,True,False,False,5039877,2.7,known_or_blank,,2.718320308213871
+Q004_state_year_mc_g40_g41_2019_2024,state,2022,Alabama,01,,,,,,,,,163,163,exact,True,False,False,5074296,3.2,known_or_blank,,3.2122682634201865
+Q004_state_year_mc_g40_g41_2019_2024,state,2023,Alabama,01,,,,,,,,,168,168,exact,True,False,False,5108468,3.3,known_or_blank,,3.2886571864598153
+Q004_state_year_mc_g40_g41_2019_2024,state,2024,Alabama,01,,,,,,,,,177,177,exact,True,False,False,5157699,3.4,known_or_blank,,3.4317628849609103
+Q004_state_year_mc_g40_g41_2019_2024,state,2019,Alaska,02,,,,,,,,,16,16,exact,True,False,False,731545,2.2,known_or_blank,,2.1871518498520257
+Q004_state_year_mc_g40_g41_2019_2024,state,2020,Alaska,02,,,,,,,,,18,18,exact,True,False,False,731158,2.5,known_or_blank,,2.461848191498965
+Q004_state_year_mc_g40_g41_2019_2024,state,2021,Alaska,02,,,,,,,,,24,24,exact,True,False,False,732673,3.3,known_or_blank,,3.275676870855075
+Q004_state_year_mc_g40_g41_2019_2024,state,2022,Alaska,02,,,,,,,,,32,32,exact,True,False,False,733583,4.4,known_or_blank,,4.36215124941554
+Q004_state_year_mc_g40_g41_2019_2024,state,2023,Alaska,02,,,,,,,,,21,21,exact,True,False,False,733406,2.9,known_or_blank,,2.863352631421068
+Q004_state_year_mc_g40_g41_2019_2024,state,2024,Alaska,02,,,,,,,,,23,23,exact,True,False,False,740133,3.1,known_or_blank,,3.1075495890603446
+Q004_state_year_mc_g40_g41_2019_2024,state,2019,Arizona,04,,,,,,,,,168,168,exact,True,False,False,7278717,2.3,known_or_blank,,2.3080990784502267
+Q004_state_year_mc_g40_g41_2019_2024,state,2020,Arizona,04,,,,,,,,,218,218,exact,True,False,False,7421401,2.9,known_or_blank,,2.937450758960471
+Q004_state_year_mc_g40_g41_2019_2024,state,2021,Arizona,04,,,,,,,,,244,244,exact,True,False,False,7276316,3.4,known_or_blank,,3.3533452917657782
+Q004_state_year_mc_g40_g41_2019_2024,state,2022,Arizona,04,,,,,,,,,221,221,exact,True,False,False,7359197,3.0,known_or_blank,,3.0030450333100203
+Q004_state_year_mc_g40_g41_2019_2024,state,2023,Arizona,04,,,,,,,,,230,230,exact,True,False,False,7431344,3.1,known_or_blank,,3.0949986974092436
+Q004_state_year_mc_g40_g41_2019_2024,state,2024,Arizona,04,,,,,,,,,258,258,exact,True,False,False,7582384,3.4,known_or_blank,,3.4026237658235194
+Q004_state_year_mc_g40_g41_2019_2024,state,2019,Arkansas,05,,,,,,,,,96,96,exact,True,False,False,3017804,3.2,known_or_blank,,3.1811211066059957
+Q004_state_year_mc_g40_g41_2019_2024,state,2020,Arkansas,05,,,,,,,,,111,111,exact,True,False,False,3030522,3.7,known_or_blank,,3.662735330745
+Q004_state_year_mc_g40_g41_2019_2024,state,2021,Arkansas,05,,,,,,,,,122,122,exact,True,False,False,3025891,4.0,known_or_blank,,4.031870282174737
+Q004_state_year_mc_g40_g41_2019_2024,state,2022,Arkansas,05,,,,,,,,,132,132,exact,True,False,False,3045637,4.3,known_or_blank,,4.334068702212377
+Q004_state_year_mc_g40_g41_2019_2024,state,2023,Arkansas,05,,,,,,,,,145,145,exact,True,False,False,3067732,4.7,known_or_blank,,4.726618883266204
+Q004_state_year_mc_g40_g41_2019_2024,state,2024,Arkansas,05,,,,,,,,,137,137,exact,True,False,False,3088354,4.4,known_or_blank,,4.436019964032621
+Q004_state_year_mc_g40_g41_2019_2024,state,2019,California,06,,,,,,,,,892,892,exact,True,False,False,39512223,2.3,known_or_blank,,2.2575292713852115
+Q004_state_year_mc_g40_g41_2019_2024,state,2020,California,06,,,,,,,,,1149,1149,exact,True,False,False,39368078,2.9,known_or_blank,,2.9186083201725013
+Q004_state_year_mc_g40_g41_2019_2024,state,2021,California,06,,,,,,,,,1111,1111,exact,True,False,False,39237836,2.8,known_or_blank,,2.831450745652742
+Q004_state_year_mc_g40_g41_2019_2024,state,2022,California,06,,,,,,,,,1176,1176,exact,True,False,False,39029342,3.0,known_or_blank,,3.013117669265344
+Q004_state_year_mc_g40_g41_2019_2024,state,2023,California,06,,,,,,,,,1193,1193,exact,True,False,False,38965193,3.1,known_or_blank,,3.0617068931238194
+Q004_state_year_mc_g40_g41_2019_2024,state,2024,California,06,,,,,,,,,1182,1182,exact,True,False,False,39431263,3.0,known_or_blank,,2.9976214558483707
+Q004_state_year_mc_g40_g41_2019_2024,state,2019,Colorado,08,,,,,,,,,178,178,exact,True,False,False,5758736,3.1,known_or_blank,,3.0909560709155617
+Q004_state_year_mc_g40_g41_2019_2024,state,2020,Colorado,08,,,,,,,,,202,202,exact,True,False,False,5807719,3.5,known_or_blank,,3.478129709787956
+Q004_state_year_mc_g40_g41_2019_2024,state,2021,Colorado,08,,,,,,,,,224,224,exact,True,False,False,5812069,3.9,known_or_blank,,3.854049220681998
+Q004_state_year_mc_g40_g41_2019_2024,state,2022,Colorado,08,,,,,,,,,299,299,exact,True,False,False,5839926,5.1,known_or_blank,,5.119927889497229
+Q004_state_year_mc_g40_g41_2019_2024,state,2023,Colorado,08,,,,,,,,,245,245,exact,True,False,False,5877610,4.2,known_or_blank,,4.168360949433529
+Q004_state_year_mc_g40_g41_2019_2024,state,2024,Colorado,08,,,,,,,,,295,295,exact,True,False,False,5957493,5.0,known_or_blank,,4.951747320559168
+Q004_state_year_mc_g40_g41_2019_2024,state,2019,Connecticut,09,,,,,,,,,76,76,exact,True,False,False,3565287,2.1,known_or_blank,,2.131665697600221
+Q004_state_year_mc_g40_g41_2019_2024,state,2020,Connecticut,09,,,,,,,,,67,67,exact,True,False,False,3557006,1.9,known_or_blank,,1.8836066062300711
+Q004_state_year_mc_g40_g41_2019_2024,state,2021,Connecticut,09,,,,,,,,,99,99,exact,True,False,False,3605597,2.7,known_or_blank,,2.74573115076366
+Q004_state_year_mc_g40_g41_2019_2024,state,2022,Connecticut,09,,,,,,,,,91,91,exact,True,False,False,3626205,2.5,known_or_blank,,2.5095106316383107
+Q004_state_year_mc_g40_g41_2019_2024,state,2023,Connecticut,09,,,,,,,,,103,103,exact,True,False,False,3617176,2.8,known_or_blank,,2.847525251743349
+Q004_state_year_mc_g40_g41_2019_2024,state,2024,Connecticut,09,,,,,,,,,119,119,exact,True,False,False,3675069,3.2,known_or_blank,,3.2380344423465246
+Q004_state_year_mc_g40_g41_2019_2024,state,2019,Delaware,10,,,,,,,,,14,14,exact,True,False,False,973764,1.4,known_or_blank,,1.4377200225105877
+Q004_state_year_mc_g40_g41_2019_2024,state,2020,Delaware,10,,,,,,,,,30,30,exact,True,False,False,986809,3.0,known_or_blank,,3.0401019852879334
+Q004_state_year_mc_g40_g41_2019_2024,state,2021,Delaware,10,,,,,,,,,38,38,exact,True,False,False,1003384,3.8,known_or_blank,,3.787184168772873
+Q004_state_year_mc_g40_g41_2019_2024,state,2022,Delaware,10,,,,,,,,,30,30,exact,True,False,False,1018396,2.9,known_or_blank,,2.9458088994850726
+Q004_state_year_mc_g40_g41_2019_2024,state,2023,Delaware,10,,,,,,,,,49,49,exact,True,False,False,1031890,4.7,known_or_blank,,4.748568161335026
+Q004_state_year_mc_g40_g41_2019_2024,state,2024,Delaware,10,,,,,,,,,40,40,exact,True,False,False,1051917,3.8,known_or_blank,,3.8025813823714225
+Q004_state_year_mc_g40_g41_2019_2024,state,2019,District of Columbia,11,,,,,,,,,14,14,exact,True,False,False,705749,2.0,known_or_blank,,1.9837080888531191
+Q004_state_year_mc_g40_g41_2019_2024,state,2020,District of Columbia,11,,,,,,,,,33,33,exact,True,False,False,712816,4.6,known_or_blank,,4.629525712105227
+Q004_state_year_mc_g40_g41_2019_2024,state,2021,District of Columbia,11,,,,,,,,,34,34,exact,True,False,False,670050,5.1,known_or_blank,,5.07424819043355
+Q004_state_year_mc_g40_g41_2019_2024,state,2022,District of Columbia,11,,,,,,,,,33,33,exact,True,False,False,671803,4.9,known_or_blank,,4.912154307140636
+Q004_state_year_mc_g40_g41_2019_2024,state,2023,District of Columbia,11,,,,,,,,,29,29,exact,True,False,False,678972,4.3,known_or_blank,,4.27116287564141
+Q004_state_year_mc_g40_g41_2019_2024,state,2024,District of Columbia,11,,,,,,,,,24,24,exact,True,False,False,702250,3.4,known_or_blank,,3.4175863296546813
+Q004_state_year_mc_g40_g41_2019_2024,state,2019,Florida,12,,,,,,,,,435,435,exact,True,False,False,21477737,2.0,known_or_blank,,2.0253530434793947
+Q004_state_year_mc_g40_g41_2019_2024,state,2020,Florida,12,,,,,,,,,503,503,exact,True,False,False,21733312,2.3,known_or_blank,,2.314419449736883
+Q004_state_year_mc_g40_g41_2019_2024,state,2021,Florida,12,,,,,,,,,579,579,exact,True,False,False,21781128,2.7,known_or_blank,,2.6582645306524073
+Q004_state_year_mc_g40_g41_2019_2024,state,2022,Florida,12,,,,,,,,,600,600,exact,True,False,False,22244823,2.7,known_or_blank,,2.6972567954350546
+Q004_state_year_mc_g40_g41_2019_2024,state,2023,Florida,12,,,,,,,,,617,617,exact,True,False,False,22610726,2.7,known_or_blank,,2.728793405395298
+Q004_state_year_mc_g40_g41_2019_2024,state,2024,Florida,12,,,,,,,,,595,595,exact,True,False,False,23372215,2.5,known_or_blank,,2.545757858208989
+Q004_state_year_mc_g40_g41_2019_2024,state,2019,Georgia,13,,,,,,,,,212,212,exact,True,False,False,10617423,2.0,known_or_blank,,1.9967180360055354
+Q004_state_year_mc_g40_g41_2019_2024,state,2020,Georgia,13,,,,,,,,,249,249,exact,True,False,False,10710017,2.3,known_or_blank,,2.3249262816296183
+Q004_state_year_mc_g40_g41_2019_2024,state,2021,Georgia,13,,,,,,,,,247,247,exact,True,False,False,10799566,2.3,known_or_blank,,2.287128945737264
+Q004_state_year_mc_g40_g41_2019_2024,state,2022,Georgia,13,,,,,,,,,266,266,exact,True,False,False,10912876,2.4,known_or_blank,,2.437487606383505
+Q004_state_year_mc_g40_g41_2019_2024,state,2023,Georgia,13,,,,,,,,,287,287,exact,True,False,False,11029227,2.6,known_or_blank,,2.602176925001181
+Q004_state_year_mc_g40_g41_2019_2024,state,2024,Georgia,13,,,,,,,,,346,346,exact,True,False,False,11180878,3.1,known_or_blank,,3.0945691384880507
+Q004_state_year_mc_g40_g41_2019_2024,state,2019,Hawaii,15,,,,,,,,,19,19,exact,True,False,False,1415872,1.3,known_or_blank,,1.3419292139402432
+Q004_state_year_mc_g40_g41_2019_2024,state,2020,Hawaii,15,,,,,,,,,22,22,exact,True,False,False,1407006,1.6,known_or_blank,,1.5636038510141392
+Q004_state_year_mc_g40_g41_2019_2024,state,2021,Hawaii,15,,,,,,,,,28,28,exact,True,False,False,1441553,1.9,known_or_blank,,1.9423496742748965
+Q004_state_year_mc_g40_g41_2019_2024,state,2022,Hawaii,15,,,,,,,,,20,20,exact,True,False,False,1440196,1.4,known_or_blank,,1.3886998714063918
+Q004_state_year_mc_g40_g41_2019_2024,state,2023,Hawaii,15,,,,,,,,,16,16,exact,True,False,False,1435138,1.1,known_or_blank,,1.1148753639022868
+Q004_state_year_mc_g40_g41_2019_2024,state,2024,Hawaii,15,,,,,,,,,30,30,exact,True,False,False,1446146,2.1,known_or_blank,,2.0744793402602504
+Q004_state_year_mc_g40_g41_2019_2024,state,2019,Idaho,16,,,,,,,,,51,51,exact,True,False,False,1787065,2.9,known_or_blank,,2.8538413543995325
+Q004_state_year_mc_g40_g41_2019_2024,state,2020,Idaho,16,,,,,,,,,53,53,exact,True,False,False,1826913,2.9,known_or_blank,,2.901068633262777
+Q004_state_year_mc_g40_g41_2019_2024,state,2021,Idaho,16,,,,,,,,,59,59,exact,True,False,False,1900923,3.1,known_or_blank,,3.103755386199231
+Q004_state_year_mc_g40_g41_2019_2024,state,2022,Idaho,16,,,,,,,,,61,61,exact,True,False,False,1939033,3.1,known_or_blank,,3.1458979811070775
+Q004_state_year_mc_g40_g41_2019_2024,state,2023,Idaho,16,,,,,,,,,55,55,exact,True,False,False,1964726,2.8,known_or_blank,,2.7993725333710655
+Q004_state_year_mc_g40_g41_2019_2024,state,2024,Idaho,16,,,,,,,,,56,56,exact,True,False,False,2001619,2.8,known_or_blank,,2.7977352333286203
+Q004_state_year_mc_g40_g41_2019_2024,state,2019,Illinois,17,,,,,,,,,213,213,exact,True,False,False,12671821,1.7,known_or_blank,,1.6808949558236341
+Q004_state_year_mc_g40_g41_2019_2024,state,2020,Illinois,17,,,,,,,,,238,238,exact,True,False,False,12587530,1.9,known_or_blank,,1.8907601411873498
+Q004_state_year_mc_g40_g41_2019_2024,state,2021,Illinois,17,,,,,,,,,240,240,exact,True,False,False,12671469,1.9,known_or_blank,,1.894018759782311
+Q004_state_year_mc_g40_g41_2019_2024,state,2022,Illinois,17,,,,,,,,,285,285,exact,True,False,False,12582032,2.3,known_or_blank,,2.265134916204314
+Q004_state_year_mc_g40_g41_2019_2024,state,2023,Illinois,17,,,,,,,,,279,279,exact,True,False,False,12549689,2.2,known_or_blank,,2.22316266164046
+Q004_state_year_mc_g40_g41_2019_2024,state,2024,Illinois,17,,,,,,,,,275,275,exact,True,False,False,12710158,2.2,known_or_blank,,2.1636237724188794
+Q004_state_year_mc_g40_g41_2019_2024,state,2019,Indiana,18,,,,,,,,,169,169,exact,True,False,False,6732219,2.5,known_or_blank,,2.5103164350417004
+Q004_state_year_mc_g40_g41_2019_2024,state,2020,Indiana,18,,,,,,,,,229,229,exact,True,False,False,6754953,3.4,known_or_blank,,3.3901050088727485
+Q004_state_year_mc_g40_g41_2019_2024,state,2021,Indiana,18,,,,,,,,,267,267,exact,True,False,False,6805985,3.9,known_or_blank,,3.923017755695906
+Q004_state_year_mc_g40_g41_2019_2024,state,2022,Indiana,18,,,,,,,,,259,259,exact,True,False,False,6833037,3.8,known_or_blank,,3.7904082767296594
+Q004_state_year_mc_g40_g41_2019_2024,state,2023,Indiana,18,,,,,,,,,297,297,exact,True,False,False,6862199,4.3,known_or_blank,,4.328058687892905
+Q004_state_year_mc_g40_g41_2019_2024,state,2024,Indiana,18,,,,,,,,,296,296,exact,True,False,False,6924275,4.3,known_or_blank,,4.274815774936727
+Q004_state_year_mc_g40_g41_2019_2024,state,2019,Iowa,19,,,,,,,,,96,96,exact,True,False,False,3155070,3.0,known_or_blank,,3.0427217145736862
+Q004_state_year_mc_g40_g41_2019_2024,state,2020,Iowa,19,,,,,,,,,93,93,exact,True,False,False,3163561,2.9,known_or_blank,,2.9397252020744977
+Q004_state_year_mc_g40_g41_2019_2024,state,2021,Iowa,19,,,,,,,,,83,83,exact,True,False,False,3193079,2.6,known_or_blank,,2.599371954154595
+Q004_state_year_mc_g40_g41_2019_2024,state,2022,Iowa,19,,,,,,,,,114,114,exact,True,False,False,3200517,3.6,known_or_blank,,3.561924526568676
+Q004_state_year_mc_g40_g41_2019_2024,state,2023,Iowa,19,,,,,,,,,99,99,exact,True,False,False,3207004,3.1,known_or_blank,,3.0869933433198087
+Q004_state_year_mc_g40_g41_2019_2024,state,2024,Iowa,19,,,,,,,,,110,110,exact,True,False,False,3241488,3.4,known_or_blank,,3.3935032306150754
+Q004_state_year_mc_g40_g41_2019_2024,state,2019,Kansas,20,,,,,,,,,59,59,exact,True,False,False,2913314,2.0,known_or_blank,,2.025185064157176
+Q004_state_year_mc_g40_g41_2019_2024,state,2020,Kansas,20,,,,,,,,,74,74,exact,True,False,False,2913805,2.5,known_or_blank,,2.539634601491864
+Q004_state_year_mc_g40_g41_2019_2024,state,2021,Kansas,20,,,,,,,,,81,81,exact,True,False,False,2934582,2.8,known_or_blank,,2.7601886742302653
+Q004_state_year_mc_g40_g41_2019_2024,state,2022,Kansas,20,,,,,,,,,85,85,exact,True,False,False,2937150,2.9,known_or_blank,,2.8939618337504043
+Q004_state_year_mc_g40_g41_2019_2024,state,2023,Kansas,20,,,,,,,,,88,88,exact,True,False,False,2940546,3.0,known_or_blank,,2.992641502632504
+Q004_state_year_mc_g40_g41_2019_2024,state,2024,Kansas,20,,,,,,,,,83,83,exact,True,False,False,2970606,2.8,known_or_blank,,2.79404269701199
+Q004_state_year_mc_g40_g41_2019_2024,state,2019,Kentucky,21,,,,,,,,,128,128,exact,True,False,False,4467673,2.9,known_or_blank,,2.8650261556743297
+Q004_state_year_mc_g40_g41_2019_2024,state,2020,Kentucky,21,,,,,,,,,140,140,exact,True,False,False,4477251,3.1,known_or_blank,,3.1269187275852977
+Q004_state_year_mc_g40_g41_2019_2024,state,2021,Kentucky,21,,,,,,,,,133,133,exact,True,False,False,4509394,2.9,known_or_blank,,2.9493985222848127
+Q004_state_year_mc_g40_g41_2019_2024,state,2022,Kentucky,21,,,,,,,,,162,162,exact,True,False,False,4512310,3.6,known_or_blank,,3.5901788662569727
+Q004_state_year_mc_g40_g41_2019_2024,state,2023,Kentucky,21,,,,,,,,,159,159,exact,True,False,False,4526154,3.5,known_or_blank,,3.5129162640069254
+Q004_state_year_mc_g40_g41_2019_2024,state,2024,Kentucky,21,,,,,,,,,160,160,exact,True,False,False,4588372,3.5,known_or_blank,,3.4870755902093378
+Q004_state_year_mc_g40_g41_2019_2024,state,2019,Louisiana,22,,,,,,,,,123,123,exact,True,False,False,4648794,2.6,known_or_blank,,2.6458475036751468
+Q004_state_year_mc_g40_g41_2019_2024,state,2020,Louisiana,22,,,,,,,,,155,155,exact,True,False,False,4645318,3.3,known_or_blank,,3.3366929885101513
+Q004_state_year_mc_g40_g41_2019_2024,state,2021,Louisiana,22,,,,,,,,,172,172,exact,True,False,False,4624047,3.7,known_or_blank,,3.7196853751702785
+Q004_state_year_mc_g40_g41_2019_2024,state,2022,Louisiana,22,,,,,,,,,146,146,exact,True,False,False,4590241,3.2,known_or_blank,,3.1806608846899325
+Q004_state_year_mc_g40_g41_2019_2024,state,2023,Louisiana,22,,,,,,,,,161,161,exact,True,False,False,4573749,3.5,known_or_blank,,3.5200882252174313
+Q004_state_year_mc_g40_g41_2019_2024,state,2024,Louisiana,22,,,,,,,,,115,115,exact,True,False,False,4597740,2.5,known_or_blank,,2.501228864616094
+Q004_state_year_mc_g40_g41_2019_2024,state,2019,Maine,23,,,,,,,,,51,51,exact,True,False,False,1344212,3.8,known_or_blank,,3.794044391807245
+Q004_state_year_mc_g40_g41_2019_2024,state,2020,Maine,23,,,,,,,,,46,46,exact,True,False,False,1350141,3.4,known_or_blank,,3.4070515598000504
+Q004_state_year_mc_g40_g41_2019_2024,state,2021,Maine,23,,,,,,,,,53,53,exact,True,False,False,1372247,3.9,known_or_blank,,3.8622784382111965
+Q004_state_year_mc_g40_g41_2019_2024,state,2022,Maine,23,,,,,,,,,65,65,exact,True,False,False,1385340,4.7,known_or_blank,,4.6919889702166975
+Q004_state_year_mc_g40_g41_2019_2024,state,2023,Maine,23,,,,,,,,,62,62,exact,True,False,False,1395722,4.4,known_or_blank,,4.442145355593736
+Q004_state_year_mc_g40_g41_2019_2024,state,2024,Maine,23,,,,,,,,,63,63,exact,True,False,False,1405012,4.5,known_or_blank,,4.48394746806433
+Q004_state_year_mc_g40_g41_2019_2024,state,2019,Maryland,24,,,,,,,,,135,135,exact,True,False,False,6045680,2.2,known_or_blank,,2.232999430998664
+Q004_state_year_mc_g40_g41_2019_2024,state,2020,Maryland,24,,,,,,,,,186,186,exact,True,False,False,6055802,3.1,known_or_blank,,3.0714346340914056
+Q004_state_year_mc_g40_g41_2019_2024,state,2021,Maryland,24,,,,,,,,,201,201,exact,True,False,False,6165129,3.3,known_or_blank,,3.260272412791363
+Q004_state_year_mc_g40_g41_2019_2024,state,2022,Maryland,24,,,,,,,,,253,253,exact,True,False,False,6164660,4.1,known_or_blank,,4.10403817891011
+Q004_state_year_mc_g40_g41_2019_2024,state,2023,Maryland,24,,,,,,,,,226,226,exact,True,False,False,6180253,3.7,known_or_blank,,3.656808224517669
+Q004_state_year_mc_g40_g41_2019_2024,state,2024,Maryland,24,,,,,,,,,229,229,exact,True,False,False,6263220,3.7,known_or_blank,,3.656266265595013
+Q004_state_year_mc_g40_g41_2019_2024,state,2019,Massachusetts,25,,,,,,,,,114,114,exact,True,False,False,6892503,1.7,known_or_blank,,1.653970988478351
+Q004_state_year_mc_g40_g41_2019_2024,state,2020,Massachusetts,25,,,,,,,,,96,96,exact,True,False,False,6893574,1.4,known_or_blank,,1.3926012834561579
+Q004_state_year_mc_g40_g41_2019_2024,state,2021,Massachusetts,25,,,,,,,,,150,150,exact,True,False,False,6984723,2.1,known_or_blank,,2.147544004250419
+Q004_state_year_mc_g40_g41_2019_2024,state,2022,Massachusetts,25,,,,,,,,,159,159,exact,True,False,False,6981974,2.3,known_or_blank,,2.2772929260406873
+Q004_state_year_mc_g40_g41_2019_2024,state,2023,Massachusetts,25,,,,,,,,,146,146,exact,True,False,False,7001399,2.1,known_or_blank,,2.0852975241091105
+Q004_state_year_mc_g40_g41_2019_2024,state,2024,Massachusetts,25,,,,,,,,,142,142,exact,True,False,False,7136171,2.0,known_or_blank,,1.9898626308141998
+Q004_state_year_mc_g40_g41_2019_2024,state,2019,Michigan,26,,,,,,,,,238,238,exact,True,False,False,9986857,2.4,known_or_blank,,2.3831321505855145
+Q004_state_year_mc_g40_g41_2019_2024,state,2020,Michigan,26,,,,,,,,,287,287,exact,True,False,False,9966555,2.9,known_or_blank,,2.879630925630772
+Q004_state_year_mc_g40_g41_2019_2024,state,2021,Michigan,26,,,,,,,,,326,326,exact,True,False,False,10050811,3.2,known_or_blank,,3.243519353811349
+Q004_state_year_mc_g40_g41_2019_2024,state,2022,Michigan,26,,,,,,,,,340,340,exact,True,False,False,10034113,3.4,known_or_blank,,3.3884410111785668
+Q004_state_year_mc_g40_g41_2019_2024,state,2023,Michigan,26,,,,,,,,,337,337,exact,True,False,False,10037261,3.4,known_or_blank,,3.357489657786123
+Q004_state_year_mc_g40_g41_2019_2024,state,2024,Michigan,26,,,,,,,,,354,354,exact,True,False,False,10140459,3.5,known_or_blank,,3.490966237327127
+Q004_state_year_mc_g40_g41_2019_2024,state,2019,Minnesota,27,,,,,,,,,171,171,exact,True,False,False,5639632,3.0,known_or_blank,,3.032112733596802
+Q004_state_year_mc_g40_g41_2019_2024,state,2020,Minnesota,27,,,,,,,,,196,196,exact,True,False,False,5657342,3.5,known_or_blank,,3.4645245063848003
+Q004_state_year_mc_g40_g41_2019_2024,state,2021,Minnesota,27,,,,,,,,,206,206,exact,True,False,False,5707390,3.6,known_or_blank,,3.6093555898580614
+Q004_state_year_mc_g40_g41_2019_2024,state,2022,Minnesota,27,,,,,,,,,218,218,exact,True,False,False,5717184,3.8,known_or_blank,,3.813066012918248
+Q004_state_year_mc_g40_g41_2019_2024,state,2023,Minnesota,27,,,,,,,,,227,227,exact,True,False,False,5737915,4.0,known_or_blank,,3.95614086301383
+Q004_state_year_mc_g40_g41_2019_2024,state,2024,Minnesota,27,,,,,,,,,233,233,exact,True,False,False,5793151,4.0,known_or_blank,,4.021990795682695
+Q004_state_year_mc_g40_g41_2019_2024,state,2019,Mississippi,28,,,,,,,,,102,102,exact,True,False,False,2976149,3.4,known_or_blank,,3.4272477621248125
+Q004_state_year_mc_g40_g41_2019_2024,state,2020,Mississippi,28,,,,,,,,,118,118,exact,True,False,False,2966786,4.0,known_or_blank,,3.977368101373001
+Q004_state_year_mc_g40_g41_2019_2024,state,2021,Mississippi,28,,,,,,,,,134,134,exact,True,False,False,2949965,4.5,known_or_blank,,4.5424267745549525
+Q004_state_year_mc_g40_g41_2019_2024,state,2022,Mississippi,28,,,,,,,,,139,139,exact,True,False,False,2940057,4.7,known_or_blank,,4.727799495043804
+Q004_state_year_mc_g40_g41_2019_2024,state,2023,Mississippi,28,,,,,,,,,132,132,exact,True,False,False,2939690,4.5,known_or_blank,,4.490269382145736
+Q004_state_year_mc_g40_g41_2019_2024,state,2024,Mississippi,28,,,,,,,,,137,137,exact,True,False,False,2943045,4.7,known_or_blank,,4.655042651403563
+Q004_state_year_mc_g40_g41_2019_2024,state,2019,Missouri,29,,,,,,,,,129,129,exact,True,False,False,6137428,2.1,known_or_blank,,2.1018576511203064
+Q004_state_year_mc_g40_g41_2019_2024,state,2020,Missouri,29,,,,,,,,,187,187,exact,True,False,False,6151548,3.0,known_or_blank,,3.0398852451447995
+Q004_state_year_mc_g40_g41_2019_2024,state,2021,Missouri,29,,,,,,,,,195,195,exact,True,False,False,6168187,3.2,known_or_blank,,3.1613827531493457
+Q004_state_year_mc_g40_g41_2019_2024,state,2022,Missouri,29,,,,,,,,,201,201,exact,True,False,False,6177957,3.3,known_or_blank,,3.2535027356130835
+Q004_state_year_mc_g40_g41_2019_2024,state,2023,Missouri,29,,,,,,,,,202,202,exact,True,False,False,6196156,3.3,known_or_blank,,3.260085769306002
+Q004_state_year_mc_g40_g41_2019_2024,state,2024,Missouri,29,,,,,,,,,215,215,exact,True,False,False,6245466,3.4,known_or_blank,,3.442497325259636
+Q004_state_year_mc_g40_g41_2019_2024,state,2019,Montana,30,,,,,,,,,24,24,exact,True,False,False,1068778,2.2,known_or_blank,,2.2455552041677507
+Q004_state_year_mc_g40_g41_2019_2024,state,2020,Montana,30,,,,,,,,,33,33,exact,True,False,False,1080577,3.1,known_or_blank,,3.053923968398365
+Q004_state_year_mc_g40_g41_2019_2024,state,2021,Montana,30,,,,,,,,,32,32,exact,True,False,False,1104271,2.9,known_or_blank,,2.8978393890630105
+Q004_state_year_mc_g40_g41_2019_2024,state,2022,Montana,30,,,,,,,,,44,44,exact,True,False,False,1122867,3.9,known_or_blank,,3.9185406642104543
+Q004_state_year_mc_g40_g41_2019_2024,state,2023,Montana,30,,,,,,,,,39,39,exact,True,False,False,1132812,3.4,known_or_blank,,3.442760140252752
+Q004_state_year_mc_g40_g41_2019_2024,state,2024,Montana,30,,,,,,,,,30,30,exact,True,False,False,1137233,2.6,known_or_blank,,2.63798183837437
+Q004_state_year_mc_g40_g41_2019_2024,state,2019,Nebraska,31,,,,,,,,,47,47,exact,True,False,False,1934408,2.4,known_or_blank,,2.429683913631457
+Q004_state_year_mc_g40_g41_2019_2024,state,2020,Nebraska,31,,,,,,,,,65,65,exact,True,False,False,1937552,3.4,known_or_blank,,3.354748672551756
+Q004_state_year_mc_g40_g41_2019_2024,state,2021,Nebraska,31,,,,,,,,,59,59,exact,True,False,False,1963692,3.0,known_or_blank,,3.004544500868772
+Q004_state_year_mc_g40_g41_2019_2024,state,2022,Nebraska,31,,,,,,,,,66,66,exact,True,False,False,1967923,3.4,known_or_blank,,3.3537897570179322
+Q004_state_year_mc_g40_g41_2019_2024,state,2023,Nebraska,31,,,,,,,,,83,83,exact,True,False,False,1978379,4.2,known_or_blank,,4.1953538730445485
+Q004_state_year_mc_g40_g41_2019_2024,state,2024,Nebraska,31,,,,,,,,,92,92,exact,True,False,False,2005465,4.6,known_or_blank,,4.58746475256362
+Q004_state_year_mc_g40_g41_2019_2024,state,2019,Nevada,32,,,,,,,,,61,61,exact,True,False,False,3080156,2.0,known_or_blank,,1.9804191735743255
+Q004_state_year_mc_g40_g41_2019_2024,state,2020,Nevada,32,,,,,,,,,63,63,exact,True,False,False,3138259,2.0,known_or_blank,,2.0074824926814516
+Q004_state_year_mc_g40_g41_2019_2024,state,2021,Nevada,32,,,,,,,,,63,63,exact,True,False,False,3143991,2.0,known_or_blank,,2.0038225300263264
+Q004_state_year_mc_g40_g41_2019_2024,state,2022,Nevada,32,,,,,,,,,69,69,exact,True,False,False,3177772,2.2,known_or_blank,,2.171332619206161
+Q004_state_year_mc_g40_g41_2019_2024,state,2023,Nevada,32,,,,,,,,,65,65,exact,True,False,False,3194176,2.0,known_or_blank,,2.0349536155803563
+Q004_state_year_mc_g40_g41_2019_2024,state,2024,Nevada,32,,,,,,,,,59,59,exact,True,False,False,3267467,1.8,known_or_blank,,1.8056800573655374
+Q004_state_year_mc_g40_g41_2019_2024,state,2019,New Hampshire,33,,,,,,,,,30,30,exact,True,False,False,1359711,2.2,known_or_blank,,2.206351202571723
+Q004_state_year_mc_g40_g41_2019_2024,state,2020,New Hampshire,33,,,,,,,,,37,37,exact,True,False,False,1366275,2.7,known_or_blank,,2.708093173043494
+Q004_state_year_mc_g40_g41_2019_2024,state,2021,New Hampshire,33,,,,,,,,,34,34,exact,True,False,False,1388992,2.4,known_or_blank,,2.4478182739713406
+Q004_state_year_mc_g40_g41_2019_2024,state,2022,New Hampshire,33,,,,,,,,,37,37,exact,True,False,False,1395231,2.7,known_or_blank,,2.651890618829427
+Q004_state_year_mc_g40_g41_2019_2024,state,2023,New Hampshire,33,,,,,,,,,31,31,exact,True,False,False,1402054,2.2,known_or_blank,,2.211041800101851
+Q004_state_year_mc_g40_g41_2019_2024,state,2024,New Hampshire,33,,,,,,,,,35,35,exact,True,False,False,1409032,2.5,known_or_blank,,2.4839748139148012
+Q004_state_year_mc_g40_g41_2019_2024,state,2019,New Jersey,34,,,,,,,,,151,151,exact,True,False,False,8882190,1.7,known_or_blank,,1.7000311860025512
+Q004_state_year_mc_g40_g41_2019_2024,state,2020,New Jersey,34,,,,,,,,,197,197,exact,True,False,False,8882371,2.2,known_or_blank,,2.2178762855098038
+Q004_state_year_mc_g40_g41_2019_2024,state,2021,New Jersey,34,,,,,,,,,174,174,exact,True,False,False,9267130,1.9,known_or_blank,,1.8776039615285423
+Q004_state_year_mc_g40_g41_2019_2024,state,2022,New Jersey,34,,,,,,,,,178,178,exact,True,False,False,9261699,1.9,known_or_blank,,1.9218935964124941
+Q004_state_year_mc_g40_g41_2019_2024,state,2023,New Jersey,34,,,,,,,,,185,185,exact,True,False,False,9290841,2.0,known_or_blank,,1.991208330871231
+Q004_state_year_mc_g40_g41_2019_2024,state,2024,New Jersey,34,,,,,,,,,210,210,exact,True,False,False,9500851,2.2,known_or_blank,,2.210328316905507
+Q004_state_year_mc_g40_g41_2019_2024,state,2019,New Mexico,35,,,,,,,,,86,86,exact,True,False,False,2096829,4.1,known_or_blank,,4.101431256435313
+Q004_state_year_mc_g40_g41_2019_2024,state,2020,New Mexico,35,,,,,,,,,87,87,exact,True,False,False,2106319,4.1,known_or_blank,,4.1304284868531305
+Q004_state_year_mc_g40_g41_2019_2024,state,2021,New Mexico,35,,,,,,,,,86,86,exact,True,False,False,2115877,4.1,known_or_blank,,4.0645084756817145
+Q004_state_year_mc_g40_g41_2019_2024,state,2022,New Mexico,35,,,,,,,,,84,84,exact,True,False,False,2113344,4.0,known_or_blank,,3.9747433451439993
+Q004_state_year_mc_g40_g41_2019_2024,state,2023,New Mexico,35,,,,,,,,,89,89,exact,True,False,False,2114371,4.2,known_or_blank,,4.209289665815507
+Q004_state_year_mc_g40_g41_2019_2024,state,2024,New Mexico,35,,,,,,,,,87,87,exact,True,False,False,2130256,4.1,known_or_blank,,4.08401619335892
+Q004_state_year_mc_g40_g41_2019_2024,state,2019,New York,36,,,,,,,,,327,327,exact,True,False,False,19453561,1.7,known_or_blank,,1.6809261810729665
+Q004_state_year_mc_g40_g41_2019_2024,state,2020,New York,36,,,,,,,,,494,494,exact,True,False,False,19336776,2.6,known_or_blank,,2.554717497891065
+Q004_state_year_mc_g40_g41_2019_2024,state,2021,New York,36,,,,,,,,,476,476,exact,True,False,False,19835913,2.4,known_or_blank,,2.3996878792521423
+Q004_state_year_mc_g40_g41_2019_2024,state,2022,New York,36,,,,,,,,,550,550,exact,True,False,False,19677151,2.8,known_or_blank,,2.7951200862360612
+Q004_state_year_mc_g40_g41_2019_2024,state,2023,New York,36,,,,,,,,,517,517,exact,True,False,False,19571216,2.6,known_or_blank,,2.6416345310378264
+Q004_state_year_mc_g40_g41_2019_2024,state,2024,New York,36,,,,,,,,,501,501,exact,True,False,False,19867248,2.5,known_or_blank,,2.5217382900741967
+Q004_state_year_mc_g40_g41_2019_2024,state,2019,North Carolina,37,,,,,,,,,228,228,exact,True,False,False,10488084,2.2,known_or_blank,,2.173895632414843
+Q004_state_year_mc_g40_g41_2019_2024,state,2020,North Carolina,37,,,,,,,,,290,290,exact,True,False,False,10600823,2.7,known_or_blank,,2.7356366576444113
+Q004_state_year_mc_g40_g41_2019_2024,state,2021,North Carolina,37,,,,,,,,,319,319,exact,True,False,False,10551162,3.0,known_or_blank,,3.0233636825972345
+Q004_state_year_mc_g40_g41_2019_2024,state,2022,North Carolina,37,,,,,,,,,398,398,exact,True,False,False,10698973,3.7,known_or_blank,,3.7199832170807423
+Q004_state_year_mc_g40_g41_2019_2024,state,2023,North Carolina,37,,,,,,,,,378,378,exact,True,False,False,10835491,3.5,known_or_blank,,3.488535960207064
+Q004_state_year_mc_g40_g41_2019_2024,state,2024,North Carolina,37,,,,,,,,,349,349,exact,True,False,False,11046024,3.2,known_or_blank,,3.1595078917083645
+Q004_state_year_mc_g40_g41_2019_2024,state,2019,North Dakota,38,,,,,,,,,16,16,exact,True,False,False,762062,2.1,known_or_blank,,2.099566701921891
+Q004_state_year_mc_g40_g41_2019_2024,state,2020,North Dakota,38,,,,,,,,,29,29,exact,True,False,False,765309,3.8,known_or_blank,,3.789319085493572
+Q004_state_year_mc_g40_g41_2019_2024,state,2021,North Dakota,38,,,,,,,,,19,19,exact,True,False,False,774948,2.5,known_or_blank,,2.45177740958103
+Q004_state_year_mc_g40_g41_2019_2024,state,2022,North Dakota,38,,,,,,,,,16,16,exact,True,False,False,779261,2.1,known_or_blank,,2.053227352581484
+Q004_state_year_mc_g40_g41_2019_2024,state,2023,North Dakota,38,,,,,,,,,18,18,exact,True,False,False,783926,2.3,known_or_blank,,2.2961350943839087
+Q004_state_year_mc_g40_g41_2019_2024,state,2024,North Dakota,38,,,,,,,,,15,15,exact,True,False,False,796568,1.9,known_or_blank,,1.8830784063632986
+Q004_state_year_mc_g40_g41_2019_2024,state,2019,Ohio,39,,,,,,,,,263,263,exact,True,False,False,11689100,2.2,known_or_blank,,2.2499593638517936
+Q004_state_year_mc_g40_g41_2019_2024,state,2020,Ohio,39,,,,,,,,,291,291,exact,True,False,False,11693217,2.5,known_or_blank,,2.488622249976204
+Q004_state_year_mc_g40_g41_2019_2024,state,2021,Ohio,39,,,,,,,,,355,355,exact,True,False,False,11780017,3.0,known_or_blank,,3.0135779939876146
+Q004_state_year_mc_g40_g41_2019_2024,state,2022,Ohio,39,,,,,,,,,350,350,exact,True,False,False,11756058,3.0,known_or_blank,,2.9771884419079933
+Q004_state_year_mc_g40_g41_2019_2024,state,2023,Ohio,39,,,,,,,,,368,368,exact,True,False,False,11785935,3.1,known_or_blank,,3.1223657690289315
+Q004_state_year_mc_g40_g41_2019_2024,state,2024,Ohio,39,,,,,,,,,409,409,exact,True,False,False,11883304,3.4,known_or_blank,,3.4418037273135487
+Q004_state_year_mc_g40_g41_2019_2024,state,2019,Oklahoma,40,,,,,,,,,126,126,exact,True,False,False,3956971,3.2,known_or_blank,,3.1842538143443555
+Q004_state_year_mc_g40_g41_2019_2024,state,2020,Oklahoma,40,,,,,,,,,148,148,exact,True,False,False,3980783,3.7,known_or_blank,,3.717861536285701
+Q004_state_year_mc_g40_g41_2019_2024,state,2021,Oklahoma,40,,,,,,,,,164,164,exact,True,False,False,3986639,4.1,known_or_blank,,4.1137409231184465
+Q004_state_year_mc_g40_g41_2019_2024,state,2022,Oklahoma,40,,,,,,,,,189,189,exact,True,False,False,4019800,4.7,known_or_blank,,4.70172645405244
+Q004_state_year_mc_g40_g41_2019_2024,state,2023,Oklahoma,40,,,,,,,,,143,143,exact,True,False,False,4053824,3.5,known_or_blank,,3.5275335091015294
+Q004_state_year_mc_g40_g41_2019_2024,state,2024,Oklahoma,40,,,,,,,,,146,146,exact,True,False,False,4095393,3.6,known_or_blank,,3.5649814315744544
+Q004_state_year_mc_g40_g41_2019_2024,state,2019,Oregon,41,,,,,,,,,128,128,exact,True,False,False,4217737,3.0,known_or_blank,,3.0348027864231457
+Q004_state_year_mc_g40_g41_2019_2024,state,2020,Oregon,41,,,,,,,,,162,162,exact,True,False,False,4241507,3.8,known_or_blank,,3.8193972095295377
+Q004_state_year_mc_g40_g41_2019_2024,state,2021,Oregon,41,,,,,,,,,132,132,exact,True,False,False,4246155,3.1,known_or_blank,,3.1086948074198895
+Q004_state_year_mc_g40_g41_2019_2024,state,2022,Oregon,41,,,,,,,,,191,191,exact,True,False,False,4240137,4.5,known_or_blank,,4.504571432479658
+Q004_state_year_mc_g40_g41_2019_2024,state,2023,Oregon,41,,,,,,,,,195,195,exact,True,False,False,4233358,4.6,known_or_blank,,4.606272372901135
+Q004_state_year_mc_g40_g41_2019_2024,state,2024,Oregon,41,,,,,,,,,186,186,exact,True,False,False,4272371,4.4,known_or_blank,,4.353554501704089
+Q004_state_year_mc_g40_g41_2019_2024,state,2019,Pennsylvania,42,,,,,,,,,295,295,exact,True,False,False,12801989,2.3,known_or_blank,,2.3043294288098513
+Q004_state_year_mc_g40_g41_2019_2024,state,2020,Pennsylvania,42,,,,,,,,,355,355,exact,True,False,False,12783254,2.8,known_or_blank,,2.7770706895130144
+Q004_state_year_mc_g40_g41_2019_2024,state,2021,Pennsylvania,42,,,,,,,,,402,402,exact,True,False,False,12964056,3.1,known_or_blank,,3.1008813908239827
+Q004_state_year_mc_g40_g41_2019_2024,state,2022,Pennsylvania,42,,,,,,,,,415,415,exact,True,False,False,12972008,3.2,known_or_blank,,3.1991963002181314
+Q004_state_year_mc_g40_g41_2019_2024,state,2023,Pennsylvania,42,,,,,,,,,444,444,exact,True,False,False,12961683,3.4,known_or_blank,,3.4254810891455993
+Q004_state_year_mc_g40_g41_2019_2024,state,2024,Pennsylvania,42,,,,,,,,,443,443,exact,True,False,False,13078751,3.4,known_or_blank,,3.3871735917290575
+Q004_state_year_mc_g40_g41_2019_2024,state,2019,Rhode Island,44,,,,,,,,,35,35,exact,True,False,False,1059361,3.3,known_or_blank,,3.3038784701343547
+Q004_state_year_mc_g40_g41_2019_2024,state,2020,Rhode Island,44,,,,,,,,,40,40,exact,True,False,False,1057125,3.8,known_or_blank,,3.7838477001300697
+Q004_state_year_mc_g40_g41_2019_2024,state,2021,Rhode Island,44,,,,,,,,,26,26,exact,True,False,False,1095610,2.4,known_or_blank,,2.3731072188096127
+Q004_state_year_mc_g40_g41_2019_2024,state,2022,Rhode Island,44,,,,,,,,,45,45,exact,True,False,False,1093734,4.1,known_or_blank,,4.114345901288614
+Q004_state_year_mc_g40_g41_2019_2024,state,2023,Rhode Island,44,,,,,,,,,47,47,exact,True,False,False,1095962,4.3,known_or_blank,,4.288469855706675
+Q004_state_year_mc_g40_g41_2019_2024,state,2024,Rhode Island,44,,,,,,,,,37,37,exact,True,False,False,1112308,3.3,known_or_blank,,3.326416783840447
+Q004_state_year_mc_g40_g41_2019_2024,state,2019,South Carolina,45,,,,,,,,,153,153,exact,True,False,False,5148714,3.0,known_or_blank,,2.9716158248448057
+Q004_state_year_mc_g40_g41_2019_2024,state,2020,South Carolina,45,,,,,,,,,199,199,exact,True,False,False,5218040,3.8,known_or_blank,,3.813692497566136
+Q004_state_year_mc_g40_g41_2019_2024,state,2021,South Carolina,45,,,,,,,,,258,258,exact,True,False,False,5190705,5.0,known_or_blank,,4.970423092816872
+Q004_state_year_mc_g40_g41_2019_2024,state,2022,South Carolina,45,,,,,,,,,268,268,exact,True,False,False,5282634,5.1,known_or_blank,,5.0732267274242355
+Q004_state_year_mc_g40_g41_2019_2024,state,2023,South Carolina,45,,,,,,,,,274,274,exact,True,False,False,5373555,5.1,known_or_blank,,5.099045231694846
+Q004_state_year_mc_g40_g41_2019_2024,state,2024,South Carolina,45,,,,,,,,,281,281,exact,True,False,False,5478831,5.1,known_or_blank,,5.128831314563271
+Q004_state_year_mc_g40_g41_2019_2024,state,2019,South Dakota,46,,,,,,,,,35,35,exact,True,False,False,884659,4.0,known_or_blank,,3.9563266750239356
+Q004_state_year_mc_g40_g41_2019_2024,state,2020,South Dakota,46,,,,,,,,,31,31,exact,True,False,False,892717,3.5,known_or_blank,,3.4725450506711537
+Q004_state_year_mc_g40_g41_2019_2024,state,2021,South Dakota,46,,,,,,,,,38,38,exact,True,False,False,895376,4.2,known_or_blank,,4.244027090295027
+Q004_state_year_mc_g40_g41_2019_2024,state,2022,South Dakota,46,,,,,,,,,37,37,exact,True,False,False,909824,4.1,known_or_blank,,4.066720596510973
+Q004_state_year_mc_g40_g41_2019_2024,state,2023,South Dakota,46,,,,,,,,,34,34,exact,True,False,False,919318,3.7,known_or_blank,,3.698393809323868
+Q004_state_year_mc_g40_g41_2019_2024,state,2024,South Dakota,46,,,,,,,,,38,38,exact,True,False,False,924669,4.1,known_or_blank,,4.109578670854111
+Q004_state_year_mc_g40_g41_2019_2024,state,2019,Tennessee,47,,,,,,,,,221,221,exact,True,False,False,6829174,3.2,known_or_blank,,3.236116110088863
+Q004_state_year_mc_g40_g41_2019_2024,state,2020,Tennessee,47,,,,,,,,,224,224,exact,True,False,False,6886834,3.3,known_or_blank,,3.252583117293084
+Q004_state_year_mc_g40_g41_2019_2024,state,2021,Tennessee,47,,,,,,,,,228,228,exact,True,False,False,6975218,3.3,known_or_blank,,3.268715042311223
+Q004_state_year_mc_g40_g41_2019_2024,state,2022,Tennessee,47,,,,,,,,,270,270,exact,True,False,False,7051339,3.8,known_or_blank,,3.829059984210091
+Q004_state_year_mc_g40_g41_2019_2024,state,2023,Tennessee,47,,,,,,,,,287,287,exact,True,False,False,7126489,4.0,known_or_blank,,4.027228555323666
+Q004_state_year_mc_g40_g41_2019_2024,state,2024,Tennessee,47,,,,,,,,,279,279,exact,True,False,False,7227750,3.9,known_or_blank,,3.860122444744215
+Q004_state_year_mc_g40_g41_2019_2024,state,2019,Texas,48,,,,,,,,,706,706,exact,True,False,False,28995881,2.4,known_or_blank,,2.434828588239826
+Q004_state_year_mc_g40_g41_2019_2024,state,2020,Texas,48,,,,,,,,,822,822,exact,True,False,False,29360759,2.8,known_or_blank,,2.7996551451547966
+Q004_state_year_mc_g40_g41_2019_2024,state,2021,Texas,48,,,,,,,,,851,851,exact,True,False,False,29527941,2.9,known_or_blank,,2.882016053879273
+Q004_state_year_mc_g40_g41_2019_2024,state,2022,Texas,48,,,,,,,,,885,885,exact,True,False,False,30029572,2.9,known_or_blank,,2.9470949502710195
+Q004_state_year_mc_g40_g41_2019_2024,state,2023,Texas,48,,,,,,,,,878,878,exact,True,False,False,30503301,2.9,known_or_blank,,2.878376999263129
+Q004_state_year_mc_g40_g41_2019_2024,state,2024,Texas,48,,,,,,,,,860,860,exact,True,False,False,31290831,2.7,known_or_blank,,2.748408950852088
+Q004_state_year_mc_g40_g41_2019_2024,state,2019,Utah,49,,,,,,,,,73,73,exact,True,False,False,3205958,2.3,known_or_blank,,2.2770104910918985
+Q004_state_year_mc_g40_g41_2019_2024,state,2020,Utah,49,,,,,,,,,103,103,exact,True,False,False,3249879,3.2,known_or_blank,,3.1693487665233073
+Q004_state_year_mc_g40_g41_2019_2024,state,2021,Utah,49,,,,,,,,,84,84,exact,True,False,False,3337975,2.5,known_or_blank,,2.5164957796268697
+Q004_state_year_mc_g40_g41_2019_2024,state,2022,Utah,49,,,,,,,,,102,102,exact,True,False,False,3380800,3.0,known_or_blank,,3.017037387600568
+Q004_state_year_mc_g40_g41_2019_2024,state,2023,Utah,49,,,,,,,,,87,87,exact,True,False,False,3417734,2.5,known_or_blank,,2.5455462595977334
+Q004_state_year_mc_g40_g41_2019_2024,state,2024,Utah,49,,,,,,,,,110,110,exact,True,False,False,3503613,3.1,known_or_blank,,3.139616161944827
+Q004_state_year_mc_g40_g41_2019_2024,state,2019,Vermont,50,,,,,,,,,21,21,exact,True,False,False,623989,3.4,known_or_blank,,3.3654439421207747
+Q004_state_year_mc_g40_g41_2019_2024,state,2020,Vermont,50,,,,,,,,,26,26,exact,True,False,False,623347,4.2,known_or_blank,,4.171031544228175
+Q004_state_year_mc_g40_g41_2019_2024,state,2021,Vermont,50,,,,,,,,,28,28,exact,True,False,False,645570,4.3,known_or_blank,,4.337252350635873
+Q004_state_year_mc_g40_g41_2019_2024,state,2022,Vermont,50,,,,,,,,,26,26,exact,True,False,False,647064,4.0,known_or_blank,,4.018149672984435
+Q004_state_year_mc_g40_g41_2019_2024,state,2023,Vermont,50,,,,,,,,,21,21,exact,True,False,False,647464,3.2,known_or_blank,,3.2434235725847302
+Q004_state_year_mc_g40_g41_2019_2024,state,2024,Vermont,50,,,,,,,,,36,36,exact,True,False,False,648493,5.6,known_or_blank,,5.551332088395711
+Q004_state_year_mc_g40_g41_2019_2024,state,2019,Virginia,51,,,,,,,,,168,168,exact,True,False,False,8535519,2.0,known_or_blank,,1.9682458676502272
+Q004_state_year_mc_g40_g41_2019_2024,state,2020,Virginia,51,,,,,,,,,201,201,exact,True,False,False,8590563,2.3,known_or_blank,,2.3397767992621668
+Q004_state_year_mc_g40_g41_2019_2024,state,2021,Virginia,51,,,,,,,,,252,252,exact,True,False,False,8642274,2.9,known_or_blank,,2.9158992181918784
+Q004_state_year_mc_g40_g41_2019_2024,state,2022,Virginia,51,,,,,,,,,270,270,exact,True,False,False,8683619,3.1,known_or_blank,,3.1093026997154065
+Q004_state_year_mc_g40_g41_2019_2024,state,2023,Virginia,51,,,,,,,,,232,232,exact,True,False,False,8715698,2.7,known_or_blank,,2.6618636855017233
+Q004_state_year_mc_g40_g41_2019_2024,state,2024,Virginia,51,,,,,,,,,266,266,exact,True,False,False,8811195,3.0,known_or_blank,,3.0188867684803253
+Q004_state_year_mc_g40_g41_2019_2024,state,2019,Washington,53,,,,,,,,,190,190,exact,True,False,False,7614893,2.5,known_or_blank,,2.4951105681983976
+Q004_state_year_mc_g40_g41_2019_2024,state,2020,Washington,53,,,,,,,,,205,205,exact,True,False,False,7693612,2.7,known_or_blank,,2.6645481992073425
+Q004_state_year_mc_g40_g41_2019_2024,state,2021,Washington,53,,,,,,,,,228,228,exact,True,False,False,7738692,2.9,known_or_blank,,2.9462343248704044
+Q004_state_year_mc_g40_g41_2019_2024,state,2022,Washington,53,,,,,,,,,246,246,exact,True,False,False,7785786,3.2,known_or_blank,,3.159603924382201
+Q004_state_year_mc_g40_g41_2019_2024,state,2023,Washington,53,,,,,,,,,244,244,exact,True,False,False,7812880,3.1,known_or_blank,,3.123048094940662
+Q004_state_year_mc_g40_g41_2019_2024,state,2024,Washington,53,,,,,,,,,313,313,exact,True,False,False,7958180,3.9,known_or_blank,,3.933060071523891
+Q004_state_year_mc_g40_g41_2019_2024,state,2019,West Virginia,54,,,,,,,,,40,40,exact,True,False,False,1792147,2.2,known_or_blank,,2.2319597666932456
+Q004_state_year_mc_g40_g41_2019_2024,state,2020,West Virginia,54,,,,,,,,,52,52,exact,True,False,False,1784787,2.9,known_or_blank,,2.913512928993768
+Q004_state_year_mc_g40_g41_2019_2024,state,2021,West Virginia,54,,,,,,,,,54,54,exact,True,False,False,1782959,3.0,known_or_blank,,3.028673121479518
+Q004_state_year_mc_g40_g41_2019_2024,state,2022,West Virginia,54,,,,,,,,,71,71,exact,True,False,False,1775156,4.0,known_or_blank,,3.999648481598237
+Q004_state_year_mc_g40_g41_2019_2024,state,2023,West Virginia,54,,,,,,,,,82,82,exact,True,False,False,1770071,4.6,known_or_blank,,4.632582534824874
+Q004_state_year_mc_g40_g41_2019_2024,state,2024,West Virginia,54,,,,,,,,,87,87,exact,True,False,False,1769979,4.9,known_or_blank,,4.915312554555732
+Q004_state_year_mc_g40_g41_2019_2024,state,2019,Wisconsin,55,,,,,,,,,145,145,exact,True,False,False,5822434,2.5,known_or_blank,,2.490367430528195
+Q004_state_year_mc_g40_g41_2019_2024,state,2020,Wisconsin,55,,,,,,,,,149,149,exact,True,False,False,5832655,2.6,known_or_blank,,2.5545827757684965
+Q004_state_year_mc_g40_g41_2019_2024,state,2021,Wisconsin,55,,,,,,,,,165,165,exact,True,False,False,5895908,2.8,known_or_blank,,2.7985511307164224
+Q004_state_year_mc_g40_g41_2019_2024,state,2022,Wisconsin,55,,,,,,,,,197,197,exact,True,False,False,5892539,3.3,known_or_blank,,3.3432107958895143
+Q004_state_year_mc_g40_g41_2019_2024,state,2023,Wisconsin,55,,,,,,,,,211,211,exact,True,False,False,5910955,3.6,known_or_blank,,3.569643145650745
+Q004_state_year_mc_g40_g41_2019_2024,state,2024,Wisconsin,55,,,,,,,,,211,211,exact,True,False,False,5960975,3.5,known_or_blank,,3.5396893964494063
+Q004_state_year_mc_g40_g41_2019_2024,state,2019,Wyoming,56,,,,,,,,,12,12,exact,True,False,False,578759,2.1,known_or_blank,,2.073401882303342
+Q004_state_year_mc_g40_g41_2019_2024,state,2020,Wyoming,56,,,,,,,,,24,24,exact,True,False,False,582328,4.1,known_or_blank,,4.12138863321015
+Q004_state_year_mc_g40_g41_2019_2024,state,2021,Wyoming,56,,,,,,,,,19,19,exact,True,False,False,578803,3.3,known_or_blank,,3.2826367520555353
+Q004_state_year_mc_g40_g41_2019_2024,state,2022,Wyoming,56,,,,,,,,,21,21,exact,True,False,False,581381,3.6,known_or_blank,,3.612089146360132
+Q004_state_year_mc_g40_g41_2019_2024,state,2023,Wyoming,56,,,,,,,,,21,21,exact,True,False,False,584057,3.6,known_or_blank,,3.595539476455209
+Q004_state_year_mc_g40_g41_2019_2024,state,2024,Wyoming,56,,,,,,,,,22,22,exact,True,False,False,587618,3.7,known_or_blank,,3.7439288789655865
