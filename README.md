@@ -43,11 +43,9 @@ The repository is intended to reproduce the processed aggregate-data analysis fr
 
 ## Citation
 
-Please cite this repository and the archived Zenodo release. DOI text should be added after the Zenodo archival record is created.
+Please cite this repository and the archived Zenodo release:
 
-Suggested citation before DOI assignment:
-
-Pierpoint G. Suppression-Aware County-Level Epilepsy and Status Epilepticus Mortality in the United States, 2019-2024. Version 1.0.0. 2026-06-14.
+Pierpoint G. Suppression-Aware County-Level Epilepsy and Status Epilepticus Mortality in the United States, 2019–2024. Version 1.0.0. Zenodo. https://doi.org/10.5281/zenodo.20691623
 
 ## Contact
 
