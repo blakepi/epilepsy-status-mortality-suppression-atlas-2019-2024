@@ -2,7 +2,7 @@
 
 Generated: 2026-06-14
 
-Total release folder size bytes: 41221589
+Total release folder size bytes: 41224070
 Files over 95 MB: 0
 Sensitive scan hits: 0
 Public-facing sensitive scan hits: 0
