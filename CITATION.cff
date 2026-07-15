@@ -1,7 +1,7 @@
 cff-version: 1.2.0
 message: "If you use this software or derived aggregate-data analysis, please cite it using the metadata from this file."
 title: "Suppression-Aware Bayesian Analysis of County-Level Epilepsy and Status Epilepticus Mortality in the United States, 2019-2024"
-version: "1.1.0"
+version: "1.1.1"
 date-released: "2026-07-15"
 authors:
   - family-names: "Pierpoint"

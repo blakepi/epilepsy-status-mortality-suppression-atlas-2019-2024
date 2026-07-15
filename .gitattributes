@@ -1,0 +1,2 @@
+# Preserve checksum-gated production evidence byte-for-byte across platforms.
+outputs/bayes_constrained/production_8chain/** -text
