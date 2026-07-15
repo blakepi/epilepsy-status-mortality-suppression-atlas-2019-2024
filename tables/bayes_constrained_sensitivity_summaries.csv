@@ -1,0 +1,18 @@
+sensitivity,category,counties,posterior_mean_deaths,person_years,rate_per_100k,note
+rurality_only_primary_grouping,metro_large,441,28890.275,1129455502.0,2.5578940426464007,
+rurality_only_primary_grouping,metro_other,738,18461.827777777777,572315982.0,3.2258102793602883,
+rurality_only_primary_grouping,nonmetro_adjacent,1052,7644.038888888889,196713004.0,3.8858838680989742,
+rurality_only_primary_grouping,nonmetro_nonadjacent,911,3383.858333333333,88527893.0,3.8223640241085746,
+nchs_urban_rural_sensitivity,large_central_metro,66,16621.0,612030008.0,2.715716514344506,
+nchs_urban_rural_sensitivity,large_fringe_metro,367,12006.061111111112,505589853.0,2.3746641748981285,
+nchs_urban_rural_sensitivity,medium_metro,390,12982.255555555555,408957782.0,3.1744732896550074,
+nchs_urban_rural_sensitivity,micropolitan,656,6234.041666666667,166765732.0,3.7382030420174495,
+nchs_urban_rural_sensitivity,noncore,1307,4793.855555555556,118475165.0,4.046295741015052,
+nchs_urban_rural_sensitivity,small_metro,356,5742.7861111111115,175193841.0,3.2779611876373616,
+binary_rucc_sensitivity,RUCC_1_3,1179,47352.10277777778,1701771484.0,2.782518288911332,
+binary_rucc_sensitivity,RUCC_4_9,1952,10460.15,274325374.0,3.813045015660855,
+binary_rucc_sensitivity,nan,11,567.7472222222221,10915523.0,5.201282817343907,
+covariate_unmatched_excluded_description,False,11,567.7472222222221,10915523.0,5.201282817343907,
+covariate_unmatched_excluded_description,True,3131,57812.25277777778,1976096858.0,2.925577890766414,
+underlying_cause_context,parallel constrained model not run,,,,,"UCD has county-period and state-year context, but no equivalent public UCD county-year extract in Q011/Q012/Q014; not estimable with the same constraint set without inventing county-year constraints."
+covid_context,2020-2022 COVID co-mention lower-bound deaths,,1575.0,,,COVID co-mention remains contextual and was not modeled as the primary Bayesian outcome.

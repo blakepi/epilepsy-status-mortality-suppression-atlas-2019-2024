@@ -1,0 +1,70 @@
+Parameter family,Tracked quantity,R-hat,Bulk ESS,Tail ESS,MCSE mean,Chains,Draws per chain,Diagnostic status
+Fixed effect,Intercept,1.001489,4204.0,10014.1,0.00030324,8,4500,Pass
+Hyperparameter,kappa,1.001674,5911.5,19501.3,0.00756459,8,4500,Pass
+Rurality,Other metropolitan vs large metropolitan,1.000381,6213.1,14258.5,0.000204423,8,4500,Pass
+Rurality,Nonmetro adjacent vs large metropolitan,1.000910,4923.8,11027.5,0.000300746,8,4500,Pass
+Rurality,Nonmetro nonadjacent vs large metropolitan,1.000935,4024.4,8819.1,0.000430244,8,4500,Pass
+Hyperparameter,sigma_state,1.001446,6769.1,19025.3,0.000265347,8,4500,Pass
+Hyperparameter,sigma_year,1.000510,11489.7,13312.8,0.000648734,8,4500,Pass
+State effect,state_effect[01],1.000621,10132.9,18900.1,0.000403144,8,4500,Pass
+State effect,state_effect[02],1.001020,2447.1,5120.7,0.00180504,8,4500,Pass
+State effect,state_effect[04],1.000806,6311.4,12587.1,0.00067234,8,4500,Pass
+State effect,state_effect[05],1.000318,9577.8,18328.3,0.000437067,8,4500,Pass
+State effect,state_effect[06],1.000240,12143.0,23820.2,0.000250682,8,4500,Pass
+State effect,state_effect[08],1.000730,11245.6,19563.5,0.000372129,8,4500,Pass
+State effect,state_effect[09],1.002001,4182.4,8713.1,0.00100769,8,4500,Pass
+State effect,state_effect[10],1.002553,2528.1,4762.5,0.00175995,8,4500,Pass
+State effect,state_effect[11],1.008554,1437.2,3199.4,0.0030068,8,4500,Pass
+State effect,state_effect[12],1.000412,8851.6,18992.3,0.000332859,8,4500,Pass
+State effect,state_effect[13],1.000604,13945.9,25340.0,0.000263021,8,4500,Pass
+State effect,state_effect[15],1.004655,1724.7,3793.6,0.00245899,8,4500,Pass
+State effect,state_effect[16],1.000791,5513.0,11225.6,0.000805815,8,4500,Pass
+State effect,state_effect[17],1.000301,11700.9,20529.3,0.000349822,8,4500,Pass
+State effect,state_effect[18],1.000294,13543.6,23999.6,0.000281647,8,4500,Pass
+State effect,state_effect[19],1.000639,8231.3,15665.2,0.000499631,8,4500,Pass
+State effect,state_effect[20],1.000961,7254.7,14098.2,0.00061866,8,4500,Pass
+State effect,state_effect[21],1.000657,12460.0,21872.4,0.000344878,8,4500,Pass
+State effect,state_effect[22],1.000251,9316.3,18826.4,0.000425893,8,4500,Pass
+State effect,state_effect[23],1.001396,5260.1,11220.8,0.000846205,8,4500,Pass
+State effect,state_effect[24],1.000373,8812.0,16914.2,0.000465659,8,4500,Pass
+State effect,state_effect[25],1.000441,7236.8,14159.3,0.00060456,8,4500,Pass
+State effect,state_effect[26],1.000091,14680.6,24979.0,0.000268341,8,4500,Pass
+State effect,state_effect[27],1.000197,11567.7,21603.8,0.000347063,8,4500,Pass
+State effect,state_effect[28],1.000796,9536.3,18358.0,0.000425837,8,4500,Pass
+State effect,state_effect[29],1.000547,11111.3,22442.7,0.000349097,8,4500,Pass
+State effect,state_effect[30],1.002418,3902.8,7695.0,0.00112999,8,4500,Pass
+State effect,state_effect[31],1.001384,5933.0,11963.2,0.000745595,8,4500,Pass
+State effect,state_effect[32],1.002670,3008.8,6630.1,0.00145147,8,4500,Pass
+State effect,state_effect[33],1.003328,3433.4,7351.5,0.00128699,8,4500,Pass
+State effect,state_effect[34],1.000446,8607.8,17301.6,0.000462467,8,4500,Pass
+State effect,state_effect[35],1.000969,6304.3,12637.9,0.000693759,8,4500,Pass
+State effect,state_effect[36],1.000389,13100.0,24623.0,0.000269422,8,4500,Pass
+State effect,state_effect[37],1.000300,15214.0,24413.5,0.000238048,8,4500,Pass
+State effect,state_effect[38],1.004566,2515.4,5061.1,0.00178712,8,4500,Pass
+State effect,state_effect[39],1.000075,15307.2,26712.3,0.000243204,8,4500,Pass
+State effect,state_effect[40],1.000675,10025.7,19104.0,0.000410483,8,4500,Pass
+State effect,state_effect[41],1.000956,10086.8,18679.0,0.000426562,8,4500,Pass
+State effect,state_effect[42],1.000265,15627.2,24528.3,0.000240271,8,4500,Pass
+State effect,state_effect[44],1.000797,2631.0,5818.8,0.00169236,8,4500,Pass
+State effect,state_effect[45],1.000612,11713.3,21610.6,0.000335682,8,4500,Pass
+State effect,state_effect[46],1.001681,3974.8,8673.1,0.00110893,8,4500,Pass
+State effect,state_effect[47],1.000146,13345.5,23704.8,0.000284982,8,4500,Pass
+State effect,state_effect[48],1.000678,12031.7,27008.9,0.000218809,8,4500,Pass
+State effect,state_effect[49],1.002362,5225.2,11229.9,0.000807986,8,4500,Pass
+State effect,state_effect[50],1.002284,2908.5,5990.9,0.00149017,8,4500,Pass
+State effect,state_effect[51],1.000144,15352.6,24739.7,0.00025823,8,4500,Pass
+State effect,state_effect[53],1.000422,10199.8,17586.0,0.000391351,8,4500,Pass
+State effect,state_effect[54],1.000854,6742.1,13006.1,0.000653677,8,4500,Pass
+State effect,state_effect[55],1.000247,10112.4,19270.3,0.000383219,8,4500,Pass
+State effect,state_effect[56],1.002065,2445.3,5020.8,0.00176066,8,4500,Pass
+SVI,SVI Q2 vs Q1,1.000541,4853.4,10643.1,0.000293925,8,4500,Pass
+SVI,SVI Q3 vs Q1,1.000611,4249.0,10178.9,0.000321584,8,4500,Pass
+SVI,SVI Q4 vs Q1,1.000803,3728.5,8794.6,0.000380942,8,4500,Pass
+Year effect,year_effect[2019],1.000149,30940.1,34656.1,8.04163e-05,8,4500,Pass
+Year effect,year_effect[2020],1.000230,32289.4,33603.2,7.4306e-05,8,4500,Pass
+Year effect,year_effect[2021],1.000375,31738.2,34666.0,7.35626e-05,8,4500,Pass
+Year effect,year_effect[2022],1.000077,30826.4,35359.4,7.33132e-05,8,4500,Pass
+Year effect,year_effect[2023],1.000632,32831.6,35036.8,7.09983e-05,8,4500,Pass
+Year effect,year_effect[2024],1.000106,34836.7,35454.2,6.79875e-05,8,4500,Pass
+Fixed effect,"Percentage aged ≥65 years, standardized",1.000675,7791.7,17777.8,9.74859e-05,8,4500,Pass
+Fixed effect,"Percentage male, standardized",1.000911,9004.0,21077.7,0.000123926,8,4500,Pass

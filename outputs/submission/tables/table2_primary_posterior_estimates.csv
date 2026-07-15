@@ -1,0 +1,9 @@
+Family,Contrast or coefficient,Scale,Posterior median,95% CrI,Pr(IRR > 1),R-hat,Bulk ESS,Tail ESS
+Rurality,Other metropolitan vs large metropolitan,Mortality rate ratio,1.14,1.11–1.18,1.00,1.000,6213.1,14258.5
+Rurality,Nonmetro adjacent vs large metropolitan,Mortality rate ratio,1.27,1.22–1.33,1.00,1.001,4923.8,11027.5
+Rurality,Nonmetro nonadjacent vs large metropolitan,Mortality rate ratio,1.23,1.17–1.30,1.00,1.001,4024.4,8819.1
+SVI,SVI Q2 vs Q1,Mortality rate ratio,1.11,1.07–1.16,1.00,1.001,4853.4,10643.1
+SVI,SVI Q3 vs Q1,Mortality rate ratio,1.25,1.20–1.30,1.00,1.001,4249.0,10178.9
+SVI,SVI Q4 vs Q1,Mortality rate ratio,1.43,1.37–1.50,1.00,1.001,3728.5,8794.6
+Covariate,"Percentage aged ≥65 years, standardized",Log mortality-rate coefficient,0.096,0.079–0.113,—,1.001,7791.7,17777.8
+Covariate,"Percentage male, standardized",Log mortality-rate coefficient,-0.061,-0.085–-0.038,—,1.001,9004.0,21077.7

@@ -1,0 +1,9 @@
+Rurality category,Estimate type,Posterior median rate,95% CrI
+Large metropolitan,conditional model based,2.65,2.59–2.71
+Large metropolitan,standardized national covariate distribution,2.76,2.70–2.83
+Other metropolitan,conditional model based,3.26,3.20–3.32
+Other metropolitan,standardized national covariate distribution,3.15,3.09–3.22
+Nonmetro adjacent,conditional model based,3.81,3.71–3.91
+Nonmetro adjacent,standardized national covariate distribution,3.52,3.41–3.63
+Nonmetro nonadjacent,conditional model based,3.79,3.65–3.94
+Nonmetro nonadjacent,standardized national covariate distribution,3.41,3.26–3.57

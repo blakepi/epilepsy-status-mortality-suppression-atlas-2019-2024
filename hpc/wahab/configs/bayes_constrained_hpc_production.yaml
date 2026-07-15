@@ -1,0 +1,32 @@
+run:
+  n_chains: 8
+  n_iter: 300000
+  burn_in: 75000
+  thin: 50
+  count_move_sweeps_per_iter: 0.06
+  max_count_proposals_per_iter: 320
+  blocked_refresh_frequency: 25
+  blocked_refresh_attempts: 10
+  checkpoint_every: 500
+  random_seeds: [18291, 18292, 18293, 18294, 18295, 18296, 18297, 18298]
+  max_extensions: 4
+  extension_n_iter: 150000
+  extension_burn_in: 0
+  extension_thin: 50
+  target_acceptance_parameter_blocks: [0.20, 0.45]
+  selected_tuning_path: "outputs/bayes_constrained/hpc/selected_tuning.yaml"
+  save_param_draws: true
+  save_latent_draws_thinned: true
+  save_streaming_county_summaries: true
+  validate_every_saved_latent_draw: true
+model:
+  outcome: "MCOD G40/G41, 2019-2024"
+  rurality_reference: "metro_large"
+  svi_reference: "Q1_lowest"
+outputs:
+  hpc_root: "outputs/bayes_constrained/hpc"
+diagnostics:
+  expected_parameters: 69
+  rhat_max: 1.01
+  ess_bulk_min: 400
+  ess_tail_min: 400

@@ -1,0 +1,15 @@
+Column,Description
+county_fips,Five-digit county FIPS code.
+county_name,County or county-equivalent name.
+state_name,State name.
+posterior_mean_county_period_deaths,Posterior mean model-derived county-period deaths.
+posterior_median_county_period_deaths,Posterior median model-derived county-period deaths.
+deaths_credible_interval_lower_95,Lower 95% credible limit for county-period deaths.
+deaths_credible_interval_upper_95,Upper 95% credible limit for county-period deaths.
+posterior_mean_rate_per_100k,"Posterior mean county-period rate per 100,000 person-years."
+rate_credible_interval_lower_95,Lower 95% credible limit for rate.
+rate_credible_interval_upper_95,Upper 95% credible limit for rate.
+posterior_probability_rate_exceeds_national_rate,Posterior probability that county rate exceeds the national rate.
+original_q001_status,Public county-period visibility status.
+rurality,Collapsed rurality category.
+svi_quartile,Social Vulnerability Index quartile.

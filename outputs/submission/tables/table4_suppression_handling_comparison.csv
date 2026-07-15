@@ -1,0 +1,12 @@
+Method,Preserves reconciled total,Treats suppressed cells as latent positive counts,Models latent counts probabilistically,Provides posterior uncertainty,Nonmetro nonadjacent mortality rate ratio,95% interval
+Observed exact-positive only,No,No,No,No,0.97,0.80–1.19
+Observed exact plus explicit zero,No,No,No,No,0.91,0.78–1.06
+Suppressed = 1,No,No,No,No,0.98,0.88–1.10
+Suppressed = 4.06 (constant mean),Yes,No,No,No,1.24,1.14–1.36
+Suppressed = 5,No,No,No,No,1.29,1.18–1.42
+Suppressed = 9,No,No,No,No,1.42,1.27–1.60
+Population-scaled residual allocation,Yes,Partly,No,No,1.04,0.98–1.10
+Conservative anti-rural residual allocation,Yes,Partly,No,No,0.97,0.90–1.04
+Pro-rural residual allocation,Yes,Partly,No,No,1.13,1.05–1.20
+Interval-likelihood negative binomial,Not assigned / not applicable,Partly,Partly,No,1.07,0.63–1.80
+Bayesian constrained latent-count model,Yes,Yes,Yes,Yes,1.23,1.17–1.30

@@ -1,0 +1,11 @@
+Tier,Scenario,"Assigned deaths, full extract",Analytic model deaths,Preserves reconciled total?,IRR,95% CI
+Visible-only,Observed exact-positive only,"51,388","50,833",No,0.97,0.80–1.19
+Visible-only,Observed exact plus explicit zero,"51,388","50,833",No,0.91,0.78–1.06
+Fixed-value stress test,Suppressed = 1,"53,110","52,552",No,0.98,0.88–1.10
+Constant-count stress test,Suppressed = 4.06 (constant mean),"58,380","57,812.8",Yes,1.24,1.14–1.36
+Fixed-value stress test,Suppressed = 5,"59,998","59,428",No,1.29,1.18–1.42
+Fixed-value stress test,Suppressed = 9,"66,886","66,304",No,1.42,1.27–1.60
+Residual allocation,Population-scaled residual allocation,"58,380","57,817.4",Yes,1.04,0.98–1.10
+Residual allocation,Conservative anti-rural residual allocation,"58,380","57,812.1",Yes,0.97,0.90–1.04
+Residual allocation,Pro-rural residual allocation,"58,380","57,818.5",Yes,1.13,1.05–1.20
+Interval model,Interval-likelihood negative binomial,Not assigned,Not assigned,Not assigned / not applicable,1.07,0.63–1.80

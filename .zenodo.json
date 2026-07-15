@@ -1,0 +1,34 @@
+{
+  "title": "Suppression-Aware Bayesian Analysis of County-Level Epilepsy and Status Epilepticus Mortality in the United States, 2019-2024",
+  "upload_type": "software",
+  "description": "Code, processed public aggregate data, per-chain parameter draws, validation evidence, tables, figures, and manuscript text for a constrained Bayesian analysis of county-level epilepsy and status epilepticus mortality mentions in the United States, 2019-2024. The analysis preserves CDC WONDER exact counts, explicit zeros, suppressed 1-9 intervals, county-period constraints, state-year totals, national-year totals, and the reconciled national total. No person-level data are included.",
+  "creators": [
+    {
+      "name": "Pierpoint, Gregory",
+      "affiliation": "Macon & Joan Brock Virginia Health Sciences, Eastern Virginia Medical School at Old Dominion University",
+      "orcid": "0000-0001-8288-8549"
+    }
+  ],
+  "version": "1.1.0",
+  "publication_date": "2026-07-15",
+  "access_right": "open",
+  "license": "mit",
+  "language": "eng",
+  "keywords": [
+    "epilepsy",
+    "status epilepticus",
+    "mortality",
+    "Bayesian analysis",
+    "CDC WONDER",
+    "small-cell suppression",
+    "rural health",
+    "ecological study"
+  ],
+  "related_identifiers": [
+    {
+      "identifier": "https://github.com/blakepi/epilepsy-status-mortality-suppression-atlas-2019-2024",
+      "relation": "isSupplementTo",
+      "resource_type": "software"
+    }
+  ]
+}

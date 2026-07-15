@@ -1,0 +1,13 @@
+# Bayesian constrained latent-count workflow dependencies.
+# Install into the project-local .venv, not globally.
+pandas
+numpy
+scipy
+pyarrow
+statsmodels
+matplotlib
+openpyxl
+PyYAML
+pytest
+python-docx
+arviz==1.2.0
