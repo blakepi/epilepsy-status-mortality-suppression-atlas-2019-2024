@@ -1,0 +1,18 @@
+Sensitivity,Category,Counties,Posterior mean deaths,Person-years,"Rate per 100,000",Note
+Rurality-only primary grouping,Large metropolitan,441,"28,890.3","1,129,455,502",2.56,—
+Rurality-only primary grouping,Other metropolitan,738,"18,461.8","572,315,982",3.23,—
+Rurality-only primary grouping,Nonmetro adjacent,"1,052","7,644.0","196,713,004",3.89,—
+Rurality-only primary grouping,Nonmetro nonadjacent,911,"3,383.9","88,527,893",3.82,—
+NCHS urban-rural sensitivity,Large central metropolitan,66,"16,621.0","612,030,008",2.72,—
+NCHS urban-rural sensitivity,Large fringe metropolitan,367,"12,006.1","505,589,853",2.37,—
+NCHS urban-rural sensitivity,Medium metropolitan,390,"12,982.3","408,957,782",3.17,—
+NCHS urban-rural sensitivity,Micropolitan,656,"6,234.0","166,765,732",3.74,—
+NCHS urban-rural sensitivity,Noncore,"1,307","4,793.9","118,475,165",4.05,—
+NCHS urban-rural sensitivity,Small metropolitan,356,"5,742.8","175,193,841",3.28,—
+Binary RUCC sensitivity,RUCC 1–3,"1,179","47,352.1","1,701,771,484",2.78,—
+Binary RUCC sensitivity,RUCC 4–9,"1,952","10,460.1","274,325,374",3.81,—
+Binary RUCC sensitivity,—,11,567.7,"10,915,523",5.20,—
+Covariate-unmatched sensitivity,Covariate-unmatched counties,11,567.7,"10,915,523",5.20,—
+Covariate-unmatched sensitivity,Covariate-matched counties,"3,131","57,812.3","1,976,096,858",2.93,—
+Underlying-cause context,Parallel constrained model not run,—,—,—,—,"UCD has county-period and state-year context, but no equivalent public UCD county-year extract in Q011/Q012/Q014; not estimable with the same constraint set without inventing county-year constraints."
+COVID context,2020–2022 COVID co-mention lower-bound deaths,—,"1,575.0",—,—,COVID co-mention remains contextual and was not modeled as the primary Bayesian outcome.

@@ -1,0 +1,12 @@
+Method,"Assigned deaths, full extract",Analytic model deaths,Preserves reconciled total,IRR,95% interval,Models latent counts probabilistically,Provides posterior uncertainty,Treats suppressed cells as latent positive counts
+Observed exact-positive only,"51,388","50,833",No,0.97,0.80–1.19,No,No,No
+Observed exact plus explicit zero,"51,388","50,833",No,0.91,0.78–1.06,No,No,No
+Suppressed = 1,"53,110","52,552",No,0.98,0.88–1.10,No,No,No
+Suppressed = 4.06 (constant mean),"58,380","57,812.8",Yes,1.24,1.14–1.36,No,No,No
+Suppressed = 5,"59,998","59,428",No,1.29,1.18–1.42,No,No,No
+Suppressed = 9,"66,886","66,304",No,1.42,1.27–1.60,No,No,No
+Population-scaled residual allocation,"58,380","57,817.4",Yes,1.04,0.98–1.10,No,No,Partly
+Conservative anti-rural residual allocation,"58,380","57,812.1",Yes,0.97,0.90–1.04,No,No,Partly
+Pro-rural residual allocation,"58,380","57,818.5",Yes,1.13,1.05–1.20,No,No,Partly
+Interval-likelihood negative binomial,Not assigned,Not assigned,Not assigned / not applicable,1.07,0.63–1.80,Partly,No,Partly
+Bayesian constrained latent-count model,"58,380","58,380 latent-count system",Yes,1.23,1.17–1.30,Yes,Yes,Yes

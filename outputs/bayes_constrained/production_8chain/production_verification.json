@@ -1,0 +1,37 @@
+{
+  "passed": true,
+  "chain_count": 8,
+  "expected_seeds": [
+    18291,
+    18292,
+    18293,
+    18294,
+    18295,
+    18296,
+    18297,
+    18298
+  ],
+  "iterations_per_chain": 300000,
+  "burn_in": 75000,
+  "thin": 50,
+  "draws_per_chain": 4500,
+  "saved_parameter_draws_per_parameter": 36000,
+  "parameters": 69,
+  "maximum_rank_normalized_rhat": 1.0085537588710927,
+  "minimum_bulk_ess": 1437.2439572757296,
+  "minimum_tail_ess": 3199.3579952429254,
+  "latent_validation_records": 489696,
+  "latent_validation_failures": 0,
+  "warnings": [
+    "Some parameter proposal acceptance rates are outside the nominal 0.20-0.45 tuning target; this is reported as an efficiency warning because all-parameter R-hat and ESS pass.",
+    "Excluded 5 temporary NPZ files from the verified/public artifact set.",
+    "Ignored stale extension-round control metadata; chain statuses and resolved configs show pure 300,000-iteration production runs."
+  ],
+  "excluded_temporary_files": [
+    "outputs/bayes_constrained/hpc/chains/chain_01/draws_latent.npz.tmp.npz",
+    "outputs/bayes_constrained/hpc/chains/chain_02/draws_latent.npz.tmp.npz",
+    "outputs/bayes_constrained/hpc/chains/chain_03/draws_latent.npz.tmp.npz",
+    "outputs/bayes_constrained/hpc/chains/chain_06/draws_latent.npz.tmp.npz",
+    "outputs/bayes_constrained/hpc/chains/chain_07/draws_latent.npz.tmp.npz"
+  ]
+}

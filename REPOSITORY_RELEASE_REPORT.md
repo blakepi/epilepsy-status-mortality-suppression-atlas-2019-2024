@@ -1,97 +1,41 @@
 # Repository Release Report
 
-Generated: 2026-06-14
+Release date: 2026-07-15
 
-## Release Folder
+Release: `v1.1.0`
 
-`C:\Research\EpilepsyMortalityOptionB_repository_release`
+## Scope
 
-## Repository
+Version 1.1.0 promotes the constrained Bayesian analysis to the public reproducibility release. It includes the final eight-chain production parameter draws and statuses, all-parameter convergence diagnostics, compressed constraint-validation evidence, checksum manifests, county posterior summaries, final public tables and figures, manuscript Markdown, supplement Markdown, and release-time QC.
 
-- Repository name: `epilepsy-status-mortality-suppression-atlas-2019-2024`
-- GitHub URL: https://github.com/blakepi/epilepsy-status-mortality-suppression-atlas-2019-2024
-- Release tag: `v1.0.0`
-- GitHub release URL: https://github.com/blakepi/epilepsy-status-mortality-suppression-atlas-2019-2024/releases/tag/v1.0.0
-- Release commit hash: `f28d059320f61b93a6c7426adfab4c53c198ff27`
+The earlier observed-only, bounding, residual-allocation, and interval-likelihood analysis remains available as contextual and sensitivity material.
 
-## Copied Materials Summary
+## Production verification
 
-Included public/reproducible materials:
+- 8 completed chains, seeds 18291–18298
+- 300,000 iterations per chain; 75,000 burn-in; thinning 50
+- 4,500 retained draws per chain; 36,000 draws per parameter
+- 69 retained parameters
+- Maximum rank-normalized split R-hat: 1.008554
+- Minimum bulk ESS: 1437.2
+- Minimum tail ESS: 3199.4
+- 489,696 constraint-validation records; 0 failures
 
-- `src/`
-- `data/raw/wonder/`
-- `data/raw/covariates/`
-- `data/raw/geography/`
-- `data/processed/`
-- `tables/`
-- `figures/`
-- `reports/`
-- `README_project_original.md`
-- generated public metadata files and documentation
+## Public artifact policy
 
-No `config/` files were present in the source project at release-build time.
+Included: parameter draws, resolved configs, statuses, acceptance/runtime summaries, all-parameter diagnostics, compressed validation evidence, county summaries, manifests, model frame, code, tables, figures, and manuscript text.
 
-## Excluded Materials Summary
+Excluded: large latent arrays, temporary arrays, checkpoints, caches, runtime environments, logs, submission ZIPs, DOCX duplicates, and TIFF duplicates. Large excluded latent arrays are represented by cryptographic hashes and full validation summaries.
 
-Excluded:
+## Known limitations
 
-- `manuscript/phase12_submission_package/`
-- `manuscript/phase13_final_review/`
-- old DOCX submission files
-- ZIP submission packages
-- portal upload files
-- render-review folders
-- `__pycache__/`
-- temporary logs
-- private notes
-- the local manuscript/package finalization helper `src/phase11b_12_13_finalize.py`
+- Some proposal acceptance rates are outside the nominal tuning target; all-parameter convergence criteria nevertheless pass.
+- An exact enumerated small-state stationary-distribution and irreducibility test for the custom latent-count transition kernel remains recommended before journal submission.
 
-## Safety and Hygiene Checks
+## Identifiers
 
-- File-size scan: PASS, 0 files exceeded 95 MB.
-- Total-size scan: PASS, release folder approximately 39.3 MB before git internals.
-- Sensitive/private-info scan: PASS, 0 hits.
-- Phone-number scan: PASS, supplied phone-number pattern absent.
-- Public-facing unresolved-marker scan: PASS, 0 hits.
-- `python -m compileall src`: PASS.
+- GitHub: https://github.com/blakepi/epilepsy-status-mortality-suppression-atlas-2019-2024
+- GitHub release: https://github.com/blakepi/epilepsy-status-mortality-suppression-atlas-2019-2024/releases/tag/v1.1.0
+- Zenodo concept DOI: https://doi.org/10.5281/zenodo.20691622
 
-Scan artifacts:
-
-- `repository_size_scan.csv`
-- `repository_sensitive_scan.csv`
-- `repository_safety_summary.md`
-- `repository_file_checksums.csv`
-
-## Git and GitHub
-
-- Git initialized: yes.
-- Branch: `main`.
-- Commit created: `f28d059320f61b93a6c7426adfab4c53c198ff27`.
-- GitHub CLI installed: yes.
-- GitHub CLI authenticated: yes, active account `blakepi`.
-- Repository created and pushed: yes.
-- Tag created and pushed: `v1.0.0`.
-- GitHub release created: yes.
-
-## Zenodo
-
-Zenodo still requires manual user action. The repository includes:
-
-- `ZENODO_ARCHIVAL_INSTRUCTIONS.md`
-
-Required manual actions:
-
-1. Enable GitHub-Zenodo integration for the repository.
-2. Confirm Zenodo imports GitHub release `v1.0.0`.
-3. Review metadata and publish the Zenodo record.
-4. Copy back the Zenodo version DOI and concept DOI.
-5. Update README/CITATION metadata after DOI assignment.
-
-## Unresolved Issues
-
-- Zenodo DOI archival is not complete until the user enables/imports/publishes through Zenodo.
-- The manuscript package still needs the Zenodo DOI copied into data/code availability text after the DOI exists.
-
-## Notes
-
-`REPOSITORY_RELEASE_REPORT.md` was created after the GitHub release so it could record the final GitHub release URL and post-release status.
+The immutable Zenodo version DOI is assigned after the GitHub release is archived.

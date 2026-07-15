@@ -1,0 +1,20 @@
+run:
+  n_chains: 1
+  n_iter: 500
+  burn_in: 100
+  thin: 20
+  count_move_sweeps_per_iter: 0.02
+  max_count_proposals_per_iter: 120
+  blocked_refresh_frequency: 25
+  blocked_refresh_attempts: 4
+  checkpoint_every: 100
+  random_seeds: [17291]
+  validate_every_saved_draw: true
+  save_param_draws: true
+  save_latent_draws_thinned: true
+model:
+  outcome: "MCOD G40/G41, 2019-2024"
+  rurality_reference: "metro_large"
+  svi_reference: "Q1_lowest"
+outputs:
+  hpc_root: "outputs/bayes_constrained/hpc"

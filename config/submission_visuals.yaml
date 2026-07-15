@@ -1,0 +1,158 @@
+project:
+  title: "Suppression-Aware Bayesian Analysis of County-Level Epilepsy and Status Epilepticus Mortality in the United States, 2019–2024"
+  short_title: "Suppression-aware Bayesian epilepsy/status mortality atlas"
+  outcome_label: "Multiple-cause G40/G41 death mentions"
+  repository_root: "."
+outputs:
+  root: "outputs/submission"
+  figures: "outputs/submission/figures"
+  tables: "outputs/submission/tables"
+  manuscript: "outputs/submission/manuscript"
+  qc: "outputs/submission/qc"
+  package: "outputs/submission/package"
+final_wahab_handoff:
+  source: "Checksum-verified eight-chain Wahab production archive imported by scripts/60_verify_production_chains.py."
+  allow_locked_handoff_without_fetched_bundle: false
+  national_total_mcod_g40_g41: 58380
+  model_frame_rows: 18852
+  counties: 3142
+  saved_parameter_draws: 36000
+  chains: 8
+  convergence_gate_passed: true
+  parameter_count: 69
+  primary_rhat: 1.0009353605050912
+  primary_ess: 4024.3950396146324
+  primary_tail_ess: 8819.052613526208
+  maximum_rhat: 1.0085537588710927
+  minimum_bulk_ess: 1437.2439572757296
+  minimum_tail_ess: 3199.3579952429254
+  latent_validation_records: 489696
+  latent_validation_labels: 40808
+  primary_convergence_sentence: "The final Wahab HPC production run completed eight independent constrained Bayesian chains. All 69 retained parameters passed rank-normalized split R-hat (maximum 1.008554), bulk ESS (minimum 1437.2), and 5%/95% tail ESS (minimum 3199.4) thresholds. All 36,000 saved latent-count draws passed constraint validation."
+  primary_estimates:
+    - term: "metro_other vs metro_large"
+      parameter: "primary_rurality_metro_other"
+      family: "Rurality"
+      estimate_type: "IRR"
+      posterior_median: 1.14
+      credible_interval_lower_95: 1.11
+      credible_interval_upper_95: 1.18
+      posterior_probability_gt_1: 1.00
+    - term: "nonmetro_adjacent vs metro_large"
+      parameter: "primary_rurality_nonmetro_adjacent"
+      family: "Rurality"
+      estimate_type: "IRR"
+      posterior_median: 1.27
+      credible_interval_lower_95: 1.22
+      credible_interval_upper_95: 1.33
+      posterior_probability_gt_1: 1.00
+    - term: "nonmetro_nonadjacent vs metro_large"
+      parameter: "primary_rurality_nonmetro_nonadjacent"
+      family: "Rurality"
+      estimate_type: "IRR"
+      posterior_median: 1.23
+      credible_interval_lower_95: 1.17
+      credible_interval_upper_95: 1.30
+      posterior_probability_gt_1: 1.00
+    - term: "SVI Q2 vs Q1"
+      parameter: "svi_quartile_Q2"
+      family: "SVI"
+      estimate_type: "IRR"
+      posterior_median: 1.11
+      credible_interval_lower_95: 1.07
+      credible_interval_upper_95: 1.16
+      posterior_probability_gt_1: 1.00
+    - term: "SVI Q3 vs Q1"
+      parameter: "svi_quartile_Q3"
+      family: "SVI"
+      estimate_type: "IRR"
+      posterior_median: 1.25
+      credible_interval_lower_95: 1.20
+      credible_interval_upper_95: 1.30
+      posterior_probability_gt_1: 1.00
+    - term: "SVI Q4 vs Q1"
+      parameter: "svi_quartile_Q4_highest"
+      family: "SVI"
+      estimate_type: "IRR"
+      posterior_median: 1.43
+      credible_interval_lower_95: 1.37
+      credible_interval_upper_95: 1.50
+      posterior_probability_gt_1: 1.00
+    - term: "pct_age65 coefficient"
+      parameter: "z_pct_age65"
+      family: "Covariate"
+      estimate_type: "coefficient"
+      posterior_median: 0.096
+      credible_interval_lower_95: 0.079
+      credible_interval_upper_95: 0.113
+    - term: "pct_male coefficient"
+      parameter: "z_pct_male"
+      family: "Covariate"
+      estimate_type: "coefficient"
+      posterior_median: -0.061
+      credible_interval_lower_95: -0.085
+      credible_interval_upper_95: -0.038
+stale_phrase_blocklist:
+  - "handoff"
+  - "locked handoff"
+  - "user-provided"
+  - "fetched"
+  - "local fetched"
+  - "final fetched"
+  - "final scalar source"
+  - "final convergence-gate JSON present locally"
+  - "local repository products"
+  - "local latent-count validation records"
+  - "local repository"
+  - "local project"
+  - "local project environment"
+  - "incidence rate ratio"
+  - "posterior incidence rate ratio"
+  - "posterior incidence"
+  - ">=65"
+  - "2019-2024"
+  - "1.17-1.30"
+  - "1-9 cells"
+  - "recovered true suppressed counts"
+  - "bounded local production run"
+  - "local production run"
+  - "validated implementation result"
+  - "not yet definitive"
+  - "diagnostically incomplete"
+  - "requires a longer confirmatory run"
+  - "longer confirmatory run"
+  - "longer production run is needed"
+  - "before final inferential use"
+  - "R-hat=1.91"
+  - "ESS 7.5"
+  - "IRR 1.26"
+  - "1.12-1.37"
+  - "1.12–1.37"
+style:
+  font_family: "Arial"
+  base_font_size: 10
+  figure_dpi: 600
+  export_formats: ["svg", "pdf", "tiff", "png"]
+  primary_color: "#1B4F72"
+  secondary_color: "#7D3C98"
+  accent_color: "#D68910"
+  neutral_color: "#566573"
+  positive_color: "#117864"
+  warning_color: "#B03A2E"
+paths:
+  model_frame: "data/processed/bayes_constrained/model_frame.parquet"
+  county_posterior_summary: "outputs/bayes_constrained/production_8chain/county_posterior_summary.csv"
+  county_geojson: "data/raw/geography/plotly_geojson_counties_fips.json"
+  data_audit: "outputs/bayes_constrained/production_8chain/data_audit.csv"
+  constraint_validation: "outputs/bayes_constrained/production_8chain/production_constraint_validation_summary.csv"
+  parameter_diagnostics: "outputs/bayes_constrained/production_8chain/parameter_diagnostics_all.csv"
+  posterior_primary_summary: "outputs/bayes_constrained/production_8chain/posterior_primary_summary.csv"
+  production_verification: "outputs/bayes_constrained/production_8chain/production_verification.json"
+  production_source_manifest: "outputs/bayes_constrained/production_8chain/production_source_manifest.csv"
+  temporal_context: "manuscript/tables/table4_temporal_covid_context_revised.csv"
+  national_year_trend: "tables/national_year_trend.csv"
+  covid_urbanization_year: "tables/covid_by_urbanization_year.csv"
+  ucd_profile: "tables/ucd_county_suppression_profile.csv"
+  prior_scenario_table: "manuscript/tables/table3_suppression_aware_models_revised_main_labeled.csv"
+  adjusted_rates_table: "outputs/bayes_constrained/production_8chain/adjusted_rates_by_rurality.csv"
+  references: "manuscript/references/references_provisional.csv"

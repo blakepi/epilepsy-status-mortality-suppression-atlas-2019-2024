@@ -1,63 +1,25 @@
-# Zenodo Archival Instructions
+# Zenodo Archival Record
 
-## GitHub Repository
+## Repository integration
 
-Repository URL: https://github.com/blakepi/epilepsy-status-mortality-suppression-atlas-2019-2024
+- GitHub repository: https://github.com/blakepi/epilepsy-status-mortality-suppression-atlas-2019-2024
+- Release to archive: `v1.1.0`
+- Concept DOI: https://doi.org/10.5281/zenodo.20691622
+- Previous version DOI (`v1.0.1`): https://doi.org/10.5281/zenodo.20691623
 
-Release tag: v1.0.0
+The repository's Zenodo GitHub integration is enabled. Publishing GitHub release `v1.1.0` is intended to create the new immutable Zenodo version under the existing concept DOI.
 
-## Recommended Zenodo Metadata
+## Release metadata
 
-Title: Suppression-Aware County-Level Epilepsy and Status Epilepticus Mortality in the United States, 2019-2024
+- Title: Suppression-Aware Bayesian Analysis of County-Level Epilepsy and Status Epilepticus Mortality in the United States, 2019–2024
+- Version: 1.1.0
+- Upload type: Software
+- Publication date: 2026-07-15
+- License: MIT
+- Creator: Gregory Pierpoint, B.S.; ORCID 0000-0001-8288-8549
 
-Upload type: Software
+Machine-readable archival metadata are in `.zenodo.json`; citation metadata are in `CITATION.cff`.
 
-Version: 1.0.0
+## Post-publication verification
 
-Creator:
-
-- Gregory Pierpoint, B.S.
-- ORCID: https://orcid.org/0000-0001-8288-8549
-- Affiliation: Macon & Joan Brock Virginia Health Sciences, Eastern Virginia Medical School at Old Dominion University
-- Email: pierpogb@odu.edu
-
-Recommended description:
-
-Code, processed aggregate data, tables, figures, and documentation for a suppression-aware county-level analysis of epilepsy/status epilepticus mortality in the United States, 2019-2024. The repository preserves CDC WONDER exact, suppressed, and explicit zero county cells as distinct statuses and evaluates rurality-associated mortality patterns using observed-only models, bias-bounding scenarios, residual-allocation analyses, and interval-likelihood negative binomial models. No person-level data are included.
-
-Recommended keywords:
-
-- epilepsy
-- status epilepticus
-- mortality
-- CDC WONDER
-- small-cell suppression
-- rural health
-- ecological study
-- county-level atlas
-
-Recommended license language:
-
-- Code: MIT License
-- Documentation, derived aggregate tables, and figures: CC BY 4.0 unless otherwise noted
-- Underlying source data remain subject to original source terms and citation requirements
-
-## GitHub-Zenodo Integration Steps
-
-1. Sign in to Zenodo with the account that should own the archive.
-2. Open the Zenodo GitHub integration page.
-3. Enable repository access for `blakepi/epilepsy-status-mortality-suppression-atlas-2019-2024`.
-4. Confirm that the GitHub release `v1.0.0` is visible to Zenodo.
-5. If Zenodo does not import the release automatically, trigger archival from the GitHub integration page after the GitHub release exists.
-6. Review the imported metadata and apply the recommended title, creator, description, keywords, version, and license fields above.
-7. Publish the Zenodo record.
-8. Copy the Zenodo identifiers back into the manuscript package and repository metadata.
-
-## Fields to Copy Back
-
-- Zenodo version DOI:
-- Zenodo concept DOI:
-
-## After Zenodo Publication
-
-Update the README citation section and `CITATION.cff` with the Zenodo DOI values, then create a follow-up repository commit and, if needed, a small patch release.
+After the GitHub release event, verify that Zenodo lists version 1.1.0, that the title and creator metadata match this repository, that the source archive corresponds to GitHub tag `v1.1.0`, and that the concept DOI continues to resolve to the latest version.

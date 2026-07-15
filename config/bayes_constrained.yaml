@@ -1,0 +1,39 @@
+run:
+  n_chains: 4
+  n_iter: 40000
+  burn_in: 10000
+  thin: 10
+  count_move_sweeps_per_iter: 1
+  blocked_refresh_frequency: 25
+  random_seeds: [17291, 17292, 17293, 17294]
+  target_acceptance_parameter_blocks: [0.20, 0.45]
+  max_runtime_hours: 12
+  max_count_proposals_per_iter: 750
+quick_test:
+  n_iter: 80
+  burn_in: 20
+  thin: 5
+  count_move_sweeps_per_iter: 0.05
+  max_count_proposals_per_iter: 120
+  blocked_refresh_frequency: 10
+production_runtime:
+  n_iter: 1200
+  burn_in: 300
+  thin: 10
+  count_move_sweeps_per_iter: 0.10
+  max_count_proposals_per_iter: 350
+  blocked_refresh_frequency: 25
+model:
+  outcome: "MCOD G40/G41, 2019-2024"
+  rurality_reference: "metro_large"
+  svi_reference: "Q1_lowest"
+  fixed_effect_prior_sd: 1.5
+  intercept_prior_sd: 5.0
+  sigma_state_prior_sd: 1.0
+  sigma_year_prior_sd: 1.0
+  log_kappa_prior_mean: 2.302585092994046
+  log_kappa_prior_sd: 1.5
+outputs:
+  posterior_draw_batch: "outputs/bayes_constrained/posterior_draws_primary.npz"
+  posterior_parameter_draws: "outputs/bayes_constrained/posterior_parameter_draws.csv"
+  latent_draw_validation: "outputs/bayes_constrained/constraint_validation_summary.csv"

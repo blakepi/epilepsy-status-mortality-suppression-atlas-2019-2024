@@ -8,6 +8,5 @@ Thumbs.db
 *.tmp
 *.log
 *.zip
-manuscript/
 render_review/
 portal_upload/
