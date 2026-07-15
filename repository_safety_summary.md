@@ -9,8 +9,9 @@ Generated: 2026-07-15
 - Public-facing private local-path hits: 0.
 - Included raw latent arrays, ZIP archives, TIFF duplicates, or DOCX duplicates: 0.
 - Production derived-manifest checks: 62 of 62 matched SHA-256.
+- Repository checksum scope: immutable GitHub/Zenodo archive bytes; the manifest excludes itself.
 - Public convergence gate: PASS; action `finalize`.
 - Automated tests: 28 passed, 1 archive-dependent test skipped.
 - Standalone public release build: PASS; final submission QC passed with 77 packaged files.
 
-The skipped test requires the full large production archive. That archive was verified separately with `scripts/60_verify_production_chains.py`: eight chains, 69 parameters, 489,696 validation records, and zero failures.
+The skipped test requires the full large production archive. That archive was verified separately with `scripts/60_verify_production_chains.py`: eight chains, 69 parameters, 489,696 validation records, and zero failures. Version 1.1.1 adds no scientific changes; it corrects cross-platform archive-byte preservation and checksum scope.

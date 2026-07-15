@@ -2,11 +2,13 @@
 
 Release date: 2026-07-15
 
-Release: `v1.1.0`
+Release: `v1.1.1`
 
 ## Scope
 
-Version 1.1.0 promotes the constrained Bayesian analysis to the public reproducibility release. It includes the final eight-chain production parameter draws and statuses, all-parameter convergence diagnostics, compressed constraint-validation evidence, checksum manifests, county posterior summaries, final public tables and figures, manuscript Markdown, supplement Markdown, and release-time QC.
+Version 1.1.0 promoted the constrained Bayesian analysis to the public reproducibility release. Version 1.1.1 is a packaging-only patch that preserves the checksum-gated production evidence byte-for-byte across GitHub and Zenodo archives and regenerates the repository-wide checksum manifest from Git archive blobs.
+
+The release includes the final eight-chain production parameter draws and statuses, all-parameter convergence diagnostics, compressed constraint-validation evidence, checksum manifests, county posterior summaries, final public tables and figures, manuscript Markdown, supplement Markdown, and release-time QC.
 
 The earlier observed-only, bounding, residual-allocation, and interval-likelihood analysis remains available as contextual and sensitivity material.
 
@@ -35,7 +37,7 @@ Excluded: large latent arrays, temporary arrays, checkpoints, caches, runtime en
 ## Identifiers
 
 - GitHub: https://github.com/blakepi/epilepsy-status-mortality-suppression-atlas-2019-2024
-- GitHub release: https://github.com/blakepi/epilepsy-status-mortality-suppression-atlas-2019-2024/releases/tag/v1.1.0
+- GitHub release: https://github.com/blakepi/epilepsy-status-mortality-suppression-atlas-2019-2024/releases/tag/v1.1.1
 - Zenodo concept DOI: https://doi.org/10.5281/zenodo.20691622
 
 The immutable Zenodo version DOI is assigned after the GitHub release is archived.

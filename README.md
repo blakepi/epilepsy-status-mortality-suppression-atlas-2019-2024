@@ -2,7 +2,7 @@
 
 Code, processed public aggregate data, parameter draws, validation evidence, tables, figures, and manuscript text for a constrained Bayesian analysis of county-level epilepsy/status epilepticus mortality mentions in the United States.
 
-Version 1.1.0 adds the exact eight-chain Wahab HPC production results and replaces the earlier provisional Bayesian handoff with checksum-verified production artifacts.
+Version 1.1.0 added the exact eight-chain Wahab HPC production results and replaced the earlier provisional Bayesian handoff with checksum-verified production artifacts. Version 1.1.1 preserves those checksum-gated production files byte-for-byte in GitHub and Zenodo archives and makes the repository-wide checksum manifest archive-native.
 
 ## Primary result
 
@@ -56,7 +56,7 @@ To re-verify an extracted full production archive, including every latent-count 
 - Final QC: `outputs/submission/qc/SUBMISSION_QC_REPORT_FINAL.md`
 - Convergence gate: `outputs/bayes_constrained/production_8chain/convergence_gate.md`
 - Production verification: `outputs/bayes_constrained/production_8chain/production_verification.md`
-- Full file checksums: `repository_file_checksums.csv`
+- Full Git/Zenodo archive-byte checksums: `repository_file_checksums.csv`
 
 ## Retained limitations
 
@@ -66,7 +66,7 @@ The custom constraint-preserving latent-count kernel has extensive empirical inv
 
 ## Citation
 
-Pierpoint G. *Suppression-Aware Bayesian Analysis of County-Level Epilepsy and Status Epilepticus Mortality in the United States, 2019–2024*. Version 1.1.0. Zenodo. https://doi.org/10.5281/zenodo.20691622
+Pierpoint G. *Suppression-Aware Bayesian Analysis of County-Level Epilepsy and Status Epilepticus Mortality in the United States, 2019–2024*. Version 1.1.1. Zenodo. https://doi.org/10.5281/zenodo.20691622
 
 The DOI above is the concept DOI and resolves to the latest published Zenodo version.
 
