@@ -1,0 +1,15 @@
+table,urbanization,sex,death_count_status,rows,lower,upper
+sex by urbanization,Large Central Metro,Female,exact,1,7983,7983
+sex by urbanization,Large Central Metro,Male,exact,1,8638,8638
+sex by urbanization,Large Fringe Metro,Female,exact,1,6022,6022
+sex by urbanization,Large Fringe Metro,Male,exact,1,5980,5980
+sex by urbanization,Medium Metro,Female,exact,1,6388,6388
+sex by urbanization,Medium Metro,Male,exact,1,6610,6610
+sex by urbanization,Micropolitan (Nonmetro),Female,exact,1,3096,3096
+sex by urbanization,Micropolitan (Nonmetro),Male,exact,1,3153,3153
+sex by urbanization,NonCore (Nonmetro),Female,exact,1,2020,2020
+sex by urbanization,NonCore (Nonmetro),Male,exact,1,2190,2190
+sex by urbanization,Not Available,Female,exact,1,271,271
+sex by urbanization,Not Available,Male,exact,1,284,284
+sex by urbanization,Small Metro,Female,exact,1,2803,2803
+sex by urbanization,Small Metro,Male,exact,1,2942,2942

@@ -1,0 +1,14 @@
+Domain,Quantity,Value,Notes
+Model frame,County-year rows,"18,852","One row per county-year, 2019–2024."
+Model frame,Counties,"3,142",No county was dropped from the constraint system.
+Model frame,State/DC equivalents,51,State-year constraints were applied across represented jurisdictions.
+County-year visibility,Exact cells,"1,350",Observed counts fixed exactly.
+County-year visibility,Suppressed cells,"9,695",Latent integer count constrained to 1–9.
+County-year visibility,Explicit zero cells,"7,807",Latent count fixed at 0.
+County-period visibility,Exact rows,"1,085",County-period sums fixed exactly.
+County-period visibility,Suppressed rows,"1,722",County-period sums constrained to 1–9.
+County-period visibility,Zero rows,335,County-period sums fixed at 0.
+Aggregate constraints,National total,"58,380",Known 2019–2024 MCOD G40/G41 total.
+Aggregate constraints,National-year constraints,6,Each year reconciles to the national-year extract.
+Aggregate constraints,State-year constraints,306,Each state-year reconciles to the state-year extract.
+Covariates,Unmatched covariate counties,11,Kept in constraints; imputed for modeling as documented.

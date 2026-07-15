@@ -1,0 +1,14 @@
+[
+  {
+    "candidate": "C:\\Users\\gbp34\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\python\\python.exe",
+    "returncode": 1,
+    "stdout": "",
+    "stderr": "Traceback (most recent call last):\n  File \"C:\\Research\\EpilepsyMortalityOptionB\\src\\editorial_final_submission_figures.py\", line 7, in <module>\n    import matplotlib.pyplot as plt\nModuleNotFoundError: No module named 'matplotlib'\n"
+  },
+  {
+    "candidate": "python",
+    "returncode": 1,
+    "stdout": "",
+    "stderr": "Traceback (most recent call last):\n  File \"C:\\Research\\EpilepsyMortalityOptionB\\src\\editorial_final_submission_figures.py\", line 7, in <module>\n    import matplotlib.pyplot as plt\nModuleNotFoundError: No module named 'matplotlib'\n"
+  }
+]

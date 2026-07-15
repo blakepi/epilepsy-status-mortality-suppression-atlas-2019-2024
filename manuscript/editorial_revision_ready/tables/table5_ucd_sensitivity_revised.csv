@@ -1,0 +1,6 @@
+measure,mcod_g40_g41,ucd_g40_g41,interpretation
+National aggregate deaths,"58,380","22,306",MCOD is the broader death-certificate mention construct.
+Exact county deaths,"51,388","16,650",Visible exact deaths are lower in UCD sensitivity.
+Exact county rows,"1,085",504,Rows are county-period rows.
+Suppressed county rows,"1,722","1,866","Suppressed rows remain 1-9 intervals, not zero."
+Explicit-zero county rows,335,772,Explicit zeros are distinct from suppression.

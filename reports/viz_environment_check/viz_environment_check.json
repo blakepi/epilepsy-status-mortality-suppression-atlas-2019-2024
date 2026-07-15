@@ -1,0 +1,184 @@
+{
+  "python": "C:\\Research\\EpilepsyMortalityOptionB\\.venv\\Scripts\\python.exe",
+  "required_packages": [
+    {
+      "package": "matplotlib",
+      "import": "matplotlib",
+      "version": "3.11.0",
+      "status": "ok"
+    },
+    {
+      "package": "pandas",
+      "import": "pandas",
+      "version": "3.0.3",
+      "status": "ok"
+    },
+    {
+      "package": "numpy",
+      "import": "numpy",
+      "version": "2.4.6",
+      "status": "ok"
+    },
+    {
+      "package": "scipy",
+      "import": "scipy",
+      "version": "1.17.1",
+      "status": "ok"
+    },
+    {
+      "package": "statsmodels",
+      "import": "statsmodels",
+      "version": "0.14.6",
+      "status": "ok"
+    },
+    {
+      "package": "geopandas",
+      "import": "geopandas",
+      "version": "1.1.3",
+      "status": "ok"
+    },
+    {
+      "package": "shapely",
+      "import": "shapely",
+      "version": "2.1.2",
+      "status": "ok"
+    },
+    {
+      "package": "pyproj",
+      "import": "pyproj",
+      "version": "3.7.2",
+      "status": "ok"
+    },
+    {
+      "package": "pyogrio",
+      "import": "pyogrio",
+      "version": "0.12.1",
+      "status": "ok"
+    },
+    {
+      "package": "mapclassify",
+      "import": "mapclassify",
+      "version": "2.10.0",
+      "status": "ok"
+    },
+    {
+      "package": "colorspacious",
+      "import": "colorspacious",
+      "version": "1.1.2",
+      "status": "ok"
+    },
+    {
+      "package": "pillow",
+      "import": "PIL",
+      "version": "12.2.0",
+      "status": "ok"
+    },
+    {
+      "package": "lxml",
+      "import": "lxml",
+      "version": "6.1.1",
+      "status": "ok"
+    },
+    {
+      "package": "python-docx",
+      "import": "docx",
+      "version": "1.2.0",
+      "status": "ok"
+    },
+    {
+      "package": "openpyxl",
+      "import": "openpyxl",
+      "version": "3.1.5",
+      "status": "ok"
+    },
+    {
+      "package": "pytest",
+      "import": "pytest",
+      "version": "9.1.0",
+      "status": "ok"
+    },
+    {
+      "package": "ruff",
+      "import": "python -m ruff",
+      "version": "ruff 0.15.17",
+      "status": "ok"
+    }
+  ],
+  "optional_packages": [
+    {
+      "package": "cairosvg",
+      "import": "cairosvg",
+      "version": "",
+      "status": "optional_missing: No module named 'cairosvg'"
+    },
+    {
+      "package": "svgutils",
+      "import": "svgutils",
+      "version": "",
+      "status": "optional_missing: No module named 'svgutils'"
+    },
+    {
+      "package": "great-tables",
+      "import": "great_tables",
+      "version": "",
+      "status": "optional_missing: No module named 'great_tables'"
+    },
+    {
+      "package": "kaleido",
+      "import": "kaleido",
+      "version": "",
+      "status": "optional_missing: No module named 'kaleido'"
+    },
+    {
+      "package": "imageio",
+      "import": "imageio",
+      "version": "",
+      "status": "optional_missing: No module named 'imageio'"
+    }
+  ],
+  "matplotlib_format_checks": [
+    {
+      "format": "png",
+      "path": "C:\\Research\\EpilepsyMortalityOptionB\\reports\\viz_environment_check\\matplotlib_smoke_test.png",
+      "bytes": 32554,
+      "status": "ok"
+    },
+    {
+      "format": "svg",
+      "path": "C:\\Research\\EpilepsyMortalityOptionB\\reports\\viz_environment_check\\matplotlib_smoke_test.svg",
+      "bytes": 14126,
+      "status": "ok"
+    },
+    {
+      "format": "pdf",
+      "path": "C:\\Research\\EpilepsyMortalityOptionB\\reports\\viz_environment_check\\matplotlib_smoke_test.pdf",
+      "bytes": 8070,
+      "status": "ok"
+    }
+  ],
+  "geopandas_geometry_check": {
+    "path": "C:\\Research\\EpilepsyMortalityOptionB\\data\\raw\\geography\\plotly_geojson_counties_fips.json",
+    "feature_count": 3221,
+    "source_crs": "EPSG:4326",
+    "projected_crs": "EPSG:5070",
+    "status": "ok"
+  },
+  "output_dirs": [
+    {
+      "path": "C:\\Research\\EpilepsyMortalityOptionB\\reports\\viz_environment_check",
+      "exists": true
+    },
+    {
+      "path": "C:\\Research\\EpilepsyMortalityOptionB\\manuscript\\publication_figures",
+      "exists": true
+    },
+    {
+      "path": "C:\\Research\\EpilepsyMortalityOptionB\\manuscript\\final_submission_ready\\figures",
+      "exists": true
+    },
+    {
+      "path": "C:\\Research\\EpilepsyMortalityOptionB\\manuscript\\final_submission_ready\\reports",
+      "exists": true
+    }
+  ]
+}

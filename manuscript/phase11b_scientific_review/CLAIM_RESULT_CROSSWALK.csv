@@ -1,0 +1,17 @@
+claim_id,section,claim_text,supporting_source_file,supporting_table_or_report,supporting_value,status,fix_applied
+C001,required_source_of_truth,"Q003 MCOD total, 2019-2024",C:\Research\EpilepsyMortalityOptionB\reports\phase9_final_report.md,phase9_final_report.md,"58,380",supported,none
+C002,required_source_of_truth,Q001 county-period total row deaths,C:\Research\EpilepsyMortalityOptionB\reports\phase9_final_report.md,phase9_final_report.md,"58,380",supported,none
+C003,required_source_of_truth,Q001 exact county death sum,C:\Research\EpilepsyMortalityOptionB\reports\phase9_final_report.md,phase9_final_report.md,"51,388",supported,none
+C004,required_source_of_truth,Q001 suppressed county rows,C:\Research\EpilepsyMortalityOptionB\reports\phase9_final_report.md,phase9_final_report.md,"1,722",supported,none
+C005,required_source_of_truth,Q001 explicit zero county rows,C:\Research\EpilepsyMortalityOptionB\reports\phase9_final_report.md,phase9_final_report.md,335,supported,none
+C006,required_source_of_truth,Q002 county-year exact death sum,C:\Research\EpilepsyMortalityOptionB\manuscript\phase11_rebuild\MANUSCRIPT_BUILD_REPORT.md,MANUSCRIPT_BUILD_REPORT.md,"33,217",supported,none
+C007,required_source_of_truth,Q010 COVID co-mention total,C:\Research\EpilepsyMortalityOptionB\reports\phase9_final_report.md,phase9_final_report.md,"1,936",supported,none
+C008,required_source_of_truth,Q012 UCD total,C:\Research\EpilepsyMortalityOptionB\reports\phase9_final_report.md,phase9_final_report.md,"22,306",supported,none
+C009,required_source_of_truth,Q014 UCD exact county death sum,C:\Research\EpilepsyMortalityOptionB\reports\phase9_final_report.md,phase9_final_report.md,"16,650",supported,none
+C010,required_source_of_truth,Q014 UCD suppressed county rows,C:\Research\EpilepsyMortalityOptionB\manuscript\phase11_rebuild\MANUSCRIPT_BUILD_REPORT.md,MANUSCRIPT_BUILD_REPORT.md,"1,866",supported,none
+C011,required_source_of_truth,Q014 UCD explicit zero county rows,C:\Research\EpilepsyMortalityOptionB\manuscript\phase11_rebuild\MANUSCRIPT_BUILD_REPORT.md,MANUSCRIPT_BUILD_REPORT.md,772,supported,none
+C012,required_source_of_truth,Phase 10 result classification,C:\Research\EpilepsyMortalityOptionB\reports\model_stress_test_summary.md,model_stress_test_summary.md,SUPPRESSION_SENSITIVE_SIGNAL,supported,none
+C013,required_source_of_truth,Selected story,C:\Research\EpilepsyMortalityOptionB\reports\final_story_decision.md,final_story_decision.md,Story C,supported,none
+C014,abstract/results/discussion,The nonmetro nonadjacent estimate varied from below unity in observed-only and conservative scenarios to elevated under midpoint/high/pro-rural scenarios.,C:\Research\EpilepsyMortalityOptionB\reports\model_results_report.md,table3_suppression_aware_models.csv,IRR range 0.9081 to 1.423 across specified scenarios; pro-rural 1.125,supported,none
+C015,methods,Suppressed county cells were coded as 1-9 intervals and were not treated as zero.,C:\Research\EpilepsyMortalityOptionB\reports\phase10_audit_report.md,phase10_audit_report.md,No suppressed values parsed as zero: PASS,supported,none
+C016,methods/limitations,Connecticut county/county-equivalent warning was documented and no crosswalk correction was applied.,C:\Research\EpilepsyMortalityOptionB\reports\county_merge_report.md,county_merge_report.md,Connecticut geography warning documented,supported,none

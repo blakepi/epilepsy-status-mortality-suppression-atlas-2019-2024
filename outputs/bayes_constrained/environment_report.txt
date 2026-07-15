@@ -1,0 +1,30 @@
+{
+  "generated_utc": "2026-06-16T18:37:39.898011+00:00",
+  "python": "3.13.5 (main, Jun 12 2025, 12:42:35) [MSC v.1943 64 bit (AMD64)]",
+  "platform": "Windows-11-10.0.26200-SP0",
+  "git_branch": "not_available_no_git_repository",
+  "git_commit": "not_available_no_git_repository",
+  "config": "config\\bayes_constrained.yaml",
+  "input_checksums": [
+    {
+      "path": "data\\processed\\county_year_analysis.csv",
+      "sha256": "b38b8d20cf710f06651fb869a9804cf63500d277c5a580f9b6528737a4a722a9"
+    },
+    {
+      "path": "data\\processed\\county_period_analysis.csv",
+      "sha256": "a1180de153a9f0091a2351947a2d8638d329dc3856fe5eacbcae4c278dd3a4db"
+    },
+    {
+      "path": "data\\raw\\wonder\\csv\\Q003_national_year_mc_g40_g41_2019_2024.csv",
+      "sha256": "2e941c2c4d784e96c859b3cf251223196d3734bd25fe7bc56608ccb743536b05"
+    },
+    {
+      "path": "data\\raw\\wonder\\csv\\Q004_state_year_mc_g40_g41_2019_2024.csv",
+      "sha256": "d01a14b0363dd0c1e2b5a3c16d823930d3d26c8bc6eca3761f71145b4e9cdd13"
+    },
+    {
+      "path": "config\\bayes_constrained.yaml",
+      "sha256": "1403b3d3b1bb309c7c0f57651094f9435dcd5f51c226e66cb0ddb8608b15bd3d"
+    }
+  ]
+}

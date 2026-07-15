@@ -1,0 +1,8 @@
+source,rows,unique_county_fips,note
+county_covariates_50dc,3144.0,3144.0,
+acs_county_clean,3144.0,3144.0,
+svi_county_2022_clean,3144.0,3144.0,
+rucc_2023_clean,3144.0,3144.0,
+nchs_urban_rural_clean,3144.0,3144.0,
+prior_final_analysis_dataset,1169.0,1169.0,
+raw_nchs_2023,,,'utf-8' codec can't decode byte 0xf1 in position 15532: invalid continuation byte

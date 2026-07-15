@@ -1,0 +1,42 @@
+# Final Submission QA Report
+
+Generated: 2026-06-16 13:04:39
+
+Overall status: PASS
+
+| Check | Passed | Detail |
+| --- | --- | --- |
+| Main DOCX has populated Tables 1-5 | True | table_count=5 |
+| Main DOCX has Figures 1-4 with current regenerated PNG bytes | True | figure1_county_suppression_status_revised.png:embedded; figure2_suppression_bounds_revised.png:embedded; figure3_scenario_envelope_revised.png:embedded; figure4_temporal_covid_context_revised.png:embedded |
+| Main figure files exist in PDF/SVG/TIFF/PNG | True | missing_formats={} |
+| Figure manifest exists and checksums are present | True | checksum_missing=0 |
+| Figure 1 legend/category counts match Table 1 | True | exact=1,085; suppressed_1_9=1,722; zero=335 |
+| Figure 2 CIs are not silently clipped | True | source_ci_range=0.460-2.526; plotting_range=0.42-2.75 |
+| Figure 3 decision documented | True | main Figure 3 replaced by scenario envelope; residual atlas moved to Supplementary Figure S3 |
+| Figure 4 values match frozen inputs | True | urbanization_year_deaths=58,380; covid_interval=1,923-1,963 |
+| References start at 1 | True | first_visible_reference_number=1 |
+| Table 3 compressed | True | headers=['Tier', 'Scenario', 'Assigned deaths, full extract', 'Analytic model deaths', 'Preserves reconciled total?', 'IRR', '95% CI'] |
+| Table 3 fixed-value stress tests are not marked total-preserving | True | values={'Observed exact-positive only': 'No', 'Observed exact plus explicit zero': 'No', 'Suppressed = 1': 'No', 'Suppressed = 4.06 (constant mean)': 'Yes', 'Suppressed = 5': 'No', 'Suppressed = 9': 'No', 'Population-scaled residual allocation': 'Yes', 'Conservative anti-rural residual allocation': 'Yes', 'Pro-rural residual allocation': 'Yes', 'Interval-likelihood negative binomial': 'Not assigned / not applicable'} |
+| Table 3 preserves-reconciled-total labels match expected mapping | True | failures={} |
+| No visible filename footer remains in final DOCX files | True | all final DOCX footers empty |
+| Highlights contain only scientific highlights | True | process_hits=[] |
+| Supplement years are plain 2019-2024 in year columns | True | comma_year_hits=[] |
+| Cover letter does not imply formal revision and uses reconciled wording | True | fresh-submission wording checked |
+| response_to_editorial_review.docx excluded from final upload folder | True | matches=0 |
+| Core totals and model estimates preserved in main manuscript text | True | missing=[] |
+| Final folder contains allowlisted DOCX and figure assets | True | missing=[] |
+| Final submission folder contains newest main/supplement and no named stale states | True | newest generated main and supplement only; references start at 1; Figure 3 and Table 3 stale states absent |
+| No broken hyphenation/replacement artifacts | True | hits={} |
+| No placeholder or internal process notes | True | hits={} |
+| No AI/process language outside required AI declaration | True | hits={} |
+| No stale figure filenames | True | hits={} |
+| No hidden filename footers | True | all final DOCX footers empty |
+| GitHub/Zenodo/DOI wording is final or replaced consistently | True | GitHub URL and Zenodo DOI retained consistently; release metadata checked live as v1.0.1 |
+| GitHub/Zenodo version wording is consistent across package text | True | expected=v1.0.1; stale_release_hits=[]; explicit_release_claims={'main': True, 'reference_list': True} |
+| No stale DOI/release placeholder wording | True | hits={} |
+
+## Clean final folder
+
+`C:\Research\EpilepsyMortalityOptionB\manuscript\final_submission_ready\FINAL_SUBMISSION_FILES_ONLY`
+
+The clean folder is allowlist-based and excludes `response_to_editorial_review.docx`, stale baseline attachments, and internal package assembly notes.

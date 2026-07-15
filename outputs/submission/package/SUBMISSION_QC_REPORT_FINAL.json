@@ -1,0 +1,566 @@
+{
+  "passed": true,
+  "failures": [],
+  "warnings": [],
+  "stale_phrase_count_submission_materials": 0,
+  "stale_phrase_hits": [],
+  "diagnostics_status": {
+    "status": "complete_all_parameter_diagnostics",
+    "complete_final_per_parameter_diagnostics": true,
+    "primary_rhat": 1.0009353605050912,
+    "primary_ess": 4024.3950396146324,
+    "notes": [],
+    "rows": 69,
+    "maximum_rhat": 1.008554,
+    "minimum_bulk_ess": 1437.2,
+    "minimum_tail_ess": 3199.4
+  },
+  "constraint_validation_summary": {
+    "exists": true,
+    "check_records": 489696,
+    "checks": 12,
+    "chain_check_rows": 96,
+    "chain_specific_labels": 40808,
+    "failures": 0
+  },
+  "production_source_status": {
+    "verification_exists": true,
+    "manifest_exists": true,
+    "passed": true,
+    "mismatches": [],
+    "verification": {
+      "passed": true,
+      "chain_count": 8,
+      "expected_seeds": [
+        18291,
+        18292,
+        18293,
+        18294,
+        18295,
+        18296,
+        18297,
+        18298
+      ],
+      "iterations_per_chain": 300000,
+      "burn_in": 75000,
+      "thin": 50,
+      "draws_per_chain": 4500,
+      "saved_parameter_draws_per_parameter": 36000,
+      "parameters": 69,
+      "maximum_rank_normalized_rhat": 1.0085537588710927,
+      "minimum_bulk_ess": 1437.2439572757296,
+      "minimum_tail_ess": 3199.3579952429254,
+      "latent_validation_records": 489696,
+      "latent_validation_failures": 0,
+      "warnings": [
+        "Some parameter proposal acceptance rates are outside the nominal 0.20-0.45 tuning target; this is reported as an efficiency warning because all-parameter R-hat and ESS pass.",
+        "Excluded 5 temporary NPZ files from the verified/public artifact set.",
+        "Ignored stale extension-round control metadata; chain statuses and resolved configs show pure 300,000-iteration production runs."
+      ],
+      "excluded_temporary_files": [
+        "outputs/bayes_constrained/hpc/chains/chain_01/draws_latent.npz.tmp.npz",
+        "outputs/bayes_constrained/hpc/chains/chain_02/draws_latent.npz.tmp.npz",
+        "outputs/bayes_constrained/hpc/chains/chain_03/draws_latent.npz.tmp.npz",
+        "outputs/bayes_constrained/hpc/chains/chain_06/draws_latent.npz.tmp.npz",
+        "outputs/bayes_constrained/hpc/chains/chain_07/draws_latent.npz.tmp.npz"
+      ]
+    }
+  },
+  "figure_inventory": [
+    {
+      "path": "outputs\\submission\\figures\\main\\figure1_suppression_aware_modeling_necessity.svg",
+      "format": "svg",
+      "exists": true,
+      "bytes": 22436,
+      "dimensions": "viewBox 0 0 843.651429 310.79952"
+    },
+    {
+      "path": "outputs\\submission\\figures\\main\\figure1_suppression_aware_modeling_necessity.pdf",
+      "format": "pdf",
+      "exists": true,
+      "bytes": 48822,
+      "dimensions": "not inspected"
+    },
+    {
+      "path": "outputs\\submission\\figures\\main\\figure1_suppression_aware_modeling_necessity.tiff",
+      "format": "tiff",
+      "exists": true,
+      "bytes": 1994668,
+      "dimensions": "7029x2589 px"
+    },
+    {
+      "path": "outputs\\submission\\figures\\main\\figure1_suppression_aware_modeling_necessity.png",
+      "format": "png",
+      "exists": true,
+      "bytes": 445743,
+      "dimensions": "7029x2589 px"
+    },
+    {
+      "path": "outputs\\submission\\figures\\main\\figure2_primary_posterior_irrs.svg",
+      "format": "svg",
+      "exists": true,
+      "bytes": 18449,
+      "dimensions": "viewBox 0 0 598.79952 340.97151"
+    },
+    {
+      "path": "outputs\\submission\\figures\\main\\figure2_primary_posterior_irrs.pdf",
+      "format": "pdf",
+      "exists": true,
+      "bytes": 34165,
+      "dimensions": "not inspected"
+    },
+    {
+      "path": "outputs\\submission\\figures\\main\\figure2_primary_posterior_irrs.tiff",
+      "format": "tiff",
+      "exists": true,
+      "bytes": 840944,
+      "dimensions": "4989x2841 px"
+    },
+    {
+      "path": "outputs\\submission\\figures\\main\\figure2_primary_posterior_irrs.png",
+      "format": "png",
+      "exists": true,
+      "bytes": 305916,
+      "dimensions": "4989x2841 px"
+    },
+    {
+      "path": "outputs\\submission\\figures\\main\\figure3_suppression_handling_comparison.svg",
+      "format": "svg",
+      "exists": true,
+      "bytes": 26533,
+      "dimensions": "viewBox 0 0 627.220298 429.412078"
+    },
+    {
+      "path": "outputs\\submission\\figures\\main\\figure3_suppression_handling_comparison.pdf",
+      "format": "pdf",
+      "exists": true,
+      "bytes": 37095,
+      "dimensions": "not inspected"
+    },
+    {
+      "path": "outputs\\submission\\figures\\main\\figure3_suppression_handling_comparison.tiff",
+      "format": "tiff",
+      "exists": true,
+      "bytes": 1205946,
+      "dimensions": "5236x3578 px"
+    },
+    {
+      "path": "outputs\\submission\\figures\\main\\figure3_suppression_handling_comparison.png",
+      "format": "png",
+      "exists": true,
+      "bytes": 459817,
+      "dimensions": "5236x3578 px"
+    },
+    {
+      "path": "outputs\\submission\\figures\\main\\figure4_posterior_county_maps.svg",
+      "format": "svg",
+      "exists": true,
+      "bytes": 5598990,
+      "dimensions": "viewBox 0 0 828.875392 341.609453"
+    },
+    {
+      "path": "outputs\\submission\\figures\\main\\figure4_posterior_county_maps.pdf",
+      "format": "pdf",
+      "exists": true,
+      "bytes": 1772919,
+      "dimensions": "not inspected"
+    },
+    {
+      "path": "outputs\\submission\\figures\\main\\figure4_posterior_county_maps.tiff",
+      "format": "tiff",
+      "exists": true,
+      "bytes": 4016950,
+      "dimensions": "6908x2846 px"
+    },
+    {
+      "path": "outputs\\submission\\figures\\main\\figure4_posterior_county_maps.png",
+      "format": "png",
+      "exists": true,
+      "bytes": 2251016,
+      "dimensions": "6908x2846 px"
+    },
+    {
+      "path": "outputs\\submission\\figures\\supplement\\figureS1_convergence_gate_card.svg",
+      "format": "svg",
+      "exists": true,
+      "bytes": 7024,
+      "dimensions": "viewBox 0 0 526.79952 281.99952"
+    },
+    {
+      "path": "outputs\\submission\\figures\\supplement\\figureS1_convergence_gate_card.pdf",
+      "format": "pdf",
+      "exists": true,
+      "bytes": 42145,
+      "dimensions": "not inspected"
+    },
+    {
+      "path": "outputs\\submission\\figures\\supplement\\figureS1_convergence_gate_card.tiff",
+      "format": "tiff",
+      "exists": true,
+      "bytes": 721614,
+      "dimensions": "4389x2349 px"
+    },
+    {
+      "path": "outputs\\submission\\figures\\supplement\\figureS1_convergence_gate_card.png",
+      "format": "png",
+      "exists": true,
+      "bytes": 192167,
+      "dimensions": "4389x2349 px"
+    },
+    {
+      "path": "outputs\\submission\\figures\\supplement\\figureS2_final_posterior_mrr_summary.svg",
+      "format": "svg",
+      "exists": true,
+      "bytes": 14296,
+      "dimensions": "viewBox 0 0 584.39952 332.39952"
+    },
+    {
+      "path": "outputs\\submission\\figures\\supplement\\figureS2_final_posterior_mrr_summary.pdf",
+      "format": "pdf",
+      "exists": true,
+      "bytes": 28404,
+      "dimensions": "not inspected"
+    },
+    {
+      "path": "outputs\\submission\\figures\\supplement\\figureS2_final_posterior_mrr_summary.tiff",
+      "format": "tiff",
+      "exists": true,
+      "bytes": 728612,
+      "dimensions": "4869x2769 px"
+    },
+    {
+      "path": "outputs\\submission\\figures\\supplement\\figureS2_final_posterior_mrr_summary.png",
+      "format": "png",
+      "exists": true,
+      "bytes": 220423,
+      "dimensions": "4869x2769 px"
+    },
+    {
+      "path": "outputs\\submission\\figures\\supplement\\figureS3_probability_uncertainty_maps.svg",
+      "format": "svg",
+      "exists": true,
+      "bytes": 5544237,
+      "dimensions": "viewBox 0 0 814.55171 264.792837"
+    },
+    {
+      "path": "outputs\\submission\\figures\\supplement\\figureS3_probability_uncertainty_maps.pdf",
+      "format": "pdf",
+      "exists": true,
+      "bytes": 1764692,
+      "dimensions": "not inspected"
+    },
+    {
+      "path": "outputs\\submission\\figures\\supplement\\figureS3_probability_uncertainty_maps.tiff",
+      "format": "tiff",
+      "exists": true,
+      "bytes": 3483220,
+      "dimensions": "6788x2205 px"
+    },
+    {
+      "path": "outputs\\submission\\figures\\supplement\\figureS3_probability_uncertainty_maps.png",
+      "format": "png",
+      "exists": true,
+      "bytes": 2246297,
+      "dimensions": "6788x2205 px"
+    },
+    {
+      "path": "outputs\\submission\\figures\\supplement\\figureS4_constraint_validation_summary.svg",
+      "format": "svg",
+      "exists": true,
+      "bytes": 18583,
+      "dimensions": "viewBox 0 0 620.39952 353.99952"
+    },
+    {
+      "path": "outputs\\submission\\figures\\supplement\\figureS4_constraint_validation_summary.pdf",
+      "format": "pdf",
+      "exists": true,
+      "bytes": 34894,
+      "dimensions": "not inspected"
+    },
+    {
+      "path": "outputs\\submission\\figures\\supplement\\figureS4_constraint_validation_summary.tiff",
+      "format": "tiff",
+      "exists": true,
+      "bytes": 1279214,
+      "dimensions": "5169x2949 px"
+    },
+    {
+      "path": "outputs\\submission\\figures\\supplement\\figureS4_constraint_validation_summary.png",
+      "format": "png",
+      "exists": true,
+      "bytes": 380927,
+      "dimensions": "5169x2949 px"
+    }
+  ],
+  "table_inventory": [
+    {
+      "path": "outputs\\submission\\tables\\publication_tables.docx",
+      "format": "docx",
+      "bytes": 46167
+    },
+    {
+      "path": "outputs\\submission\\tables\\s1_diagnostics.csv",
+      "format": "csv",
+      "bytes": 5595
+    },
+    {
+      "path": "outputs\\submission\\tables\\s1_diagnostics.xlsx",
+      "format": "xlsx",
+      "bytes": 8776
+    },
+    {
+      "path": "outputs\\submission\\tables\\s2_constraint_validation.csv",
+      "format": "csv",
+      "bytes": 618
+    },
+    {
+      "path": "outputs\\submission\\tables\\s2_constraint_validation.xlsx",
+      "format": "xlsx",
+      "bytes": 5266
+    },
+    {
+      "path": "outputs\\submission\\tables\\s3_scenario_comparison_full.csv",
+      "format": "csv",
+      "bytes": 1177
+    },
+    {
+      "path": "outputs\\submission\\tables\\s3_scenario_comparison_full.xlsx",
+      "format": "xlsx",
+      "bytes": 5793
+    },
+    {
+      "path": "outputs\\submission\\tables\\s4_sensitivity_summaries.csv",
+      "format": "csv",
+      "bytes": 1839
+    },
+    {
+      "path": "outputs\\submission\\tables\\s4_sensitivity_summaries.xlsx",
+      "format": "xlsx",
+      "bytes": 6078
+    },
+    {
+      "path": "outputs\\submission\\tables\\s5_county_posterior_dictionary.csv",
+      "format": "csv",
+      "bytes": 981
+    },
+    {
+      "path": "outputs\\submission\\tables\\s5_county_posterior_dictionary.xlsx",
+      "format": "xlsx",
+      "bytes": 5326
+    },
+    {
+      "path": "outputs\\submission\\tables\\s6_data_audit.csv",
+      "format": "csv",
+      "bytes": 139
+    },
+    {
+      "path": "outputs\\submission\\tables\\s6_data_audit.xlsx",
+      "format": "xlsx",
+      "bytes": 4979
+    },
+    {
+      "path": "outputs\\submission\\tables\\s7_covid_context.csv",
+      "format": "csv",
+      "bytes": 421
+    },
+    {
+      "path": "outputs\\submission\\tables\\s7_covid_context.xlsx",
+      "format": "xlsx",
+      "bytes": 5218
+    },
+    {
+      "path": "outputs\\submission\\tables\\s8_underlying_cause_context.csv",
+      "format": "csv",
+      "bytes": 153
+    },
+    {
+      "path": "outputs\\submission\\tables\\s8_underlying_cause_context.xlsx",
+      "format": "xlsx",
+      "bytes": 5003
+    },
+    {
+      "path": "outputs\\submission\\tables\\submission_tables_workbook.xlsx",
+      "format": "xlsx",
+      "bytes": 20471
+    },
+    {
+      "path": "outputs\\submission\\tables\\supplement_s5_county_posterior_summary_full.csv",
+      "format": "csv",
+      "bytes": 853677
+    },
+    {
+      "path": "outputs\\submission\\tables\\supplement_s5_county_posterior_summary_full.xlsx",
+      "format": "xlsx",
+      "bytes": 340817
+    },
+    {
+      "path": "outputs\\submission\\tables\\table1_data_structure_constraints.csv",
+      "format": "csv",
+      "bytes": 1172
+    },
+    {
+      "path": "outputs\\submission\\tables\\table1_data_structure_constraints.png",
+      "format": "png",
+      "bytes": 134894
+    },
+    {
+      "path": "outputs\\submission\\tables\\table1_data_structure_constraints.xlsx",
+      "format": "xlsx",
+      "bytes": 5546
+    },
+    {
+      "path": "outputs\\submission\\tables\\table2_primary_posterior_estimates.csv",
+      "format": "csv",
+      "bytes": 942
+    },
+    {
+      "path": "outputs\\submission\\tables\\table2_primary_posterior_estimates.png",
+      "format": "png",
+      "bytes": 110283
+    },
+    {
+      "path": "outputs\\submission\\tables\\table2_primary_posterior_estimates.xlsx",
+      "format": "xlsx",
+      "bytes": 5544
+    },
+    {
+      "path": "outputs\\submission\\tables\\table3_adjusted_rates_by_rurality.csv",
+      "format": "csv",
+      "bytes": 637
+    },
+    {
+      "path": "outputs\\submission\\tables\\table3_adjusted_rates_by_rurality.png",
+      "format": "png",
+      "bytes": 77577
+    },
+    {
+      "path": "outputs\\submission\\tables\\table3_adjusted_rates_by_rurality.xlsx",
+      "format": "xlsx",
+      "bytes": 5193
+    },
+    {
+      "path": "outputs\\submission\\tables\\table4_suppression_handling_comparison.csv",
+      "format": "csv",
+      "bytes": 927
+    },
+    {
+      "path": "outputs\\submission\\tables\\table4_suppression_handling_comparison.png",
+      "format": "png",
+      "bytes": 105937
+    },
+    {
+      "path": "outputs\\submission\\tables\\table4_suppression_handling_comparison.xlsx",
+      "format": "xlsx",
+      "bytes": 5609
+    }
+  ],
+  "reference_crosscheck": {
+    "listed": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17
+    ],
+    "cited": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17
+    ],
+    "uncited_listed": [],
+    "cited_missing_from_list": [],
+    "reference_17_cited": true
+  },
+  "docx_structural_checks": {
+    "manuscript": {
+      "exists": true,
+      "bytes": 3201443,
+      "word_tables": 4,
+      "embedded_media": 4,
+      "paragraph_tags": 660,
+      "word_count_approx": 3301
+    },
+    "supplement": {
+      "exists": true,
+      "bytes": 2847854,
+      "word_tables": 8,
+      "embedded_media": 4,
+      "paragraph_tags": 2144,
+      "word_count_approx": 2714
+    }
+  },
+  "docx_word_counts": {
+    "manuscript": 3301,
+    "supplement": 2714
+  },
+  "hpc_status_internal": {
+    "production_verification_path": "outputs\\bayes_constrained\\production_8chain\\production_verification.json",
+    "production_verification_exists": true,
+    "using_locked_handoff": false,
+    "source": "Checksum-verified eight-chain Wahab production archive imported by scripts/60_verify_production_chains.py.",
+    "verification": {
+      "passed": true,
+      "chain_count": 8,
+      "expected_seeds": [
+        18291,
+        18292,
+        18293,
+        18294,
+        18295,
+        18296,
+        18297,
+        18298
+      ],
+      "iterations_per_chain": 300000,
+      "burn_in": 75000,
+      "thin": 50,
+      "draws_per_chain": 4500,
+      "saved_parameter_draws_per_parameter": 36000,
+      "parameters": 69,
+      "maximum_rank_normalized_rhat": 1.0085537588710927,
+      "minimum_bulk_ess": 1437.2439572757296,
+      "minimum_tail_ess": 3199.3579952429254,
+      "latent_validation_records": 489696,
+      "latent_validation_failures": 0,
+      "warnings": [
+        "Some parameter proposal acceptance rates are outside the nominal 0.20-0.45 tuning target; this is reported as an efficiency warning because all-parameter R-hat and ESS pass.",
+        "Excluded 5 temporary NPZ files from the verified/public artifact set.",
+        "Ignored stale extension-round control metadata; chain statuses and resolved configs show pure 300,000-iteration production runs."
+      ],
+      "excluded_temporary_files": [
+        "outputs/bayes_constrained/hpc/chains/chain_01/draws_latent.npz.tmp.npz",
+        "outputs/bayes_constrained/hpc/chains/chain_02/draws_latent.npz.tmp.npz",
+        "outputs/bayes_constrained/hpc/chains/chain_03/draws_latent.npz.tmp.npz",
+        "outputs/bayes_constrained/hpc/chains/chain_06/draws_latent.npz.tmp.npz",
+        "outputs/bayes_constrained/hpc/chains/chain_07/draws_latent.npz.tmp.npz"
+      ]
+    }
+  },
+  "color_audit": "minimum CAM02-UCS color distance=14.9"
+}

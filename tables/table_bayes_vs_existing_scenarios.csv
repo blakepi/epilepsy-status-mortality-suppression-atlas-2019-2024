@@ -1,0 +1,12 @@
+method,estimate,interval,preserves_national_total,preserves_state_year_totals,preserves_county_period_constraints,preserves_county_year_intervals,models_latent_counts_probabilistically,provides_posterior_uncertainty
+Observed exact-positive only,0.97,0.80-1.19,No,No,Partial,Partial,No,No
+Observed exact plus explicit zero,0.91,0.78-1.06,No,No,Partial,Partial,No,No
+Suppressed = 1,0.98,0.88-1.10,No,No,Partial,Partial,No,No
+Suppressed = 4.06 (constant mean),1.24,1.14-1.36,Yes,No,Partial,Partial,No,No
+Suppressed = 5,1.29,1.18-1.42,No,No,Partial,Partial,No,No
+Suppressed = 9,1.42,1.27-1.60,No,No,Partial,Partial,No,No
+Population-scaled residual allocation,1.04,0.98-1.10,Yes,No,Partial,Partial,No,No
+Conservative anti-rural residual allocation,0.97,0.90-1.04,Yes,No,Partial,Partial,No,No
+Pro-rural residual allocation,1.13,1.05-1.20,Yes,No,Partial,Partial,No,No
+Interval-likelihood negative binomial,1.07,0.63-1.80,No,No,Partial,Partial,Partly,No
+Bayesian constrained latent-count model,1.26,1.12-1.37,Yes,Yes,Yes,Yes,Yes,Yes

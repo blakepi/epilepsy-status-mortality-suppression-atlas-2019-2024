@@ -1,0 +1,8 @@
+{
+  "phase": "editorial_revision_ready_package_analysis",
+  "total_mcod": 58380.0,
+  "total_ucd": 22306.0,
+  "suppressed_residual": 6992.0,
+  "mean_deaths_per_suppressed_row": 4.060394889663183,
+  "residual_allocation_totals_preserved": true
+}

@@ -1,0 +1,23 @@
+{
+  "commands": [
+    ".\\.venv\\Scripts\\python.exe scripts\\50_build_submission_figures.py",
+    ".\\.venv\\Scripts\\python.exe scripts\\51_build_submission_tables.py",
+    ".\\.venv\\Scripts\\python.exe scripts\\52_polish_manuscript_submission.py",
+    ".\\.venv\\Scripts\\python.exe scripts\\53_build_submission_supplement.py",
+    ".\\.venv\\Scripts\\python.exe scripts\\55_package_submission_assets.py",
+    ".\\.venv\\Scripts\\python.exe scripts\\54_qc_submission_package.py"
+  ],
+  "config": "config\\submission_visuals.yaml",
+  "created": "2026-07-15T11:13:39",
+  "final_wahab_hpc": {
+    "chains": 8,
+    "maximum_rhat": 1.0085537588710927,
+    "minimum_bulk_ess": 1437.2439572757296,
+    "minimum_tail_ess": 3199.3579952429254,
+    "parameter_count": 69,
+    "primary_ess": 4024.3950396146324,
+    "primary_mortality_rate_ratio": "1.23 (95% CrI 1.17\u20131.30)",
+    "primary_rhat": 1.0009353605050912,
+    "saved_parameter_draws": 36000
+  }
+}

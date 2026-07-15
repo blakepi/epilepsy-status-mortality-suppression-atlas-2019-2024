@@ -1,0 +1,11 @@
+tier,scenario,assigned_deaths,nonmetro_nonadjacent_irr,ci_95,notes
+Visible-only,Observed exact-positive only,"51,388",0.97,0.80-1.19,"Falls short of reconciled total by 6,992 deaths."
+Visible-only,Observed exact plus explicit zero,"51,388",0.91,0.78-1.06,"Falls short of reconciled total by 6,992 deaths."
+"Fixed-value stress test, not total-preserving",Suppressed = 1,"53,110",0.98,0.88-1.10,"Falls short of reconciled total by 5,270 deaths."
+"Constant-count stress test, total-preserving",Suppressed = 4.06 (constant mean),"58,380",1.24,1.14-1.36,Preserves total as a constant-count stress test; equal assignment concentrates rate influence in lower-population suppressed counties.
+"Fixed-value stress test, not total-preserving",Suppressed = 5,"59,998",1.29,1.18-1.42,"Exceeds reconciled total by 1,618 deaths."
+"Fixed-value stress test, not total-preserving",Suppressed = 9,"66,886",1.42,1.27-1.60,"Exceeds reconciled total by 8,506 deaths."
+"Residual-allocation, total-preserving",Population-scaled residual allocation,"58,380",1.04,0.98-1.10,Preserves the reconciled national total.
+"Residual-allocation, total-preserving",Conservative anti-rural residual allocation,"58,380",0.97,0.90-1.04,Preserves the reconciled national total.
+"Residual-allocation, total-preserving",Pro-rural residual allocation,"58,380",1.13,1.05-1.20,Preserves the reconciled national total.
+Interval model,Interval-likelihood negative binomial,Not assigned,1.07,0.63-1.80,Uses interval likelihood; known suppressed-cell total not imposed.

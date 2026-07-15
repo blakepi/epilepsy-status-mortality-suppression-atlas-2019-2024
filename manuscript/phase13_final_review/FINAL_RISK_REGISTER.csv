@@ -1,0 +1,17 @@
+risk_id,risk_name,category,severity,probability,current_mitigation,residual_risk,manuscript_location,status,action_needed
+R001,Outcome-dependent CDC WONDER suppression,scientific,high,high,"Suppression profile, interval coding, and bias-bounding are central.",moderate,Methods/Results/Discussion,mitigated,None beyond final reference check
+R002,Suppressed 1-9 interval assumptions,methods,high,medium,Use lower/midpoint/upper/residual and interval likelihood.,moderate,Methods/Table 3,mitigated,Explain in response if raised
+R003,County-period denominator/person-years choice,methods,medium,medium,Q001 county population matched summed Q002 annual county populations.,low,Methods,mitigated,None
+R004,County-year sparsity,methods,medium,high,"County-year data used for profiling/reconciliation, not primary county-year modeling.",low,Methods/Results,mitigated,None
+R005,Connecticut county/county-equivalent warning,geography,medium,medium,Acknowledged; no crosswalk correction applied.,medium,Methods/Limitations,open,Human review of whether extra wording is needed
+R006,SVI/component collinearity,statistics,medium,medium,SVI and components modeled separately.,low,Methods/Limitations,mitigated,None
+R007,COVID-era pooling and death-certificate coding,interpretation,medium,medium,Temporal and COVID co-mention analyses included.,medium,Results/Discussion,mitigated,Add citation if COVID framing remains prominent
+R008,Multiple-cause vs underlying-cause interpretation,interpretation,high,medium,UCD sensitivity included; MCOD described as mention-based.,low,Methods/Results/Discussion,mitigated,None
+R009,Ecological fallacy,interpretation,high,medium,No person-level inference; limitation stated.,low,Limitations,mitigated,None
+R010,Rurality classification choice,geography,medium,medium,RUCC primary and NCHS sensitivity documented.,medium,Methods/Limitations,mitigated,None
+R011,Small-cell race/ethnicity suppression,descriptive context,medium,high,Race/ethnicity analyses kept contextual/supplemental.,medium,Limitations/Supplement,mitigated,None
+R012,Place-of-death interpretability,descriptive context,low,medium,Kept contextual/supplemental.,low,Supplement,mitigated,None
+R013,Reference verification,package,medium,high,Primary source URLs added; article references flagged.,medium,Reference checklist,open,Final reference-manager verification
+R014,Journal fit/novelty,editorial,medium,medium,Cover letter positions paper as epilepsy surveillance methods and atlas.,medium,Cover letter,open,Human journal-fit review
+R015,AI disclosure acceptance,policy,medium,medium,Elsevier-style AI disclosure included.,low,AI disclosure,open,Confirm portal policy wording
+R016,Repository/DOI not finalized,package,medium,high,Data/code statements include placeholders.,medium,Data/Code availability,open,Assign repository URL/DOI or confirm not required

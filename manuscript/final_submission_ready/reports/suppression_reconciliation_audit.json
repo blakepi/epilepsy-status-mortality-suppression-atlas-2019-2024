@@ -1,0 +1,10 @@
+{
+  "total_mcod": 58380.0,
+  "exact_county_deaths": 51388.0,
+  "suppressed_rows": 1722,
+  "suppressed_residual": 6992.0,
+  "mean_deaths_per_suppressed_row": 4.060394889663183,
+  "population_scaled_total": 58380.0,
+  "conservative_total": 58380.0,
+  "pro_rural_total": 58380.0
+}

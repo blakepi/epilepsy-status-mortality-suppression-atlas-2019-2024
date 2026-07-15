@@ -1,0 +1,14 @@
+issue,action,status
+M1,"Reframed suppression scenarios into visible-only, residual-allocation total-preserving, constant-count stress-test, fixed-value stress-test, and interval-model tiers; added residual mean and constant mean scenario; revised abstract/results/discussion.",addressed
+M2,Embedded populated Tables 1-5 in the main manuscript DOCX and supplied CSV/XLSX copies.,addressed
+M3,Replaced Figure 4 with a 2019-2024 temporal/COVID context figure and corrected legend.,addressed
+M4,"Added Introduction and Discussion comparison to Quick 2019, distinguishing Bayesian smoothing from reconciliation/bounding/interval methods.",addressed
+m1/m2,Removed the orphan county-year exact-death abstract statistic and separated death counts from row counts.,addressed
+m3,Rebuilt Figure 2 with publication labels and legend stating 95% CIs on a log scale.,addressed
+m4/m5/m10,"Added methods limitations for alpha=1 working variance, interval model non-conditioning on the known marginal total, and unadjusted p-values/multiplicity.",addressed
+m6/m9,Clarified map viewport/model inclusion and color-scale handling; regenerated Figure 1 with higher zero/missing contrast and hatching.,addressed
+m7,"Audited residual allocation totals after [1,9] clipping; all residual allocation scenarios preserve 58,380 deaths.",addressed
+m8,Replaced vague VIF statement with maximum 2.92 for median household income/poverty component diagnostics.,addressed
+m11,Harmonized the corresponding author block to the full affiliation name.,addressed
+m12,Confirmed repository README and CITATION metadata identify Gregory Pierpoint; data/code statement names repository and DOI.,addressed
+Author question 8,Added Connecticut geography limitation statement noting no crosswalk correction and possible period comparability limitation.,addressed

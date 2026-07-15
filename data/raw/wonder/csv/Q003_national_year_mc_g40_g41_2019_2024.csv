@@ -1,0 +1,8 @@
+query_id,row_type,year,state,state_fips,county,county_fips,urbanization,age_group,sex,race,hispanic_origin,place_of_death,deaths_raw,deaths,death_count_status,death_count_known,death_count_suppressed,death_count_zero,population,crude_rate,rate_status,notes
+Q003_national_year_mc_g40_g41_2019_2024,national,2019,,,,,,,,,,,7583,7583,exact,True,False,False,328239523,2.3,known_or_blank,
+Q003_national_year_mc_g40_g41_2019_2024,national,2020,,,,,,,,,,,9147,9147,exact,True,False,False,329484123,2.8,known_or_blank,
+Q003_national_year_mc_g40_g41_2019_2024,national,2021,,,,,,,,,,,9733,9733,exact,True,False,False,331893745,2.9,known_or_blank,
+Q003_national_year_mc_g40_g41_2019_2024,national,2022,,,,,,,,,,,10575,10575,exact,True,False,False,333287557,3.2,known_or_blank,
+Q003_national_year_mc_g40_g41_2019_2024,national,2023,,,,,,,,,,,10546,10546,exact,True,False,False,334914895,3.1,known_or_blank,
+Q003_national_year_mc_g40_g41_2019_2024,national,2024,,,,,,,,,,,10796,10796,exact,True,False,False,340110988,3.2,known_or_blank,
+Q003_national_year_mc_g40_g41_2019_2024,aggregate_total,,,,,,,,,,,,58380,58380,aggregate_total,True,False,False,1997930831,2.9,known_or_blank,

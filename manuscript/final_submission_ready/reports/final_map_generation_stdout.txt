@@ -1,0 +1,7 @@
+{
+  "outdir": "C:\\Research\\EpilepsyMortalityOptionB\\manuscript\\final_submission_ready\\figures",
+  "manifest": "C:\\Research\\EpilepsyMortalityOptionB\\manuscript\\final_submission_ready\\reports\\publication_figure_manifest.csv",
+  "qa_report": "C:\\Research\\EpilepsyMortalityOptionB\\manuscript\\final_submission_ready\\reports\\publication_figure_QA_report.md",
+  "ok": true,
+  "errors": []
+}

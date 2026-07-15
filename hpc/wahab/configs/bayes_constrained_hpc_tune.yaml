@@ -1,0 +1,148 @@
+run:
+  n_chains: 16
+  n_iter: 2500
+  burn_in: 500
+  thin: 50
+  count_move_sweeps_per_iter: 0.04
+  max_count_proposals_per_iter: 220
+  blocked_refresh_frequency: 25
+  blocked_refresh_attempts: 8
+  checkpoint_every: 250
+  random_seeds: [17291, 17292, 17293, 17294, 17295, 17296, 17297, 17298, 17299, 17300, 17301, 17302, 17303, 17304, 17305, 17306]
+  target_acceptance_parameter_blocks: [0.20, 0.45]
+  validate_every_saved_draw: true
+model:
+  outcome: "MCOD G40/G41, 2019-2024"
+  rurality_reference: "metro_large"
+  svi_reference: "Q1_lowest"
+outputs:
+  hpc_root: "outputs/bayes_constrained/hpc"
+tuning_configurations:
+  - name: tune_01_baseline
+    count_move_sweeps_per_iter: 0.04
+    max_count_proposals_per_iter: 220
+    blocked_refresh_frequency: 25
+    blocked_refresh_attempts: 8
+    block_size: 2
+    move_weights: {state_year_transfer: 0.55, swap_2x2: 0.25, county_period_exploration: 0.20}
+    proposal_scale_multipliers: {beta: 1.0, state: 1.0, year: 1.0, log_sigma_state: 1.0, log_sigma_year: 1.0, log_kappa: 1.0}
+  - name: tune_02_more_count_moves
+    count_move_sweeps_per_iter: 0.08
+    max_count_proposals_per_iter: 350
+    blocked_refresh_frequency: 25
+    blocked_refresh_attempts: 8
+    block_size: 2
+    move_weights: {state_year_transfer: 0.55, swap_2x2: 0.25, county_period_exploration: 0.20}
+    proposal_scale_multipliers: {beta: 1.0, state: 1.0, year: 1.0, log_sigma_state: 1.0, log_sigma_year: 1.0, log_kappa: 1.0}
+  - name: tune_03_state_year_heavy
+    count_move_sweeps_per_iter: 0.06
+    max_count_proposals_per_iter: 300
+    blocked_refresh_frequency: 25
+    blocked_refresh_attempts: 10
+    block_size: 2
+    move_weights: {state_year_transfer: 0.70, swap_2x2: 0.15, county_period_exploration: 0.15}
+    proposal_scale_multipliers: {beta: 1.0, state: 1.0, year: 1.0, log_sigma_state: 1.0, log_sigma_year: 1.0, log_kappa: 1.0}
+  - name: tune_04_period_heavy
+    count_move_sweeps_per_iter: 0.06
+    max_count_proposals_per_iter: 300
+    blocked_refresh_frequency: 25
+    blocked_refresh_attempts: 10
+    block_size: 2
+    move_weights: {state_year_transfer: 0.45, swap_2x2: 0.20, county_period_exploration: 0.35}
+    proposal_scale_multipliers: {beta: 1.0, state: 1.0, year: 1.0, log_sigma_state: 1.0, log_sigma_year: 1.0, log_kappa: 1.0}
+  - name: tune_05_swap_heavy
+    count_move_sweeps_per_iter: 0.06
+    max_count_proposals_per_iter: 300
+    blocked_refresh_frequency: 25
+    blocked_refresh_attempts: 10
+    block_size: 2
+    move_weights: {state_year_transfer: 0.45, swap_2x2: 0.40, county_period_exploration: 0.15}
+    proposal_scale_multipliers: {beta: 1.0, state: 1.0, year: 1.0, log_sigma_state: 1.0, log_sigma_year: 1.0, log_kappa: 1.0}
+  - name: tune_06_frequent_refresh
+    count_move_sweeps_per_iter: 0.05
+    max_count_proposals_per_iter: 300
+    blocked_refresh_frequency: 10
+    blocked_refresh_attempts: 12
+    block_size: 3
+    move_weights: {state_year_transfer: 0.55, swap_2x2: 0.25, county_period_exploration: 0.20}
+    proposal_scale_multipliers: {beta: 1.0, state: 1.0, year: 1.0, log_sigma_state: 1.0, log_sigma_year: 1.0, log_kappa: 1.0}
+  - name: tune_07_less_refresh
+    count_move_sweeps_per_iter: 0.05
+    max_count_proposals_per_iter: 300
+    blocked_refresh_frequency: 50
+    blocked_refresh_attempts: 8
+    block_size: 3
+    move_weights: {state_year_transfer: 0.55, swap_2x2: 0.25, county_period_exploration: 0.20}
+    proposal_scale_multipliers: {beta: 1.0, state: 1.0, year: 1.0, log_sigma_state: 1.0, log_sigma_year: 1.0, log_kappa: 1.0}
+  - name: tune_08_smaller_parameter_steps
+    count_move_sweeps_per_iter: 0.05
+    max_count_proposals_per_iter: 300
+    blocked_refresh_frequency: 25
+    blocked_refresh_attempts: 8
+    block_size: 3
+    move_weights: {state_year_transfer: 0.55, swap_2x2: 0.25, county_period_exploration: 0.20}
+    proposal_scale_multipliers: {beta: 0.7, state: 0.7, year: 0.7, log_sigma_state: 0.8, log_sigma_year: 0.8, log_kappa: 0.8}
+  - name: tune_09_larger_parameter_steps
+    count_move_sweeps_per_iter: 0.05
+    max_count_proposals_per_iter: 300
+    blocked_refresh_frequency: 25
+    blocked_refresh_attempts: 8
+    block_size: 3
+    move_weights: {state_year_transfer: 0.55, swap_2x2: 0.25, county_period_exploration: 0.20}
+    proposal_scale_multipliers: {beta: 1.3, state: 1.3, year: 1.3, log_sigma_state: 1.2, log_sigma_year: 1.2, log_kappa: 1.2}
+  - name: tune_10_more_refresh_attempts
+    count_move_sweeps_per_iter: 0.05
+    max_count_proposals_per_iter: 320
+    blocked_refresh_frequency: 20
+    blocked_refresh_attempts: 16
+    block_size: 4
+    move_weights: {state_year_transfer: 0.60, swap_2x2: 0.20, county_period_exploration: 0.20}
+    proposal_scale_multipliers: {beta: 0.9, state: 0.9, year: 0.9, log_sigma_state: 1.0, log_sigma_year: 1.0, log_kappa: 1.0}
+  - name: tune_11_period_refresh_mix
+    count_move_sweeps_per_iter: 0.07
+    max_count_proposals_per_iter: 360
+    blocked_refresh_frequency: 20
+    blocked_refresh_attempts: 12
+    block_size: 4
+    move_weights: {state_year_transfer: 0.40, swap_2x2: 0.25, county_period_exploration: 0.35}
+    proposal_scale_multipliers: {beta: 0.9, state: 1.0, year: 1.0, log_sigma_state: 1.0, log_sigma_year: 1.0, log_kappa: 0.9}
+  - name: tune_12_swap_refresh_mix
+    count_move_sweeps_per_iter: 0.07
+    max_count_proposals_per_iter: 360
+    blocked_refresh_frequency: 20
+    blocked_refresh_attempts: 12
+    block_size: 4
+    move_weights: {state_year_transfer: 0.40, swap_2x2: 0.40, county_period_exploration: 0.20}
+    proposal_scale_multipliers: {beta: 0.9, state: 1.0, year: 1.0, log_sigma_state: 1.0, log_sigma_year: 1.0, log_kappa: 0.9}
+  - name: tune_13_low_count_cost
+    count_move_sweeps_per_iter: 0.03
+    max_count_proposals_per_iter: 180
+    blocked_refresh_frequency: 25
+    blocked_refresh_attempts: 8
+    block_size: 2
+    move_weights: {state_year_transfer: 0.55, swap_2x2: 0.25, county_period_exploration: 0.20}
+    proposal_scale_multipliers: {beta: 0.8, state: 0.8, year: 0.8, log_sigma_state: 0.9, log_sigma_year: 0.9, log_kappa: 0.9}
+  - name: tune_14_high_count_cost
+    count_move_sweeps_per_iter: 0.10
+    max_count_proposals_per_iter: 420
+    blocked_refresh_frequency: 30
+    blocked_refresh_attempts: 12
+    block_size: 5
+    move_weights: {state_year_transfer: 0.55, swap_2x2: 0.25, county_period_exploration: 0.20}
+    proposal_scale_multipliers: {beta: 1.0, state: 1.0, year: 1.0, log_sigma_state: 1.0, log_sigma_year: 1.0, log_kappa: 1.0}
+  - name: tune_15_hyper_smaller
+    count_move_sweeps_per_iter: 0.06
+    max_count_proposals_per_iter: 320
+    blocked_refresh_frequency: 25
+    blocked_refresh_attempts: 10
+    block_size: 3
+    move_weights: {state_year_transfer: 0.55, swap_2x2: 0.25, county_period_exploration: 0.20}
+    proposal_scale_multipliers: {beta: 1.0, state: 1.0, year: 1.0, log_sigma_state: 0.6, log_sigma_year: 0.6, log_kappa: 0.6}
+  - name: tune_16_hyper_larger
+    count_move_sweeps_per_iter: 0.06
+    max_count_proposals_per_iter: 320
+    blocked_refresh_frequency: 25
+    blocked_refresh_attempts: 10
+    block_size: 3
+    move_weights: {state_year_transfer: 0.55, swap_2x2: 0.25, county_period_exploration: 0.20}
+    proposal_scale_multipliers: {beta: 1.0, state: 1.0, year: 1.0, log_sigma_state: 1.4, log_sigma_year: 1.4, log_kappa: 1.4}

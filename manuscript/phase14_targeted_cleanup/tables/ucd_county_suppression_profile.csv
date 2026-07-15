@@ -1,0 +1,5 @@
+death_count_status,rows,lower,upper
+aggregate_total,1,22306.0,22306.0
+exact,504,16650.0,16650.0
+suppressed_1_9,1866,1866.0,16794.0
+zero,772,0.0,0.0

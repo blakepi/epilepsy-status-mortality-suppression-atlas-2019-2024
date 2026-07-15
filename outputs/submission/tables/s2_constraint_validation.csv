@@ -1,0 +1,13 @@
+Validation check,Units checked,Validation records,Failed records
+All counts integer,40808,40808,0
+County-period constraints respected,40808,40808,0
+County-year bounds respected,40808,40808,0
+Exact county-year counts unchanged,40808,40808,0
+Explicit-zero county-year counts unchanged,40808,40808,0
+"Grand total equals 58,380",40808,40808,0
+National-year totals equal Q003,40808,40808,0
+No counties silently dropped,40808,40808,0
+No negative counts,40808,40808,0
+Row count matches model frame,40808,40808,0
+State-year totals equal Q004,40808,40808,0
+Suppressed county-year counts remain 1–9,40808,40808,0

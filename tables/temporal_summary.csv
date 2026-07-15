@@ -1,0 +1,49 @@
+source,year,deaths,population,rate_per_100k,urbanization
+national_year,2019,7583,328239523.0,2.31020321096433,
+national_year,2020,9147,329484123.0,2.7761580487445827,
+national_year,2021,9733,331893745.0,2.932565059338494,
+national_year,2022,10575,333287557.0,3.1729357360917017,
+national_year,2023,10546,334914895.0,3.148859652838074,
+national_year,2024,10796,340110988.0,3.1742579278267833,
+urbanization_year,2019,2153,101468636.0,2.1218379243808894,Large Central Metro
+urbanization_year,2020,2751,101630353.0,2.706868488393423,Large Central Metro
+urbanization_year,2021,2741,101641938.0,2.6967215048575714,Large Central Metro
+urbanization_year,2022,3039,,,Large Central Metro
+urbanization_year,2023,2944,,,Large Central Metro
+urbanization_year,2024,2993,,,Large Central Metro
+urbanization_year,2019,1592,81975902.0,1.942034135836651,Large Fringe Metro
+urbanization_year,2020,1792,82574901.0,2.1701509518007174,Large Fringe Metro
+urbanization_year,2021,2012,83968087.0,2.3961484319632054,Large Fringe Metro
+urbanization_year,2022,2215,,,Large Fringe Metro
+urbanization_year,2023,2165,,,Large Fringe Metro
+urbanization_year,2024,2226,,,Large Fringe Metro
+urbanization_year,2019,1628,66733296.0,2.43956180435026,Medium Metro
+urbanization_year,2020,1968,67148016.0,2.930838641606328,Medium Metro
+urbanization_year,2021,2213,67891024.0,3.2596356183992747,Medium Metro
+urbanization_year,2022,2351,,,Medium Metro
+urbanization_year,2023,2353,,,Medium Metro
+urbanization_year,2024,2485,,,Medium Metro
+urbanization_year,2019,763,28808101.0,2.6485605559352905,Small Metro
+urbanization_year,2020,877,28918812.0,3.0326280346509393,Small Metro
+urbanization_year,2021,969,29117935.0,3.3278458791806496,Small Metro
+urbanization_year,2022,1000,,,Small Metro
+urbanization_year,2023,1061,,,Small Metro
+urbanization_year,2024,1075,,,Small Metro
+urbanization_year,2019,844,27627656.0,3.0549099062186094,Micropolitan (Nonmetro)
+urbanization_year,2020,1006,27634067.0,3.6404341062066616,Micropolitan (Nonmetro)
+urbanization_year,2021,1026,27782860.0,3.6929243425622853,Micropolitan (Nonmetro)
+urbanization_year,2022,1124,,,Micropolitan (Nonmetro)
+urbanization_year,2023,1154,,,Micropolitan (Nonmetro)
+urbanization_year,2024,1095,,,Micropolitan (Nonmetro)
+urbanization_year,2019,527,18060645.0,2.9179467289235794,NonCore (Nonmetro)
+urbanization_year,2020,686,18020968.0,3.806676755654857,NonCore (Nonmetro)
+urbanization_year,2021,673,17886304.0,3.762655493275749,NonCore (Nonmetro)
+urbanization_year,2022,755,,,NonCore (Nonmetro)
+urbanization_year,2023,766,,,NonCore (Nonmetro)
+urbanization_year,2024,803,,,NonCore (Nonmetro)
+urbanization_year,2019,76,3565287.0,2.131665697600221,Not Available
+urbanization_year,2020,67,3557006.0,1.8836066062300711,Not Available
+urbanization_year,2021,99,3605597.0,2.74573115076366,Not Available
+urbanization_year,2022,91,,,Not Available
+urbanization_year,2023,103,,,Not Available
+urbanization_year,2024,119,,,Not Available

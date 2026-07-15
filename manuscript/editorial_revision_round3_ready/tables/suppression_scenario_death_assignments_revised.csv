@@ -1,0 +1,10 @@
+scenario,label,tier,assigned_deaths_all_counties,difference_from_reconciled_total,suppressed_rows_included,notes
+observed_exact_positive_only,Observed exact-positive only,Visible-only,51388.0,-6992.0,0,
+observed_exact_plus_zero,Observed exact plus explicit zero,Visible-only,51388.0,-6992.0,0,
+suppressed_equals_1,Suppressed = 1,"Fixed-value stress test, not total-preserving",53110.0,-5270.0,1722,
+suppressed_equals_mean_4_06,Suppressed = 4.06 (constant mean),"Constant-count stress test, total-preserving",58380.0,0.0,1722,
+suppressed_equals_5,Suppressed = 5,"Fixed-value stress test, not total-preserving",59998.0,1618.0,1722,
+suppressed_equals_9,Suppressed = 9,"Fixed-value stress test, not total-preserving",66886.0,8506.0,1722,
+population_scaled_residual_allocation,Population-scaled residual allocation,"Residual-allocation, total-preserving",58380.0,0.0,1722,
+conservative_anti_rural_allocation,Conservative anti-rural residual allocation,"Residual-allocation, total-preserving",58380.0,0.0,1722,
+pro_rural_allocation,Pro-rural residual allocation,"Residual-allocation, total-preserving",58380.0,0.0,1722,

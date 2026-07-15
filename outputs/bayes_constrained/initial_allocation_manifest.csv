@@ -1,0 +1,5 @@
+chain,seed,path,csv_gz_path,total,validation_passed
+1,17291,data\processed\bayes_constrained\initial_allocation_chain1.parquet,data\processed\bayes_constrained\initial_allocation_chain1.csv.gz,58380,True
+2,17292,data\processed\bayes_constrained\initial_allocation_chain2.parquet,data\processed\bayes_constrained\initial_allocation_chain2.csv.gz,58380,True
+3,17293,data\processed\bayes_constrained\initial_allocation_chain3.parquet,data\processed\bayes_constrained\initial_allocation_chain3.csv.gz,58380,True
+4,17294,data\processed\bayes_constrained\initial_allocation_chain4.parquet,data\processed\bayes_constrained\initial_allocation_chain4.csv.gz,58380,True

@@ -1,0 +1,19 @@
+# Publication visualization and manuscript QA dependencies.
+# Install into a project-local virtual environment; do not install globally.
+matplotlib
+pandas
+numpy
+scipy
+statsmodels
+geopandas
+shapely
+pyproj
+pyogrio
+mapclassify
+colorspacious
+pillow
+lxml
+python-docx
+openpyxl
+pytest
+ruff

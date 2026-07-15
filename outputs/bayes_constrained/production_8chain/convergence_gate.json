@@ -1,0 +1,503 @@
+{
+  "action": "finalize",
+  "checks": [
+    {
+      "check": "modern_diagnostics_schema",
+      "detail": "all required modern diagnostic columns present",
+      "passed": true
+    },
+    {
+      "check": "complete_parameter_set",
+      "detail": "69 parameters; expected 69",
+      "passed": true
+    },
+    {
+      "check": "diagnostics_are_finite",
+      "detail": "R-hat and ESS columns",
+      "passed": true
+    },
+    {
+      "check": "parameter_Intercept",
+      "detail": "Intercept: r_hat=1.001489 <= 1.01, ess_bulk=4204.0 >= 400.0, ess_tail=10014.1 >= 400.0",
+      "passed": true
+    },
+    {
+      "check": "parameter_kappa",
+      "detail": "kappa: r_hat=1.001674 <= 1.01, ess_bulk=5911.5 >= 400.0, ess_tail=19501.3 >= 400.0",
+      "passed": true
+    },
+    {
+      "check": "parameter_primary_rurality_metro_other",
+      "detail": "primary_rurality_metro_other: r_hat=1.000381 <= 1.01, ess_bulk=6213.1 >= 400.0, ess_tail=14258.5 >= 400.0",
+      "passed": true
+    },
+    {
+      "check": "parameter_primary_rurality_nonmetro_adjacent",
+      "detail": "primary_rurality_nonmetro_adjacent: r_hat=1.000910 <= 1.01, ess_bulk=4923.8 >= 400.0, ess_tail=11027.5 >= 400.0",
+      "passed": true
+    },
+    {
+      "check": "parameter_primary_rurality_nonmetro_nonadjacent",
+      "detail": "primary_rurality_nonmetro_nonadjacent: r_hat=1.000935 <= 1.01, ess_bulk=4024.4 >= 400.0, ess_tail=8819.1 >= 400.0",
+      "passed": true
+    },
+    {
+      "check": "parameter_sigma_state",
+      "detail": "sigma_state: r_hat=1.001446 <= 1.01, ess_bulk=6769.1 >= 400.0, ess_tail=19025.3 >= 400.0",
+      "passed": true
+    },
+    {
+      "check": "parameter_sigma_year",
+      "detail": "sigma_year: r_hat=1.000510 <= 1.01, ess_bulk=11489.7 >= 400.0, ess_tail=13312.8 >= 400.0",
+      "passed": true
+    },
+    {
+      "check": "parameter_state_effect[01]",
+      "detail": "state_effect[01]: r_hat=1.000621 <= 1.01, ess_bulk=10132.9 >= 400.0, ess_tail=18900.1 >= 400.0",
+      "passed": true
+    },
+    {
+      "check": "parameter_state_effect[02]",
+      "detail": "state_effect[02]: r_hat=1.001020 <= 1.01, ess_bulk=2447.1 >= 400.0, ess_tail=5120.7 >= 400.0",
+      "passed": true
+    },
+    {
+      "check": "parameter_state_effect[04]",
+      "detail": "state_effect[04]: r_hat=1.000806 <= 1.01, ess_bulk=6311.4 >= 400.0, ess_tail=12587.1 >= 400.0",
+      "passed": true
+    },
+    {
+      "check": "parameter_state_effect[05]",
+      "detail": "state_effect[05]: r_hat=1.000318 <= 1.01, ess_bulk=9577.8 >= 400.0, ess_tail=18328.3 >= 400.0",
+      "passed": true
+    },
+    {
+      "check": "parameter_state_effect[06]",
+      "detail": "state_effect[06]: r_hat=1.000240 <= 1.01, ess_bulk=12143.0 >= 400.0, ess_tail=23820.2 >= 400.0",
+      "passed": true
+    },
+    {
+      "check": "parameter_state_effect[08]",
+      "detail": "state_effect[08]: r_hat=1.000730 <= 1.01, ess_bulk=11245.6 >= 400.0, ess_tail=19563.5 >= 400.0",
+      "passed": true
+    },
+    {
+      "check": "parameter_state_effect[09]",
+      "detail": "state_effect[09]: r_hat=1.002001 <= 1.01, ess_bulk=4182.4 >= 400.0, ess_tail=8713.1 >= 400.0",
+      "passed": true
+    },
+    {
+      "check": "parameter_state_effect[10]",
+      "detail": "state_effect[10]: r_hat=1.002553 <= 1.01, ess_bulk=2528.1 >= 400.0, ess_tail=4762.5 >= 400.0",
+      "passed": true
+    },
+    {
+      "check": "parameter_state_effect[11]",
+      "detail": "state_effect[11]: r_hat=1.008554 <= 1.01, ess_bulk=1437.2 >= 400.0, ess_tail=3199.4 >= 400.0",
+      "passed": true
+    },
+    {
+      "check": "parameter_state_effect[12]",
+      "detail": "state_effect[12]: r_hat=1.000412 <= 1.01, ess_bulk=8851.6 >= 400.0, ess_tail=18992.3 >= 400.0",
+      "passed": true
+    },
+    {
+      "check": "parameter_state_effect[13]",
+      "detail": "state_effect[13]: r_hat=1.000604 <= 1.01, ess_bulk=13945.9 >= 400.0, ess_tail=25340.0 >= 400.0",
+      "passed": true
+    },
+    {
+      "check": "parameter_state_effect[15]",
+      "detail": "state_effect[15]: r_hat=1.004655 <= 1.01, ess_bulk=1724.7 >= 400.0, ess_tail=3793.6 >= 400.0",
+      "passed": true
+    },
+    {
+      "check": "parameter_state_effect[16]",
+      "detail": "state_effect[16]: r_hat=1.000791 <= 1.01, ess_bulk=5513.0 >= 400.0, ess_tail=11225.6 >= 400.0",
+      "passed": true
+    },
+    {
+      "check": "parameter_state_effect[17]",
+      "detail": "state_effect[17]: r_hat=1.000301 <= 1.01, ess_bulk=11700.9 >= 400.0, ess_tail=20529.3 >= 400.0",
+      "passed": true
+    },
+    {
+      "check": "parameter_state_effect[18]",
+      "detail": "state_effect[18]: r_hat=1.000294 <= 1.01, ess_bulk=13543.6 >= 400.0, ess_tail=23999.6 >= 400.0",
+      "passed": true
+    },
+    {
+      "check": "parameter_state_effect[19]",
+      "detail": "state_effect[19]: r_hat=1.000639 <= 1.01, ess_bulk=8231.3 >= 400.0, ess_tail=15665.2 >= 400.0",
+      "passed": true
+    },
+    {
+      "check": "parameter_state_effect[20]",
+      "detail": "state_effect[20]: r_hat=1.000961 <= 1.01, ess_bulk=7254.7 >= 400.0, ess_tail=14098.2 >= 400.0",
+      "passed": true
+    },
+    {
+      "check": "parameter_state_effect[21]",
+      "detail": "state_effect[21]: r_hat=1.000657 <= 1.01, ess_bulk=12460.0 >= 400.0, ess_tail=21872.4 >= 400.0",
+      "passed": true
+    },
+    {
+      "check": "parameter_state_effect[22]",
+      "detail": "state_effect[22]: r_hat=1.000251 <= 1.01, ess_bulk=9316.3 >= 400.0, ess_tail=18826.4 >= 400.0",
+      "passed": true
+    },
+    {
+      "check": "parameter_state_effect[23]",
+      "detail": "state_effect[23]: r_hat=1.001396 <= 1.01, ess_bulk=5260.1 >= 400.0, ess_tail=11220.8 >= 400.0",
+      "passed": true
+    },
+    {
+      "check": "parameter_state_effect[24]",
+      "detail": "state_effect[24]: r_hat=1.000373 <= 1.01, ess_bulk=8812.0 >= 400.0, ess_tail=16914.2 >= 400.0",
+      "passed": true
+    },
+    {
+      "check": "parameter_state_effect[25]",
+      "detail": "state_effect[25]: r_hat=1.000441 <= 1.01, ess_bulk=7236.8 >= 400.0, ess_tail=14159.3 >= 400.0",
+      "passed": true
+    },
+    {
+      "check": "parameter_state_effect[26]",
+      "detail": "state_effect[26]: r_hat=1.000091 <= 1.01, ess_bulk=14680.6 >= 400.0, ess_tail=24979.0 >= 400.0",
+      "passed": true
+    },
+    {
+      "check": "parameter_state_effect[27]",
+      "detail": "state_effect[27]: r_hat=1.000197 <= 1.01, ess_bulk=11567.7 >= 400.0, ess_tail=21603.8 >= 400.0",
+      "passed": true
+    },
+    {
+      "check": "parameter_state_effect[28]",
+      "detail": "state_effect[28]: r_hat=1.000796 <= 1.01, ess_bulk=9536.3 >= 400.0, ess_tail=18358.0 >= 400.0",
+      "passed": true
+    },
+    {
+      "check": "parameter_state_effect[29]",
+      "detail": "state_effect[29]: r_hat=1.000547 <= 1.01, ess_bulk=11111.3 >= 400.0, ess_tail=22442.7 >= 400.0",
+      "passed": true
+    },
+    {
+      "check": "parameter_state_effect[30]",
+      "detail": "state_effect[30]: r_hat=1.002418 <= 1.01, ess_bulk=3902.8 >= 400.0, ess_tail=7695.0 >= 400.0",
+      "passed": true
+    },
+    {
+      "check": "parameter_state_effect[31]",
+      "detail": "state_effect[31]: r_hat=1.001384 <= 1.01, ess_bulk=5933.0 >= 400.0, ess_tail=11963.2 >= 400.0",
+      "passed": true
+    },
+    {
+      "check": "parameter_state_effect[32]",
+      "detail": "state_effect[32]: r_hat=1.002670 <= 1.01, ess_bulk=3008.8 >= 400.0, ess_tail=6630.1 >= 400.0",
+      "passed": true
+    },
+    {
+      "check": "parameter_state_effect[33]",
+      "detail": "state_effect[33]: r_hat=1.003328 <= 1.01, ess_bulk=3433.4 >= 400.0, ess_tail=7351.5 >= 400.0",
+      "passed": true
+    },
+    {
+      "check": "parameter_state_effect[34]",
+      "detail": "state_effect[34]: r_hat=1.000446 <= 1.01, ess_bulk=8607.8 >= 400.0, ess_tail=17301.6 >= 400.0",
+      "passed": true
+    },
+    {
+      "check": "parameter_state_effect[35]",
+      "detail": "state_effect[35]: r_hat=1.000969 <= 1.01, ess_bulk=6304.3 >= 400.0, ess_tail=12637.9 >= 400.0",
+      "passed": true
+    },
+    {
+      "check": "parameter_state_effect[36]",
+      "detail": "state_effect[36]: r_hat=1.000389 <= 1.01, ess_bulk=13100.0 >= 400.0, ess_tail=24623.0 >= 400.0",
+      "passed": true
+    },
+    {
+      "check": "parameter_state_effect[37]",
+      "detail": "state_effect[37]: r_hat=1.000300 <= 1.01, ess_bulk=15214.0 >= 400.0, ess_tail=24413.5 >= 400.0",
+      "passed": true
+    },
+    {
+      "check": "parameter_state_effect[38]",
+      "detail": "state_effect[38]: r_hat=1.004566 <= 1.01, ess_bulk=2515.4 >= 400.0, ess_tail=5061.1 >= 400.0",
+      "passed": true
+    },
+    {
+      "check": "parameter_state_effect[39]",
+      "detail": "state_effect[39]: r_hat=1.000075 <= 1.01, ess_bulk=15307.2 >= 400.0, ess_tail=26712.3 >= 400.0",
+      "passed": true
+    },
+    {
+      "check": "parameter_state_effect[40]",
+      "detail": "state_effect[40]: r_hat=1.000675 <= 1.01, ess_bulk=10025.7 >= 400.0, ess_tail=19104.0 >= 400.0",
+      "passed": true
+    },
+    {
+      "check": "parameter_state_effect[41]",
+      "detail": "state_effect[41]: r_hat=1.000956 <= 1.01, ess_bulk=10086.8 >= 400.0, ess_tail=18679.0 >= 400.0",
+      "passed": true
+    },
+    {
+      "check": "parameter_state_effect[42]",
+      "detail": "state_effect[42]: r_hat=1.000265 <= 1.01, ess_bulk=15627.2 >= 400.0, ess_tail=24528.3 >= 400.0",
+      "passed": true
+    },
+    {
+      "check": "parameter_state_effect[44]",
+      "detail": "state_effect[44]: r_hat=1.000797 <= 1.01, ess_bulk=2631.0 >= 400.0, ess_tail=5818.8 >= 400.0",
+      "passed": true
+    },
+    {
+      "check": "parameter_state_effect[45]",
+      "detail": "state_effect[45]: r_hat=1.000612 <= 1.01, ess_bulk=11713.3 >= 400.0, ess_tail=21610.6 >= 400.0",
+      "passed": true
+    },
+    {
+      "check": "parameter_state_effect[46]",
+      "detail": "state_effect[46]: r_hat=1.001681 <= 1.01, ess_bulk=3974.8 >= 400.0, ess_tail=8673.1 >= 400.0",
+      "passed": true
+    },
+    {
+      "check": "parameter_state_effect[47]",
+      "detail": "state_effect[47]: r_hat=1.000146 <= 1.01, ess_bulk=13345.5 >= 400.0, ess_tail=23704.8 >= 400.0",
+      "passed": true
+    },
+    {
+      "check": "parameter_state_effect[48]",
+      "detail": "state_effect[48]: r_hat=1.000678 <= 1.01, ess_bulk=12031.7 >= 400.0, ess_tail=27008.9 >= 400.0",
+      "passed": true
+    },
+    {
+      "check": "parameter_state_effect[49]",
+      "detail": "state_effect[49]: r_hat=1.002362 <= 1.01, ess_bulk=5225.2 >= 400.0, ess_tail=11229.9 >= 400.0",
+      "passed": true
+    },
+    {
+      "check": "parameter_state_effect[50]",
+      "detail": "state_effect[50]: r_hat=1.002284 <= 1.01, ess_bulk=2908.5 >= 400.0, ess_tail=5990.9 >= 400.0",
+      "passed": true
+    },
+    {
+      "check": "parameter_state_effect[51]",
+      "detail": "state_effect[51]: r_hat=1.000144 <= 1.01, ess_bulk=15352.6 >= 400.0, ess_tail=24739.7 >= 400.0",
+      "passed": true
+    },
+    {
+      "check": "parameter_state_effect[53]",
+      "detail": "state_effect[53]: r_hat=1.000422 <= 1.01, ess_bulk=10199.8 >= 400.0, ess_tail=17586.0 >= 400.0",
+      "passed": true
+    },
+    {
+      "check": "parameter_state_effect[54]",
+      "detail": "state_effect[54]: r_hat=1.000854 <= 1.01, ess_bulk=6742.1 >= 400.0, ess_tail=13006.1 >= 400.0",
+      "passed": true
+    },
+    {
+      "check": "parameter_state_effect[55]",
+      "detail": "state_effect[55]: r_hat=1.000247 <= 1.01, ess_bulk=10112.4 >= 400.0, ess_tail=19270.3 >= 400.0",
+      "passed": true
+    },
+    {
+      "check": "parameter_state_effect[56]",
+      "detail": "state_effect[56]: r_hat=1.002065 <= 1.01, ess_bulk=2445.3 >= 400.0, ess_tail=5020.8 >= 400.0",
+      "passed": true
+    },
+    {
+      "check": "parameter_svi_quartile_Q2",
+      "detail": "svi_quartile_Q2: r_hat=1.000541 <= 1.01, ess_bulk=4853.4 >= 400.0, ess_tail=10643.1 >= 400.0",
+      "passed": true
+    },
+    {
+      "check": "parameter_svi_quartile_Q3",
+      "detail": "svi_quartile_Q3: r_hat=1.000611 <= 1.01, ess_bulk=4249.0 >= 400.0, ess_tail=10178.9 >= 400.0",
+      "passed": true
+    },
+    {
+      "check": "parameter_svi_quartile_Q4_highest",
+      "detail": "svi_quartile_Q4_highest: r_hat=1.000803 <= 1.01, ess_bulk=3728.5 >= 400.0, ess_tail=8794.6 >= 400.0",
+      "passed": true
+    },
+    {
+      "check": "parameter_year_effect[2019]",
+      "detail": "year_effect[2019]: r_hat=1.000149 <= 1.01, ess_bulk=30940.1 >= 400.0, ess_tail=34656.1 >= 400.0",
+      "passed": true
+    },
+    {
+      "check": "parameter_year_effect[2020]",
+      "detail": "year_effect[2020]: r_hat=1.000230 <= 1.01, ess_bulk=32289.4 >= 400.0, ess_tail=33603.2 >= 400.0",
+      "passed": true
+    },
+    {
+      "check": "parameter_year_effect[2021]",
+      "detail": "year_effect[2021]: r_hat=1.000375 <= 1.01, ess_bulk=31738.2 >= 400.0, ess_tail=34666.0 >= 400.0",
+      "passed": true
+    },
+    {
+      "check": "parameter_year_effect[2022]",
+      "detail": "year_effect[2022]: r_hat=1.000077 <= 1.01, ess_bulk=30826.4 >= 400.0, ess_tail=35359.4 >= 400.0",
+      "passed": true
+    },
+    {
+      "check": "parameter_year_effect[2023]",
+      "detail": "year_effect[2023]: r_hat=1.000632 <= 1.01, ess_bulk=32831.6 >= 400.0, ess_tail=35036.8 >= 400.0",
+      "passed": true
+    },
+    {
+      "check": "parameter_year_effect[2024]",
+      "detail": "year_effect[2024]: r_hat=1.000106 <= 1.01, ess_bulk=34836.7 >= 400.0, ess_tail=35454.2 >= 400.0",
+      "passed": true
+    },
+    {
+      "check": "parameter_z_pct_age65",
+      "detail": "z_pct_age65: r_hat=1.000675 <= 1.01, ess_bulk=7791.7 >= 400.0, ess_tail=17777.8 >= 400.0",
+      "passed": true
+    },
+    {
+      "check": "parameter_z_pct_male",
+      "detail": "z_pct_male: r_hat=1.000911 <= 1.01, ess_bulk=9004.0 >= 400.0, ess_tail=21077.7 >= 400.0",
+      "passed": true
+    },
+    {
+      "check": "parameter_family_primary_rurality_",
+      "detail": "required parameter family primary_rurality_* present",
+      "passed": true
+    },
+    {
+      "check": "parameter_family_svi_quartile_",
+      "detail": "required parameter family svi_quartile_* present",
+      "passed": true
+    },
+    {
+      "check": "parameter_family_state_effect[",
+      "detail": "required parameter family state_effect[* present",
+      "passed": true
+    },
+    {
+      "check": "parameter_family_year_effect[",
+      "detail": "required parameter family year_effect[* present",
+      "passed": true
+    },
+    {
+      "check": "all_saved_latent_draw_validations_passed",
+      "detail": "489696 validation records summarized in 96 chain-check rows",
+      "passed": true
+    },
+    {
+      "check": "expected_chain_count",
+      "detail": "8 chains; expected 8",
+      "passed": true
+    },
+    {
+      "check": "no_chain_status_failure",
+      "detail": "completed",
+      "passed": true
+    },
+    {
+      "check": "grand_total_remains_58380",
+      "detail": "[58380, 58380, 58380, 58380, 58380, 58380, 58380, 58380]",
+      "passed": true
+    },
+    {
+      "check": "no_suppressed_cells_treated_as_zero",
+      "detail": "",
+      "passed": true
+    },
+    {
+      "check": "all_chains_reached_target_iteration",
+      "detail": "iteration equals target_iteration",
+      "passed": true
+    },
+    {
+      "check": "expected_saved_draws",
+      "detail": "expected 4500 per chain",
+      "passed": true
+    },
+    {
+      "check": "expected_unique_seeds",
+      "detail": "[18291, 18292, 18293, 18294, 18295, 18296, 18297, 18298]",
+      "passed": true
+    },
+    {
+      "check": "production_mode_only",
+      "detail": "production",
+      "passed": true
+    }
+  ],
+  "extension_round": 0,
+  "failures": [],
+  "max_extensions": 4,
+  "passed": true,
+  "recommended_extension_n_iter": 150000,
+  "thresholds": {
+    "ess_bulk_min": 400.0,
+    "ess_tail_min": 400.0,
+    "expected_parameters": 69,
+    "rhat_max": 1.01
+  },
+  "worst_parameters": [
+    {
+      "ess_bulk": 1437.2439572757296,
+      "ess_tail": 3199.3579952429254,
+      "parameter": "state_effect[11]",
+      "r_hat": 1.0085537588710929
+    },
+    {
+      "ess_bulk": 1724.7429998516732,
+      "ess_tail": 3793.636336616184,
+      "parameter": "state_effect[15]",
+      "r_hat": 1.0046547414474745
+    },
+    {
+      "ess_bulk": 2515.392517084606,
+      "ess_tail": 5061.075848228472,
+      "parameter": "state_effect[38]",
+      "r_hat": 1.0045657097348746
+    },
+    {
+      "ess_bulk": 3433.43244619562,
+      "ess_tail": 7351.492738470911,
+      "parameter": "state_effect[33]",
+      "r_hat": 1.0033281914476724
+    },
+    {
+      "ess_bulk": 3008.765564544892,
+      "ess_tail": 6630.11981107604,
+      "parameter": "state_effect[32]",
+      "r_hat": 1.0026697176592574
+    },
+    {
+      "ess_bulk": 2528.1312733550567,
+      "ess_tail": 4762.460186049922,
+      "parameter": "state_effect[10]",
+      "r_hat": 1.0025531209803271
+    },
+    {
+      "ess_bulk": 3902.803492475767,
+      "ess_tail": 7695.027831669544,
+      "parameter": "state_effect[30]",
+      "r_hat": 1.0024177109688637
+    },
+    {
+      "ess_bulk": 5225.155941089108,
+      "ess_tail": 11229.93131263042,
+      "parameter": "state_effect[49]",
+      "r_hat": 1.0023617197677843
+    },
+    {
+      "ess_bulk": 2908.504826472656,
+      "ess_tail": 5990.946781057195,
+      "parameter": "state_effect[50]",
+      "r_hat": 1.0022838736644026
+    },
+    {
+      "ess_bulk": 2445.3440137423167,
+      "ess_tail": 5020.8033034292885,
+      "parameter": "state_effect[56]",
+      "r_hat": 1.002064961955475
+    }
+  ]
+}
