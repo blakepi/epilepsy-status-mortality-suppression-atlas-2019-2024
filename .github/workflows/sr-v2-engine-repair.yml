@@ -61,6 +61,9 @@ jobs:
       - name: Run full-data latent movement pilot
         run: python scripts/65_run_latent_movement_pilot.py
 
+      - name: Importance-reweight archived draws for isolated prior correction
+        run: python scripts/66_importance_reweight_centered_prior.py
+
       - name: Check patch hygiene
         run: git diff --check
 
