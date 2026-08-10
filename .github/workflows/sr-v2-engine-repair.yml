@@ -40,6 +40,8 @@ jobs:
           python scripts/sr_v2_apply_engine_patch.py
           python scripts/sr_v2_optimize_cycle_patch.py
           python scripts/sr_v2_optimize_exact_validation_patch.py
+          python scripts/sr_v2_heatbath_patch.py
+          python scripts/sr_v2_heatbath_exact_patch.py
 
       - name: Run existing and v2 validation tests
         run: python -m pytest -q tests/test_bayes_constrained.py tests/test_sr_v2_engine.py
@@ -76,5 +78,5 @@ jobs:
             echo "No generated repair changes to commit."
             exit 0
           fi
-          git commit -m "test: update v2 validation and pilot evidence [skip sr-v2]"
+          git commit -m "test: update v2 heat-bath validation and pilot evidence [skip sr-v2]"
           git push origin HEAD:scientific-reports-v2
