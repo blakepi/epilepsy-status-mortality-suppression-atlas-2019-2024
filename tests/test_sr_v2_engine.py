@@ -24,6 +24,7 @@ from bayes_constrained.identifiability import (  # noqa: E402
 )
 from bayes_constrained.model import log_prior, make_design  # noqa: E402
 from bayes_constrained.sampler import run_mcmc  # noqa: E402
+from bayes_constrained.support_graph import analyze_state_support, overall_support_summary  # noqa: E402
 from bayes_constrained.target_density import centered_normal_log_density  # noqa: E402
 from bayes_constrained.validation_cases import structural_six_cycle_frame, structural_six_cycle_theta  # noqa: E402
 
@@ -77,6 +78,19 @@ def test_interval_half_edge_removes_the_component_margin_dependency() -> None:
     assert interval.nonzero_reduced_equalities == exact.nonzero_reduced_equalities - 1
     assert interval.intrinsic_margin_dependencies == exact.intrinsic_margin_dependencies - 1
     assert interval.graph_components_without_interval_half_edge == 0
+
+
+def test_support_graph_detects_chordless_six_cycle_without_four_cycle() -> None:
+    by_state = analyze_state_support(structural_six_cycle_frame())
+    assert len(by_state) == 1
+    row = by_state.iloc[0]
+    assert int(row["exact_support_cycle_rank"]) == 1
+    assert int(row["exact_support_cycle_edges"]) == 6
+    assert int(row["exact_support_four_cycle_edges"]) == 0
+    assert int(row["exact_support_long_cycle_only_edges"]) == 6
+    assert int(row["cyclic_components_without_four_cycle"]) == 1
+    overall = overall_support_summary(by_state)
+    assert overall["states_with_long_cycle_only_edges"] == 1
 
 
 def test_v111_two_by_two_kernel_is_disconnected_on_a_six_cycle_support() -> None:
