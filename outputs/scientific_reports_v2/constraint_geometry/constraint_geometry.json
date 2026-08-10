@@ -1,0 +1,17 @@
+{
+  "algebraically_redundant_higher_level_equalities": 7,
+  "county_period_interval_constraints": 1722,
+  "equality_nullity": 8439,
+  "graph_components": 50,
+  "graph_components_without_interval_half_edge": 3,
+  "independent_equalities": 1256,
+  "intrinsic_margin_dependencies": 3,
+  "latent_cell_bound_constraints": 9695,
+  "latent_variables": 9695,
+  "nominal_county_period_equalities": 1420,
+  "nominal_grand_total_equalities": 1,
+  "nominal_national_year_equalities": 6,
+  "nominal_state_year_equalities": 306,
+  "nonzero_reduced_equalities": 1259,
+  "zero_information_equalities": 467
+}

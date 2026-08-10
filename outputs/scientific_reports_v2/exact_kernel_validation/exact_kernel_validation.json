@@ -1,0 +1,28 @@
+{
+  "case": "chordless_six_cycle_structural_support",
+  "empirical_probabilities": [
+    0.527578947368421,
+    0.47242105263157896
+  ],
+  "exact_probabilities": [
+    0.5331948544600152,
+    0.46680514553998537
+  ],
+  "feasible_states": 2,
+  "legacy_2x2_only": {
+    "detailed_balance_error": 0.0,
+    "row_sum_error": 1.6653345369377348e-15,
+    "states": 2,
+    "stationarity_error": 8.881784197001252e-16,
+    "strongly_connected_components": 2
+  },
+  "maximum_empirical_absolute_error": 0.005615907091594208,
+  "pass": true,
+  "repaired_general_cycle": {
+    "detailed_balance_error": 0.0,
+    "row_sum_error": 1.3322676295501878e-15,
+    "states": 2,
+    "stationarity_error": 6.661338147750939e-16,
+    "strongly_connected_components": 1
+  }
+}

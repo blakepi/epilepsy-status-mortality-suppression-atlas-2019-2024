@@ -7,6 +7,7 @@ import pandas as pd
 from scipy.special import gammaln
 
 from .data import RURAL_ORDER, SVI_ORDER
+from .target_density import centered_normal_log_density
 
 
 PRIMARY_TERMS = [
@@ -145,8 +146,11 @@ def log_prior(theta: Theta, *, intercept_mean: float) -> float:
         return -np.inf
     state = theta.state_effect - theta.state_effect.mean()
     year = theta.year_effect - theta.year_effect.mean()
-    lp += float((-0.5 * (state / sigma_state) ** 2 - np.log(sigma_state)).sum())
-    lp += float((-0.5 * (year / sigma_year) ** 2 - np.log(sigma_year)).sum())
+    # The effects live on sum-to-zero subspaces of dimensions S-1 and T-1.
+    # Counting S or T Gaussian normalizers would add an unintended -log(sigma)
+    # term and over-shrink the corresponding hierarchical scale.
+    lp += centered_normal_log_density(state, sigma_state)
+    lp += centered_normal_log_density(year, sigma_year)
     # HalfNormal(1) on sigma with Jacobian from log sigma.
     lp += -0.5 * sigma_state**2 + theta.log_sigma_state
     lp += -0.5 * sigma_year**2 + theta.log_sigma_year

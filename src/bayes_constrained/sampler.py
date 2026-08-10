@@ -173,6 +173,70 @@ def state_2x2_swap(y: np.ndarray, move: MoveState, current_mu: np.ndarray, kappa
     return _try_apply_delta(y, move, idx, delta, current_mu, kappa, rng)
 
 
+
+def state_cycle_swap(
+    y: np.ndarray,
+    move: MoveState,
+    current_mu: np.ndarray,
+    kappa: float,
+    rng: np.random.Generator,
+    *,
+    max_cycle_half_length: int = 6,
+) -> bool:
+    """Propose an alternating move around a simple bipartite support cycle.
+
+    Two-by-two swaps are not a Markov basis when fixed cells create structural
+    zeros. A feasible fiber can contain longer even cycles but no admissible
+    2x2 rectangle. This proposal samples ordered counties and years from the
+    static free-cell support and alternates +1/-1 around the resulting cycle.
+    It preserves every state-year and county-period total exactly. Because the
+    selection law is independent of the current counts and the opposite sign
+    has the same probability, the proposal is symmetric.
+    """
+
+    years = np.unique(move.year_code)
+    eligible: list[tuple[int, np.ndarray, int]] = []
+    for state, counties in move.state_counties.items():
+        candidates = []
+        for county in counties:
+            rows = np.where(
+                (move.state_code == int(state))
+                & (move.county_code == int(county))
+                & (move.upper > move.lower)
+            )[0]
+            if len(rows) >= 2:
+                candidates.append(int(county))
+        maximum = min(int(max_cycle_half_length), len(candidates), len(years))
+        if maximum >= 3:
+            eligible.append((int(state), np.asarray(candidates, dtype=int), maximum))
+    if not eligible:
+        return False
+
+    _, counties, maximum = eligible[int(rng.integers(0, len(eligible)))]
+    length = int(rng.integers(3, maximum + 1))
+    selected_counties = rng.choice(counties, size=length, replace=False)
+    selected_years = rng.choice(years, size=length, replace=False)
+
+    indices: list[int] = []
+    delta: list[int] = []
+    for position in range(length):
+        positive_key = (int(selected_counties[position]), int(selected_years[position]))
+        negative_key = (int(selected_counties[(position + 1) % length]), int(selected_years[position]))
+        if positive_key not in move.county_year_to_row or negative_key not in move.county_year_to_row:
+            return False
+        positive = int(move.county_year_to_row[positive_key])
+        negative = int(move.county_year_to_row[negative_key])
+        if not (move.upper[positive] > move.lower[positive] and move.upper[negative] > move.lower[negative]):
+            return False
+        indices.extend([positive, negative])
+        delta.extend([1, -1])
+
+    idx = np.asarray(indices, dtype=int)
+    change = np.asarray(delta, dtype=int)
+    if rng.uniform() < 0.5:
+        change = -change
+    return _try_apply_delta(y, move, idx, change, current_mu, kappa, rng)
+
 def blocked_refresh(y: np.ndarray, move: MoveState, current_mu: np.ndarray, kappa: float, rng: np.random.Generator, attempts: int = 12) -> int:
     accepted = 0
     for _ in range(attempts):
@@ -195,6 +259,21 @@ def _proposal_scales(theta: Theta, multipliers: dict[str, float] | None = None) 
                 base[key] *= float(value)
     return base
 
+
+
+def _normalized_move_weights(settings: dict) -> dict[str, float]:
+    configured = settings.get("move_weights", {}) or {}
+    values = {
+        "state_year_transfer": float(configured.get("state_year_transfer", configured.get("transfer", 0.50))),
+        "county_period_exploration": float(configured.get("county_period_exploration", configured.get("interval_transfer", 0.20))),
+        "swap_2x2": float(configured.get("swap_2x2", 0.20)),
+        "cycle_swap": float(configured.get("cycle_swap", 0.10)),
+    }
+    values = {key: max(value, 0.0) for key, value in values.items()}
+    total = sum(values.values())
+    if total <= 0:
+        raise ValueError("At least one latent-count move weight must be positive.")
+    return {key: value / total for key, value in values.items()}
 
 def _theta_to_rows(theta: Theta, design: Design, chain: int, draw: int, iteration: int) -> list[dict]:
     rows = []
@@ -306,6 +385,7 @@ def _merge_selected_tuning(settings: dict) -> dict:
         "blocked_refresh_frequency",
         "blocked_refresh_attempts",
         "block_size",
+        "max_cycle_half_length",
         "move_weights",
         "proposal_scale_multipliers",
     ]:
@@ -605,13 +685,12 @@ def run_mcmc_chain_hpc(
     blocked_frequency = int(settings.get("blocked_refresh_frequency", 25))
     blocked_attempts = int(settings.get("blocked_refresh_attempts", 12))
     checkpoint_every = max(1, int(checkpoint_every or settings.get("checkpoint_every", 250)))
-    move_weights = settings.get("move_weights", {})
-    weight_transfer = float(move_weights.get("state_year_transfer", move_weights.get("transfer", 0.55)))
-    weight_interval = float(move_weights.get("county_period_exploration", move_weights.get("interval_transfer", 0.20)))
-    weight_swap = float(move_weights.get("swap_2x2", 0.25))
-    weight_total = max(weight_transfer + weight_interval + weight_swap, 1e-12)
-    weight_transfer /= weight_total
-    weight_interval /= weight_total
+    move_weights = _normalized_move_weights(settings)
+    weight_transfer = move_weights["state_year_transfer"]
+    weight_interval = move_weights["county_period_exploration"]
+    weight_swap = move_weights["swap_2x2"]
+    weight_cycle = move_weights["cycle_swap"]
+    max_cycle_half_length = int(settings.get("max_cycle_half_length", 6))
 
     checkpoint_root.mkdir(parents=True, exist_ok=True)
     parameter_rows: list[dict]
@@ -642,7 +721,7 @@ def run_mcmc_chain_hpc(
         theta = initialize_theta(frame, y, design)
         current_lp = log_posterior_theta(y, theta, design, intercept_mean=intercept_mean)
         scales0 = _proposal_scales(theta, settings.get("proposal_scale_multipliers"))
-        accepted = {"transfer": 0, "interval_transfer": 0, "swap_2x2": 0, "blocked_refresh": 0}
+        accepted = {"transfer": 0, "interval_transfer": 0, "swap_2x2": 0, "cycle_swap": 0, "blocked_refresh": 0}
         proposed = {key: 0 for key in accepted}
         param_accept = {key: 0 for key in scales0}
         param_prop = {key: 0 for key in scales0}
@@ -680,9 +759,16 @@ def run_mcmc_chain_hpc(
                 elif r < weight_transfer + weight_interval:
                     proposed["interval_transfer"] += 1
                     accepted["interval_transfer"] += int(period_interval_transfer(y, move, current_mu, kappa, rng))
-                else:
+                elif r < weight_transfer + weight_interval + weight_swap:
                     proposed["swap_2x2"] += 1
                     accepted["swap_2x2"] += int(state_2x2_swap(y, move, current_mu, kappa, rng))
+                else:
+                    proposed["cycle_swap"] += 1
+                    accepted["cycle_swap"] += int(
+                        state_cycle_swap(
+                            y, move, current_mu, kappa, rng, max_cycle_half_length=max_cycle_half_length
+                        )
+                    )
             if blocked_frequency and iteration % blocked_frequency == 0:
                 proposed["blocked_refresh"] += blocked_attempts
                 accepted["blocked_refresh"] += blocked_refresh(y, move, current_mu, kappa, rng, attempts=blocked_attempts)
@@ -837,6 +923,12 @@ def run_mcmc(frame: pd.DataFrame, *, mode: str = "production", model_name: str =
     max_count_proposals = int(settings.get("max_count_proposals_per_iter", 350))
     blocked_frequency = int(settings.get("blocked_refresh_frequency", 25))
     n_chains = int(settings.get("n_chains", 4))
+    move_weights = _normalized_move_weights(settings)
+    weight_transfer = move_weights["state_year_transfer"]
+    weight_interval = move_weights["county_period_exploration"]
+    weight_swap = move_weights["swap_2x2"]
+    weight_cycle = move_weights["cycle_swap"]
+    max_cycle_half_length = int(settings.get("max_cycle_half_length", 6))
     chain_rows = []
     latent_draws = []
     draw_meta = []
@@ -853,7 +945,7 @@ def run_mcmc(frame: pd.DataFrame, *, mode: str = "production", model_name: str =
         theta = initialize_theta(frame, y, design)
         current_lp = log_posterior_theta(y, theta, design, intercept_mean=intercept_mean)
         scales = _proposal_scales(theta)
-        accepted = {"transfer": 0, "interval_transfer": 0, "swap_2x2": 0, "blocked_refresh": 0}
+        accepted = {"transfer": 0, "interval_transfer": 0, "swap_2x2": 0, "cycle_swap": 0, "blocked_refresh": 0}
         proposed = {key: 0 for key in accepted}
         param_accept = {key: 0 for key in scales}
         param_prop = {key: 0 for key in scales}
@@ -877,6 +969,10 @@ def run_mcmc(frame: pd.DataFrame, *, mode: str = "production", model_name: str =
             if blocked_frequency and iteration % blocked_frequency == 0:
                 proposed["blocked_refresh"] += 12
                 accepted["blocked_refresh"] += blocked_refresh(y, move, current_mu, kappa, rng, attempts=12)
+            # Count moves mutate y. Refresh the current target value before any
+            # parameter Metropolis ratio is evaluated. The v1 local runner
+            # compared proposals against a log posterior from the previous y.
+            current_lp = log_posterior_theta(y, theta, design, intercept_mean=intercept_mean)
             for block, scale in scales.items():
                 param_prop[block] += 1
                 theta, current_lp, ok = _update_theta_block(y, theta, design, intercept_mean, rng, block, scale, current_lp)
