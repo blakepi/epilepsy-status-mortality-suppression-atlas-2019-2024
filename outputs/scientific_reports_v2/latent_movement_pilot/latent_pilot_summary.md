@@ -6,20 +6,20 @@ Four independently generated v1 initial allocations were evolved for 25,000 corr
 | --- | ---: |
 | Chains | 4 |
 | Proposals per chain | 25,000 |
-| Minimum final fraction of free cells changed | 0.0851 |
-| Median final fraction of free cells changed | 0.0877 |
-| Maximum final fraction of free cells changed | 0.0937 |
-| Minimum final L1 distance over free cells | 1,106 |
-| Median pairwise final/start L1 ratio | 0.9857 |
+| Minimum final fraction of free cells changed | 0.1277 |
+| Median final fraction of free cells changed | 0.1362 |
+| Maximum final fraction of free cells changed | 0.1416 |
+| Minimum final L1 distance over free cells | 3,010 |
+| Median pairwise final/start L1 ratio | 0.9698 |
 | Unique recorded state hashes | 204 |
 
 ## Acceptance by move
 
 | Move | Minimum | Median | Maximum |
 | --- | ---: | ---: | ---: |
-| county_period_exploration | 0.0969 | 0.1068 | 0.1105 |
-| cycle_swap | 0.0021 | 0.0035 | 0.0062 |
-| state_year_transfer | 0.0205 | 0.0233 | 0.0238 |
-| swap_2x2 | 0.0190 | 0.0226 | 0.0232 |
+| county_period_exploration | 0.1469 | 0.1615 | 0.1676 |
+| cycle_swap | 0.0063 | 0.0076 | 0.0081 |
+| state_year_transfer | 0.0337 | 0.0341 | 0.0369 |
+| swap_2x2 | 0.0298 | 0.0349 | 0.0392 |
 
 The next pilot must update parameters jointly, use eight independently dispersed starts, and compute latent-summary autocorrelation and between-chain convergence. No epidemiologic estimate is authorized from this fixed-theta diagnostic.

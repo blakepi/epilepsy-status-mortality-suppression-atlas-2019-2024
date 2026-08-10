@@ -11,6 +11,7 @@ from scipy.sparse import csr_matrix
 from scipy.sparse.csgraph import connected_components
 
 from .constraints import validate_constraints
+from .heatbath import amplitude_log_weights, amplitude_probabilities, feasible_amplitudes
 from .model import Design, Theta, log_likelihood, make_design, mu
 from .sampler import (
     MoveState,
@@ -83,12 +84,10 @@ def _state_year_events(move: MoveState) -> list[ProposalEvent]:
         return [ProposalEvent(None, None, 1.0)]
     raw: list[tuple[tuple[int, ...] | None, tuple[int, ...] | None, float]] = []
     for group in groups:
-        base = 1.0 / len(groups) / (len(group) * (len(group) - 1)) / 2.0
+        base = 1.0 / len(groups) / (len(group) * (len(group) - 1))
         for a, b in permutations(group.tolist(), 2):
             raw.append(((int(a), int(b)), (-1, 1), base))
-            raw.append(((int(a), int(b)), (1, -1), base))
     return _coalesce(raw)
-
 
 def _interval_events(move: MoveState) -> list[ProposalEvent]:
     groups: list[np.ndarray] = []
@@ -104,22 +103,25 @@ def _interval_events(move: MoveState) -> list[ProposalEvent]:
         return [ProposalEvent(None, None, 1.0)]
     raw: list[tuple[tuple[int, ...] | None, tuple[int, ...] | None, float]] = []
     for group in groups:
-        base = 1.0 / len(groups) / (len(group) * (len(group) - 1)) / 2.0
+        base = 1.0 / len(groups) / (len(group) * (len(group) - 1))
         for a, b in permutations(group.tolist(), 2):
             raw.append(((int(a), int(b)), (-1, 1), base))
-            raw.append(((int(a), int(b)), (1, -1), base))
     return _coalesce(raw)
-
 
 def _swap_2x2_events(move: MoveState) -> list[ProposalEvent]:
     states = [int(state) for state, counties in move.state_counties.items() if len(counties) >= 2]
-    years = [int(year) for year in np.unique(move.year_code)]
+    years = [int(year) for year in move.years]
     if not states or len(years) < 2:
         return [ProposalEvent(None, None, 1.0)]
     raw: list[tuple[tuple[int, ...] | None, tuple[int, ...] | None, float]] = []
     for state in states:
         counties = [int(code) for code in move.state_counties[state]]
-        base = 1.0 / len(states) / (len(counties) * (len(counties) - 1)) / (len(years) * (len(years) - 1)) / 2.0
+        base = (
+            1.0
+            / len(states)
+            / (len(counties) * (len(counties) - 1))
+            / (len(years) * (len(years) - 1))
+        )
         for county_a, county_b in permutations(counties, 2):
             for year_a, year_b in permutations(years, 2):
                 keys = [
@@ -130,13 +132,13 @@ def _swap_2x2_events(move: MoveState) -> list[ProposalEvent]:
                 ]
                 if any(key not in move.county_year_to_row for key in keys):
                     raw.append((None, None, base))
-                    raw.append((None, None, base))
                     continue
                 indices = tuple(int(move.county_year_to_row[key]) for key in keys)
+                if any(move.upper[index] <= move.lower[index] for index in indices):
+                    raw.append((None, None, base))
+                    continue
                 raw.append((indices, (1, -1, -1, 1), base))
-                raw.append((indices, (-1, 1, 1, -1), base))
     return _coalesce(raw)
-
 
 def _cycle_events(move: MoveState, *, max_cycle_half_length: int = 6, max_events: int = 2_000_000) -> list[ProposalEvent]:
     years = [int(year) for year in move.years]
@@ -152,7 +154,7 @@ def _cycle_events(move: MoveState, *, max_cycle_half_length: int = 6, max_events
     anticipated = 0
     for _, candidates, maximum in eligible:
         for length in range(3, maximum + 1):
-            anticipated += math.perm(len(candidates), length) * math.perm(len(years), length) * 2
+            anticipated += math.perm(len(candidates), length) * math.perm(len(years), length)
     if anticipated > max_events:
         raise ValueError(f"Exact cycle proposal enumeration requires {anticipated:,} events; limit is {max_events:,}.")
 
@@ -165,12 +167,11 @@ def _cycle_events(move: MoveState, *, max_cycle_half_length: int = 6, max_events
                 / (maximum - 2)
                 / math.perm(len(candidates), length)
                 / math.perm(len(years), length)
-                / 2.0
             )
             for counties in permutations(candidates, length):
                 for selected_years in permutations(years, length):
                     indices: list[int] = []
-                    delta: list[int] = []
+                    direction: list[int] = []
                     supported = True
                     for position in range(length):
                         positive_key = (int(counties[position]), int(selected_years[position]))
@@ -184,17 +185,12 @@ def _cycle_events(move: MoveState, *, max_cycle_half_length: int = 6, max_events
                             supported = False
                             break
                         indices.extend([positive, negative])
-                        delta.extend([1, -1])
+                        direction.extend([1, -1])
                     if not supported:
                         raw.append((None, None, base))
-                        raw.append((None, None, base))
                     else:
-                        idx_tuple = tuple(indices)
-                        delta_array = np.asarray(delta, dtype=int)
-                        raw.append((idx_tuple, tuple(delta_array.tolist()), base))
-                        raw.append((idx_tuple, tuple((-delta_array).tolist()), base))
+                        raw.append((tuple(indices), tuple(direction), base))
     return _coalesce(raw)
-
 
 def proposal_events(move: MoveState, move_name: str, *, max_cycle_half_length: int = 6) -> list[ProposalEvent]:
     if move_name == "state_year_transfer":
@@ -262,12 +258,12 @@ def exact_transition_matrix(
     state_lookup = {_state_key(state): index for index, state in enumerate(states)}
     mixture = normalized_weights(weights)
     matrix = np.zeros((len(states), len(states)), dtype=float)
-    log_likelihoods = np.asarray([log_likelihood(state, theta, design) for state in states], dtype=float)
+    current_mu = mu(theta, design)
+    kappa = float(np.exp(theta.log_kappa))
 
-    # Proposal selection depends on the static support, not on current counts.
-    # Enumerate each move law once, then apply fast cell-bound and county-margin
-    # checks for every source state. This makes randomized finite-fiber audits
-    # practical without changing the exact transition probabilities.
+    # Block selection depends only on the static free-cell support. Conditional
+    # on a selected direction, the production kernel samples every feasible
+    # integer amplitude from its exact NB2 full conditional.
     template_move = build_move_state(frame, states[0].copy())
     events_by_move = {
         move_name: proposal_events(
@@ -279,26 +275,50 @@ def exact_transition_matrix(
 
     for source_index, source in enumerate(states):
         period_total = np.bincount(
-            template_move.county_code, weights=source, minlength=len(template_move.period_lower)
+            template_move.county_code,
+            weights=source,
+            minlength=len(template_move.period_lower),
         ).astype(int)
         for move_name, move_weight in mixture.items():
             if move_weight <= 0:
                 continue
             for event in events_by_move[move_name]:
                 mass = move_weight * event.probability
-                proposed = _apply_event_if_feasible(source, event, template_move, period_total)
-                if proposed is None:
+                if event.indices is None or event.delta is None:
                     matrix[source_index, source_index] += mass
                     continue
-                target_index = state_lookup.get(_state_key(proposed))
-                if target_index is None:
-                    raise AssertionError(
-                        "A fast-feasible proposal was absent from the enumerated state space."
+                indices = np.asarray(event.indices, dtype=int)
+                direction = np.asarray(event.delta, dtype=int)
+                amplitudes = feasible_amplitudes(
+                    source,
+                    indices,
+                    direction,
+                    lower=template_move.lower,
+                    upper=template_move.upper,
+                    county_code=template_move.county_code,
+                    period_total=period_total,
+                    period_lower=template_move.period_lower,
+                    period_upper=template_move.period_upper,
+                )
+                probabilities = amplitude_probabilities(
+                    amplitude_log_weights(
+                        source,
+                        indices,
+                        direction,
+                        amplitudes,
+                        current_mu[indices],
+                        kappa,
                     )
-                log_ratio = log_likelihoods[target_index] - log_likelihoods[source_index]
-                acceptance = 1.0 if log_ratio >= 0 else float(np.exp(log_ratio))
-                matrix[source_index, target_index] += mass * acceptance
-                matrix[source_index, source_index] += mass * (1.0 - acceptance)
+                )
+                for amplitude, probability in zip(amplitudes, probabilities):
+                    proposed = source.copy()
+                    proposed[indices] += int(amplitude) * direction
+                    target_index = state_lookup.get(_state_key(proposed))
+                    if target_index is None:
+                        raise AssertionError(
+                            "A heat-bath-feasible proposal was absent from the enumerated state space."
+                        )
+                    matrix[source_index, target_index] += mass * float(probability)
     return matrix
 
 def exact_kernel_diagnostics(probabilities: np.ndarray, transition: np.ndarray, *, tolerance: float = 1e-14) -> ExactKernelDiagnostics:

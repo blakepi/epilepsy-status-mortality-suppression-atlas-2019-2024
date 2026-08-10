@@ -13,6 +13,7 @@ import pandas as pd
 
 from .constraints import append_validation, assert_constraints, solve_and_save_initial_allocations
 from .data import load_config
+from .heatbath import feasible_amplitudes, sample_amplitude
 from .model import Design, Theta, initialize_theta, log_posterior_theta, make_design, mu, nb2_logpmf, crude_intercept_prior
 from .paths import BAYES_DATA, OUTPUT_DIR, PROJECT_ROOT, rel
 
@@ -139,59 +140,90 @@ def _try_apply_delta(
     return False
 
 
+
+def _apply_heatbath_direction(
+    y: np.ndarray,
+    move: MoveState,
+    indices: np.ndarray,
+    direction: np.ndarray,
+    current_mu: np.ndarray,
+    kappa: float,
+    rng: np.random.Generator,
+) -> bool:
+    indices = np.asarray(indices, dtype=int)
+    direction = np.asarray(direction, dtype=int)
+    amplitudes = feasible_amplitudes(
+        y,
+        indices,
+        direction,
+        lower=move.lower,
+        upper=move.upper,
+        county_code=move.county_code,
+        period_total=move.period_total,
+        period_lower=move.period_lower,
+        period_upper=move.period_upper,
+    )
+    amplitude = sample_amplitude(
+        y, indices, direction, amplitudes, current_mu[indices], kappa, rng
+    )
+    if amplitude == 0:
+        return False
+    change = amplitude * direction
+    y[indices] += change
+    for county in np.unique(move.county_code[indices]):
+        move.period_total[county] += int(change[move.county_code[indices] == county].sum())
+    return True
+
 def state_year_transfer(y: np.ndarray, move: MoveState, current_mu: np.ndarray, kappa: float, rng: np.random.Generator) -> bool:
     groups = [g for g in move.free_by_state_year if len(g) >= 2]
     if not groups:
         return False
-    g = groups[int(rng.integers(0, len(groups)))]
-    a, b = rng.choice(g, size=2, replace=False)
-    if rng.uniform() < 0.5:
-        idx = np.asarray([a, b])
-        delta = np.asarray([-1, 1])
-    else:
-        idx = np.asarray([a, b])
-        delta = np.asarray([1, -1])
-    return _try_apply_delta(y, move, idx, delta, current_mu, kappa, rng)
-
+    group = groups[int(rng.integers(0, len(groups)))]
+    a, b = rng.choice(group, size=2, replace=False)
+    return _apply_heatbath_direction(
+        y, move, np.asarray([a, b]), np.asarray([-1, 1]), current_mu, kappa, rng
+    )
 
 def period_interval_transfer(y: np.ndarray, move: MoveState, current_mu: np.ndarray, kappa: float, rng: np.random.Generator) -> bool:
     groups = []
-    for g in move.free_by_state_year:
-        if len(g) < 2:
+    for group in move.free_by_state_year:
+        if len(group) < 2:
             continue
-        county = move.county_code[g]
-        mask = np.asarray([c in move.interval_counties for c in county])
+        county = move.county_code[group]
+        mask = np.asarray([int(code) in move.interval_counties for code in county])
         if mask.sum() >= 2:
-            groups.append(g[mask])
+            groups.append(group[mask])
     if not groups:
         return False
-    g = groups[int(rng.integers(0, len(groups)))]
-    a, b = rng.choice(g, size=2, replace=False)
-    idx = np.asarray([a, b])
-    delta = np.asarray([-1, 1]) if rng.uniform() < 0.5 else np.asarray([1, -1])
-    return _try_apply_delta(y, move, idx, delta, current_mu, kappa, rng)
-
+    group = groups[int(rng.integers(0, len(groups)))]
+    a, b = rng.choice(group, size=2, replace=False)
+    return _apply_heatbath_direction(
+        y, move, np.asarray([a, b]), np.asarray([-1, 1]), current_mu, kappa, rng
+    )
 
 def state_2x2_swap(y: np.ndarray, move: MoveState, current_mu: np.ndarray, kappa: float, rng: np.random.Generator) -> bool:
-    states = [s for s, counties in move.state_counties.items() if len(counties) >= 2]
+    states = [state for state, counties in move.state_counties.items() if len(counties) >= 2]
     if not states:
         return False
     state = states[int(rng.integers(0, len(states)))]
     counties = rng.choice(move.state_counties[state], size=2, replace=False)
-    years = np.unique(move.year_code)
-    if len(years) < 2:
+    if len(move.years) < 2:
         return False
-    t, u = rng.choice(years, size=2, replace=False)
-    keys = [(int(counties[0]), int(t)), (int(counties[0]), int(u)), (int(counties[1]), int(t)), (int(counties[1]), int(u))]
+    year_a, year_b = rng.choice(move.years, size=2, replace=False)
+    keys = [
+        (int(counties[0]), int(year_a)),
+        (int(counties[0]), int(year_b)),
+        (int(counties[1]), int(year_a)),
+        (int(counties[1]), int(year_b)),
+    ]
     if any(key not in move.county_year_to_row for key in keys):
         return False
-    idx = np.asarray([move.county_year_to_row[key] for key in keys])
-    delta = np.asarray([1, -1, -1, 1])
-    if rng.uniform() < 0.5:
-        delta = -delta
-    return _try_apply_delta(y, move, idx, delta, current_mu, kappa, rng)
-
-
+    indices = np.asarray([move.county_year_to_row[key] for key in keys], dtype=int)
+    if np.any(move.upper[indices] <= move.lower[indices]):
+        return False
+    return _apply_heatbath_direction(
+        y, move, indices, np.asarray([1, -1, -1, 1]), current_mu, kappa, rng
+    )
 
 def state_cycle_swap(
     y: np.ndarray,
@@ -241,11 +273,11 @@ def state_cycle_swap(
         indices.extend([positive, negative])
         delta.extend([1, -1])
 
-    idx = np.asarray(indices, dtype=int)
-    change = np.asarray(delta, dtype=int)
-    if rng.uniform() < 0.5:
-        change = -change
-    return _try_apply_delta(y, move, idx, change, current_mu, kappa, rng)
+    indices_array = np.asarray(indices, dtype=int)
+    direction = np.asarray(delta, dtype=int)
+    return _apply_heatbath_direction(
+        y, move, indices_array, direction, current_mu, kappa, rng
+    )
 
 def blocked_refresh(y: np.ndarray, move: MoveState, current_mu: np.ndarray, kappa: float, rng: np.random.Generator, attempts: int = 12) -> int:
     accepted = 0
