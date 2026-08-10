@@ -35,11 +35,8 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install pandas numpy scipy pyarrow statsmodels matplotlib openpyxl PyYAML pytest python-docx arviz
 
-      - name: Apply idempotent engine repair
+      - name: Apply exact heat-bath repair
         run: |
-          python scripts/sr_v2_apply_engine_patch.py
-          python scripts/sr_v2_optimize_cycle_patch.py
-          python scripts/sr_v2_optimize_exact_validation_patch.py
           python scripts/sr_v2_heatbath_patch.py
           python scripts/sr_v2_heatbath_exact_patch.py
 
