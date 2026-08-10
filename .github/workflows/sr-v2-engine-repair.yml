@@ -5,6 +5,10 @@ on:
     branches:
       - scientific-reports-v2
 
+concurrency:
+  group: scientific-reports-v2-engine-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: write
 
@@ -12,7 +16,7 @@ jobs:
   repair-and-validate:
     if: ${{ !contains(github.event.head_commit.message, '[skip sr-v2]') }}
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
     steps:
       - name: Check out v2 branch
         uses: actions/checkout@v4
@@ -48,6 +52,12 @@ jobs:
       - name: Analyze full-data latent support
         run: python scripts/63_analyze_latent_support.py
 
+      - name: Run randomized exact validation
+        run: python scripts/64_run_random_exact_validation.py
+
+      - name: Run full-data latent movement pilot
+        run: python scripts/65_run_latent_movement_pilot.py
+
       - name: Check patch hygiene
         run: git diff --check
 
@@ -64,5 +74,5 @@ jobs:
             echo "No generated repair changes to commit."
             exit 0
           fi
-          git commit -m "test: update v2 structural validation evidence [skip sr-v2]"
+          git commit -m "test: update v2 validation and pilot evidence [skip sr-v2]"
           git push origin HEAD:scientific-reports-v2
