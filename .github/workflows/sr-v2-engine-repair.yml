@@ -32,7 +32,9 @@ jobs:
           python -m pip install pandas numpy scipy pyarrow statsmodels matplotlib openpyxl PyYAML pytest python-docx arviz
 
       - name: Apply idempotent engine repair
-        run: python scripts/sr_v2_apply_engine_patch.py
+        run: |
+          python scripts/sr_v2_apply_engine_patch.py
+          python scripts/sr_v2_optimize_cycle_patch.py
 
       - name: Run existing and v2 validation tests
         run: python -m pytest -q tests/test_bayes_constrained.py tests/test_sr_v2_engine.py
