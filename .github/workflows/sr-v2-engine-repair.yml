@@ -39,6 +39,7 @@ jobs:
         run: |
           python scripts/sr_v2_apply_engine_patch.py
           python scripts/sr_v2_optimize_cycle_patch.py
+          python scripts/sr_v2_optimize_exact_validation_patch.py
 
       - name: Run existing and v2 validation tests
         run: python -m pytest -q tests/test_bayes_constrained.py tests/test_sr_v2_engine.py
@@ -69,6 +70,7 @@ jobs:
           git add \
             src/bayes_constrained/model.py \
             src/bayes_constrained/sampler.py \
+            src/bayes_constrained/exact_validation.py \
             outputs/scientific_reports_v2
           if git diff --cached --quiet; then
             echo "No generated repair changes to commit."
