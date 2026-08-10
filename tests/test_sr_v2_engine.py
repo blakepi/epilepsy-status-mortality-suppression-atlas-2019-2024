@@ -18,12 +18,13 @@ from bayes_constrained.exact_validation import (  # noqa: E402
     exact_kernel_diagnostics,
     exact_transition_matrix,
 )
+from bayes_constrained.heatbath import amplitude_probabilities, feasible_amplitudes  # noqa: E402
 from bayes_constrained.identifiability import (  # noqa: E402
     analyze_constraint_geometry,
     build_reduced_equality_matrix,
 )
 from bayes_constrained.model import log_prior, make_design  # noqa: E402
-from bayes_constrained.sampler import run_mcmc  # noqa: E402
+from bayes_constrained.sampler import build_move_state, run_mcmc, state_cycle_swap  # noqa: E402
 from bayes_constrained.support_graph import analyze_state_support, overall_support_summary  # noqa: E402
 from bayes_constrained.target_density import centered_normal_log_density  # noqa: E402
 from bayes_constrained.validation_cases import structural_six_cycle_frame, structural_six_cycle_theta  # noqa: E402
@@ -59,6 +60,30 @@ def test_local_runner_refreshes_log_posterior_after_count_moves() -> None:
     assert source.index(marker) < source.index("for block, scale in scales.items():", source.index(marker))
 
 
+def test_heatbath_enumerates_complete_integer_line() -> None:
+    amplitudes = feasible_amplitudes(
+        np.asarray([5, 5]),
+        np.asarray([0, 1]),
+        np.asarray([-1, 1]),
+        lower=np.asarray([1, 1]),
+        upper=np.asarray([9, 9]),
+        county_code=np.asarray([0, 1]),
+        period_total=np.asarray([5, 5]),
+        period_lower=np.asarray([1, 1]),
+        period_upper=np.asarray([9, 9]),
+    )
+    np.testing.assert_array_equal(amplitudes, np.arange(-4, 5))
+    probabilities = amplitude_probabilities(np.linspace(-2.0, 2.0, len(amplitudes)))
+    assert probabilities.sum() == pytest.approx(1.0)
+    assert np.all(probabilities > 0)
+
+
+def test_count_moves_use_heatbath_block_updates() -> None:
+    source = inspect.getsource(state_cycle_swap)
+    assert "_apply_heatbath_direction" in source
+    assert "_try_apply_delta" not in source
+
+
 def test_graph_rank_matches_dense_linear_algebra_on_exact_margin_toy() -> None:
     frame = structural_six_cycle_frame()
     geometry = analyze_constraint_geometry(frame)
@@ -88,6 +113,7 @@ def test_support_graph_detects_chordless_six_cycle_without_four_cycle() -> None:
     assert int(row["exact_support_cycle_edges"]) == 6
     assert int(row["exact_support_four_cycle_edges"]) == 0
     assert int(row["exact_support_long_cycle_only_edges"]) == 6
+    assert int(row["exact_support_unspanned_cycle_dimension_gf2"]) == 1
     assert int(row["cyclic_components_without_four_cycle"]) == 1
     overall = overall_support_summary(by_state)
     assert overall["states_with_long_cycle_only_edges"] == 1
@@ -116,7 +142,7 @@ def test_v111_two_by_two_kernel_is_disconnected_on_a_six_cycle_support() -> None
     assert diagnostics.strongly_connected_components == 2
 
 
-def test_general_cycle_move_connects_and_preserves_exact_posterior() -> None:
+def test_general_cycle_heatbath_connects_and_preserves_exact_posterior() -> None:
     frame = structural_six_cycle_frame()
     states = enumerate_feasible_states(frame)
     theta = structural_six_cycle_theta(frame)
@@ -142,7 +168,7 @@ def test_general_cycle_move_connects_and_preserves_exact_posterior() -> None:
     assert diagnostics.strongly_connected_components == 1
 
 
-def test_empirical_cycle_kernel_matches_exact_toy_posterior() -> None:
+def test_empirical_cycle_heatbath_matches_exact_toy_posterior() -> None:
     frame = structural_six_cycle_frame()
     states = enumerate_feasible_states(frame)
     theta = structural_six_cycle_theta(frame)
@@ -152,8 +178,8 @@ def test_empirical_cycle_kernel_matches_exact_toy_posterior() -> None:
         states,
         frame,
         theta,
-        steps=60_000,
-        burn_in=5_000,
+        steps=40_000,
+        burn_in=2_000,
         seed=20260810,
         weights={
             "state_year_transfer": 0.0,
@@ -162,4 +188,4 @@ def test_empirical_cycle_kernel_matches_exact_toy_posterior() -> None:
             "cycle_swap": 1.0,
         },
     )
-    np.testing.assert_allclose(empirical, probabilities, atol=0.025, rtol=0.0)
+    np.testing.assert_allclose(empirical, probabilities, atol=0.02, rtol=0.0)
