@@ -61,4 +61,5 @@ jobs:
             exit 0
           fi
           git commit -m "test: select v2 latent move profile [skip sr-v2] [skip tuning]"
+          git pull --rebase origin scientific-reports-v2
           git push origin HEAD:scientific-reports-v2
