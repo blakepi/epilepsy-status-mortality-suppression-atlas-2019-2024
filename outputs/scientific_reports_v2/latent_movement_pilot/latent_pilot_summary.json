@@ -1,0 +1,38 @@
+{
+  "acceptance_by_move": [
+    {
+      "max": 0.11048839071257005,
+      "median": 0.10681775693023644,
+      "min": 0.09689766317485898,
+      "move": "county_period_exploration"
+    },
+    {
+      "max": 0.006219578150351541,
+      "median": 0.0035340608919906284,
+      "min": 0.0021436227224008574,
+      "move": "cycle_swap"
+    },
+    {
+      "max": 0.02375695487061733,
+      "median": 0.023281686138828996,
+      "min": 0.02052471890058897,
+      "move": "state_year_transfer"
+    },
+    {
+      "max": 0.02317544216304127,
+      "median": 0.022570575159287398,
+      "min": 0.0189873417721519,
+      "move": "swap_2x2"
+    }
+  ],
+  "all_recorded_states_constraint_valid": true,
+  "chains": 4,
+  "maximum_final_fraction_free_cells_changed": 0.09365652398143373,
+  "median_final_fraction_free_cells_changed": 0.08767405879319237,
+  "median_pairwise_final_to_start_l1_ratio": 0.9857301126611117,
+  "minimum_final_fraction_free_cells_changed": 0.0850954100051573,
+  "minimum_final_l1_distance_free_cells": 1106,
+  "proposals_per_chain": 25000,
+  "reference_theta": "v1.1.1 posterior medians used only for fixed-parameter movement diagnostics",
+  "unique_recorded_state_hashes": 204
+}

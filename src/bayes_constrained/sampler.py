@@ -33,6 +33,8 @@ class MoveState:
     county_year_to_row: dict[tuple[int, int], int]
     free_by_state_year: list[np.ndarray]
     interval_counties: set[int]
+    years: np.ndarray
+    cycle_state_counties: list[tuple[int, np.ndarray]]
 
 
 def _codes(series: pd.Series) -> tuple[np.ndarray, list[str]]:
@@ -69,6 +71,21 @@ def build_move_state(frame: pd.DataFrame, y: np.ndarray) -> MoveState:
     county_year_to_row = {(int(c), int(t)): int(i) for i, (c, t) in enumerate(zip(county_code, year_code))}
     period_status = frame.drop_duplicates("county_fips").sort_values("county_fips")["q001_period_status"].astype(str).to_numpy()
     interval_counties = set(np.where(period_status == "suppressed_1_9")[0].tolist())
+    years = np.unique(year_code)
+    free_mask = upper > lower
+    cycle_state_counties: list[tuple[int, np.ndarray]] = []
+    for state, state_county_codes in state_counties.items():
+        candidates = []
+        for county in state_county_codes:
+            rows = np.where(
+                (state_code == int(state))
+                & (county_code == int(county))
+                & free_mask
+            )[0]
+            if len(rows) >= 2:
+                candidates.append(int(county))
+        if len(candidates) >= 3 and len(years) >= 3:
+            cycle_state_counties.append((int(state), np.asarray(candidates, dtype=int)))
     return MoveState(
         lower=lower,
         upper=upper,
@@ -84,6 +101,8 @@ def build_move_state(frame: pd.DataFrame, y: np.ndarray) -> MoveState:
         county_year_to_row=county_year_to_row,
         free_by_state_year=free_by_state_year,
         interval_counties=interval_counties,
+        years=years,
+        cycle_state_counties=cycle_state_counties,
     )
 
 
@@ -194,21 +213,12 @@ def state_cycle_swap(
     has the same probability, the proposal is symmetric.
     """
 
-    years = np.unique(move.year_code)
+    years = move.years
     eligible: list[tuple[int, np.ndarray, int]] = []
-    for state, counties in move.state_counties.items():
-        candidates = []
-        for county in counties:
-            rows = np.where(
-                (move.state_code == int(state))
-                & (move.county_code == int(county))
-                & (move.upper > move.lower)
-            )[0]
-            if len(rows) >= 2:
-                candidates.append(int(county))
-        maximum = min(int(max_cycle_half_length), len(candidates), len(years))
+    for state, counties in move.cycle_state_counties:
+        maximum = min(int(max_cycle_half_length), len(counties), len(years))
         if maximum >= 3:
-            eligible.append((int(state), np.asarray(candidates, dtype=int), maximum))
+            eligible.append((int(state), counties, maximum))
     if not eligible:
         return False
 

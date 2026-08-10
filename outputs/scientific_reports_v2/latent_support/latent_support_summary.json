@@ -6,12 +6,15 @@
   "exact_support_cycle_edges": 4790,
   "exact_support_cycle_rank": 3628,
   "exact_support_four_cycle_edges": 4790,
+  "exact_support_four_cycle_span_rank_gf2": 3628,
   "exact_support_long_cycle_only_edges": 0,
+  "exact_support_unspanned_cycle_dimension_gf2": 0,
   "free_cells": 9695,
   "interval_margin_counties": 1722,
   "interval_margin_free_cells": 4858,
   "states": 51,
   "states_with_cyclic_component_without_four_cycle": 0,
   "states_with_exact_support_cycles": 50,
-  "states_with_long_cycle_only_edges": 0
+  "states_with_long_cycle_only_edges": 0,
+  "states_with_unspanned_four_cycle_dimension_gf2": 0
 }

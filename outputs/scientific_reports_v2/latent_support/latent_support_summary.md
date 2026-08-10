@@ -14,10 +14,13 @@ The exact-margin free-cell support is represented as a bipartite graph linking c
 | exact support cycle edges | 4,790 |
 | exact support four cycle edges | 4,790 |
 | exact support long cycle only edges | 0 |
+| exact support four cycle span rank gf2 | 3,628 |
+| exact support unspanned cycle dimension gf2 | 0 |
 | cyclic components without four cycle | 0 |
 | states | 51 |
 | states with exact support cycles | 50 |
 | states with long cycle only edges | 0 |
+| states with unspanned four cycle dimension gf2 | 0 |
 | states with cyclic component without four cycle | 0 |
 
 This is a structural-support diagnostic, not a proof that the full bounded fiber is irreducible. It determines whether the support contains real-data cycle directions that the v1.1.1 length-four move family could not directly traverse.

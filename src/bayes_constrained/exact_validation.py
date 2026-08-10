@@ -139,18 +139,10 @@ def _swap_2x2_events(move: MoveState) -> list[ProposalEvent]:
 
 
 def _cycle_events(move: MoveState, *, max_cycle_half_length: int = 6, max_events: int = 2_000_000) -> list[ProposalEvent]:
-    years = [int(year) for year in np.unique(move.year_code)]
+    years = [int(year) for year in move.years]
     eligible: list[tuple[int, list[int], int]] = []
-    for state, counties_array in move.state_counties.items():
-        candidates: list[int] = []
-        for county in counties_array:
-            rows = np.where(
-                (move.state_code == int(state))
-                & (move.county_code == int(county))
-                & (move.upper > move.lower)
-            )[0]
-            if len(rows) >= 2:
-                candidates.append(int(county))
+    for state, counties_array in move.cycle_state_counties:
+        candidates = [int(county) for county in counties_array]
         maximum = min(int(max_cycle_half_length), len(candidates), len(years))
         if maximum >= 3:
             eligible.append((int(state), candidates, maximum))
@@ -233,6 +225,30 @@ def normalized_weights(weights: dict[str, float] | None = None) -> dict[str, flo
     return {key: max(value, 0.0) / total for key, value in values.items()}
 
 
+
+def _apply_event_if_feasible(
+    source: np.ndarray,
+    event: ProposalEvent,
+    move: MoveState,
+    period_total: np.ndarray,
+) -> np.ndarray | None:
+    if event.indices is None or event.delta is None:
+        return None
+    indices = np.asarray(event.indices, dtype=int)
+    delta = np.asarray(event.delta, dtype=int)
+    proposed_values = source[indices] + delta
+    if np.any(proposed_values < move.lower[indices]) or np.any(proposed_values > move.upper[indices]):
+        return None
+    affected = np.unique(move.county_code[indices])
+    updated_totals = period_total[affected].copy()
+    for county in affected:
+        updated_totals[affected == county] += int(delta[move.county_code[indices] == county].sum())
+    if np.any(updated_totals < move.period_lower[affected]) or np.any(updated_totals > move.period_upper[affected]):
+        return None
+    proposed = source.copy()
+    proposed[indices] = proposed_values
+    return proposed
+
 def exact_transition_matrix(
     states: np.ndarray,
     frame: pd.DataFrame,
@@ -248,32 +264,42 @@ def exact_transition_matrix(
     matrix = np.zeros((len(states), len(states)), dtype=float)
     log_likelihoods = np.asarray([log_likelihood(state, theta, design) for state in states], dtype=float)
 
+    # Proposal selection depends on the static support, not on current counts.
+    # Enumerate each move law once, then apply fast cell-bound and county-margin
+    # checks for every source state. This makes randomized finite-fiber audits
+    # practical without changing the exact transition probabilities.
+    template_move = build_move_state(frame, states[0].copy())
+    events_by_move = {
+        move_name: proposal_events(
+            template_move, move_name, max_cycle_half_length=max_cycle_half_length
+        )
+        for move_name, move_weight in mixture.items()
+        if move_weight > 0
+    }
+
     for source_index, source in enumerate(states):
-        move = build_move_state(frame, source.copy())
+        period_total = np.bincount(
+            template_move.county_code, weights=source, minlength=len(template_move.period_lower)
+        ).astype(int)
         for move_name, move_weight in mixture.items():
             if move_weight <= 0:
                 continue
-            events = proposal_events(move, move_name, max_cycle_half_length=max_cycle_half_length)
-            for event in events:
+            for event in events_by_move[move_name]:
                 mass = move_weight * event.probability
-                if event.indices is None or event.delta is None:
-                    matrix[source_index, source_index] += mass
-                    continue
-                proposed = source.copy()
-                indices = np.asarray(event.indices, dtype=int)
-                proposed[indices] += np.asarray(event.delta, dtype=int)
-                if not validate_constraints(proposed, frame).passed:
+                proposed = _apply_event_if_feasible(source, event, template_move, period_total)
+                if proposed is None:
                     matrix[source_index, source_index] += mass
                     continue
                 target_index = state_lookup.get(_state_key(proposed))
                 if target_index is None:
-                    raise AssertionError("A constraint-valid proposal was absent from the enumerated state space.")
+                    raise AssertionError(
+                        "A fast-feasible proposal was absent from the enumerated state space."
+                    )
                 log_ratio = log_likelihoods[target_index] - log_likelihoods[source_index]
                 acceptance = 1.0 if log_ratio >= 0 else float(np.exp(log_ratio))
                 matrix[source_index, target_index] += mass * acceptance
                 matrix[source_index, source_index] += mass * (1.0 - acceptance)
     return matrix
-
 
 def exact_kernel_diagnostics(probabilities: np.ndarray, transition: np.ndarray, *, tolerance: float = 1e-14) -> ExactKernelDiagnostics:
     probabilities = np.asarray(probabilities, dtype=float)
