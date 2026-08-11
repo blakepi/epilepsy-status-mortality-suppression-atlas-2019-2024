@@ -182,6 +182,14 @@ def main() -> None:
     calibration_design = load_json(
         ROOT / "outputs" / "scientific_reports_v2" / "calibration_design_smoke" / "calibration_design_summary.json"
     )
+    calibration_pilot = load_json(
+        ROOT
+        / "outputs"
+        / "scientific_reports_v2"
+        / "calibration_pilot"
+        / "replicate_001"
+        / "calibration_pilot_summary.json"
+    )
     add("exact_kernel_gate", bool(exact.get("pass")), str(exact.get("pass")))
     add(
         "randomized_exact_kernel_gate",
@@ -207,6 +215,11 @@ def main() -> None:
         "calibration_design_gate",
         bool(calibration_design.get("design_pass")),
         str(calibration_design.get("design_pass")),
+    )
+    add(
+        "calibration_computational_gate",
+        bool(calibration_pilot.get("computational_gate_pass")),
+        str(calibration_pilot.get("computational_gate_pass")),
     )
 
     checks_df = pd.DataFrame(checks)
