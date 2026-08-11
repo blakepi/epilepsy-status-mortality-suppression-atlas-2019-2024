@@ -1,0 +1,98 @@
+name: Scientific Reports v2 substantive scaffold audit
+
+on:
+  push:
+    branches:
+      - scientific-reports-v2
+    paths:
+      - 'outputs/scientific_reports_v2/substantive_scaffold_requested.json'
+
+permissions:
+  contents: write
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out substantive-work request
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Install audit dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pandas numpy scipy pyarrow statsmodels matplotlib PyYAML pytest arviz
+
+      - name: Compile new substantive modules
+        run: |
+          python -m py_compile \
+            src/bayes_constrained/calibration_study.py \
+            src/bayes_constrained/spatial_diagnostics.py \
+            scripts/86_prepare_sr_v2_calibration_batch1_replicate.py \
+            scripts/87_run_sr_v2_calibration_batch1_chain.py \
+            scripts/88_summarize_sr_v2_calibration_batch1_replicate.py \
+            scripts/89_aggregate_sr_v2_calibration_batch1.py \
+            scripts/90_run_sr_v2_spatial_residual_diagnostics.py \
+            scripts/91_validate_sr_v2_manuscript_scaffold.py
+
+      - name: Run corrected-engine, calibration, and spatial tests
+        run: |
+          python -m pytest -q \
+            tests/test_bayes_constrained.py \
+            tests/test_sr_v2_calibration.py \
+            tests/test_sr_v2_spatial_diagnostics.py
+
+      - name: Validate working manuscript scaffold
+        continue-on-error: true
+        run: python scripts/91_validate_sr_v2_manuscript_scaffold.py --mode working
+
+      - name: Verify working scaffold evidence
+        run: |
+          test -s outputs/scientific_reports_v2/manuscript_scaffold_qc/manuscript_qc_working.json
+          test -s outputs/scientific_reports_v2/manuscript_scaffold_qc/manuscript_qc_working.md
+          python - <<'PY'
+          import yaml
+          from pathlib import Path
+          path = Path('config/scientific_reports_v2_robustness_registry.yaml')
+          payload = yaml.safe_load(path.read_text(encoding='utf-8'))
+          assert payload['status'] == 'prespecified_before_corrected_production_results'
+          assert payload['reporting_rules']['no_corrected_empirical_estimate_before_production_gate'] is True
+          assert len(payload['production_gate']['chain_seeds']) == 8
+          assert len(payload['production_gate']['initialization_seeds']) == 8
+          PY
+          git diff --check
+
+      - name: Commit scaffold QC evidence
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add outputs/scientific_reports_v2/manuscript_scaffold_qc
+          if git diff --cached --quiet; then
+            echo "No scaffold-QC evidence to commit."
+          else
+            git commit -m "test: record v2 substantive scaffold audit [skip sr-v2] [skip tuning] [skip joint-pilot]"
+            git pull --rebase origin scientific-reports-v2
+            git push origin HEAD:scientific-reports-v2
+          fi
+
+      - name: Enforce scaffold gate after evidence is committed
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          path = Path('outputs/scientific_reports_v2/manuscript_scaffold_qc/manuscript_qc_working.json')
+          report = json.loads(path.read_text(encoding='utf-8'))
+          if not report.get('passed', False):
+              failed = [row for row in report.get('checks', []) if not row.get('passed', False)]
+              raise SystemExit(f'Substantive scaffold is on HOLD: {failed}')
+          PY
