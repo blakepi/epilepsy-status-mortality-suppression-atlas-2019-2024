@@ -1,8 +1,8 @@
-# Scientific Reports v2: target density and first inference-engine repair
+# Scientific Reports v2: corrected target density and latent-kernel validation
 
 ## Frozen baseline
 
-Scientific Reports v2 branches from the immutable `v1.1.1` tag at commit `50b468d212616ee80be55045dedf8a696db14df5`. The archived v1.1.1 outputs remain historical artifacts and are not overwritten. No v1.1.1 estimate should be relabeled as a corrected v2 result.
+Scientific Reports v2 branches from the immutable `v1.1.1` tag at commit `50b468d212616ee80be55045dedf8a696db14df5`. The archived v1.1.1 outputs remain historical artifacts and are not overwritten. No v1.1.1 estimate is relabeled as a corrected v2 result.
 
 ## Implemented target density
 
@@ -22,44 +22,58 @@ The fixed-effect and hyperprior families remain those documented in v1.1.1 unles
 
 -0.5 * sum_s(u_s^2 / sigma^2) - (S-1) * log(sigma).
 
-The v1.1.1 code counted S normalizing factors before the log-scale Jacobian, adding one unintended -log(sigma) term per centered random-effect family. The v2 helper `centered_normal_log_density` uses the correct subspace dimension. A corrected production rerun is required to determine the numerical effect.
+The v1.1.1 code counted S normalizing factors before the log-scale Jacobian, adding one unintended -log(sigma) term per centered random-effect family. The v2 helper `centered_normal_log_density` uses the correct subspace dimension. Exact importance reweighting of the 36,000 archived parameter draws shows that this correction alone changes the nonmetro-nonadjacent median IRR from 1.234985 to 1.234585, a -0.032% shift. It changes the state-effect scale median by approximately 1.35% and the year-effect scale median by approximately 13.65%. This reweighting isolates the prior correction only and does not replace corrected sampling.
 
 ## Confirmed local-runner defect
 
-The legacy local runner permitted latent-count moves to change y, then evaluated the first parameter Metropolis proposal against a cached log posterior computed for the preceding y. The HPC production path refreshed the target after count moves, but the local path did not. Scientific Reports v2 refreshes the current log posterior immediately after the count-move sweep and before any parameter proposal. The local and HPC paths must agree before a new release is frozen.
+The legacy local runner permitted latent-count moves to change y, then evaluated the first parameter Metropolis proposal against a cached log posterior computed for the preceding y. The HPC production path refreshed the target after count moves, but the local path did not. Scientific Reports v2 refreshes the current log posterior immediately after the count-move sweep and before any parameter proposal. The local and HPC paths now use the same target bookkeeping.
 
-## Exact counterexample to the v1.1.1 move family
+## Why invariant checks were not enough
 
-Constraint compliance does not establish irreducibility. A three-county by three-year toy system was constructed whose free-cell support is a chordless six-cycle. All county-period and year margins are exact. The fiber contains exactly two feasible allocations.
+Constraint compliance does not establish irreducibility or correct stationary probabilities. A three-county by three-year toy system was constructed whose free-cell support is a chordless six-cycle. All county-period and year margins are exact, and the fiber contains exactly two feasible allocations.
 
-State-year transfers cannot move because every county-period total is fixed. The support contains no all-free 2x2 rectangle, so the v1.1.1 2x2 swap cannot move either. The resulting latent kernel has two strongly connected components even though every state it visits is legal. This is a concrete counterexample to treating invariant checks as sufficient evidence of posterior exploration.
+State-year transfers cannot move because every county-period total is fixed. The support contains no all-free 2x2 rectangle, so the v1.1.1 2x2 move cannot connect the two allocations. The resulting latent kernel has two strongly connected components even though every state it visits is legal. This is a concrete counterexample to treating zero constraint violations as sufficient evidence of posterior exploration.
 
-## General-cycle repair
+The real model frame was also audited structurally. It contains 9,695 free latent county-year cells. The exact-margin county-by-year support has cycle rank 3,628, and supported 2x2 cycles span all 3,628 cycle-space dimensions over GF(2). Thus the adversarial chordless-cycle obstruction is a genuine generic failure mode but was not detected as an unspanned support direction in the present application. Bounds and posterior concentration can nevertheless make single-unit transitions mix slowly.
 
-The v2 engine adds an alternating simple-cycle proposal on the county-by-year bipartite free-cell support. For a selected state, it samples distinct counties and years, constructs an even cycle, and alternates +1 and -1 around that cycle. The move preserves each selected county-period total and every state-year total exactly. The support selection is independent of current count values and the opposite sign is proposed with equal probability, so the proposal is symmetric and uses the same local likelihood-ratio Metropolis rule as the existing count moves.
+## General-cycle and exact heat-bath repair
 
-The existing 2x2 move remains as the efficient length-four special case. Longer cycles have positive proposal probability up to the number of modeled years. This addresses the demonstrated structural-zero failure mode, although full-data exploration still requires empirical support-graph and dispersed-start diagnostics.
+The v2 engine adds an alternating simple-cycle direction on the county-by-year bipartite free-cell support. For a selected state, it samples distinct counties and years, constructs an even cycle, and alternates +1 and -1 around that cycle. The direction preserves each selected exact county-period total and every state-year total.
+
+More importantly, v2 no longer restricts a selected direction to a single +/-1 Metropolis step. For each selected pair, 2x2 rectangle, or longer cycle, the engine enumerates every integer amplitude compatible with county-year bounds and county-period bounds, evaluates the negative-binomial likelihood at every admissible point on that finite line, and samples the amplitude from its exact conditional distribution. Zero amplitude is included. This random-scan heat-bath update has the intended conditional target by construction and can traverse several count units in one accepted block update.
+
+The 2x2 move remains the efficient length-four special case. Longer cycles retain positive selection probability as protection against structural-zero fibers. Interval-margin transfers use the same full-line heat-bath mechanism while allowing county-period totals to vary within their public ranges.
 
 ## Exact enumerable validation
 
-The new validation module enumerates all feasible states for deliberately small systems, computes their exact conditional posterior probabilities for fixed parameters, constructs the exact transition matrix implied by each move mixture, and reports row-stochasticity error, posterior stationarity error, detailed-balance error, strongly connected components, and empirical versus exact state frequencies from the actual stochastic move implementation.
+The validation module enumerates every feasible state for deliberately small systems, computes the exact conditional posterior probabilities for fixed parameters, constructs the exact transition matrix implied by the production heat-bath move mixture, and reports row-stochasticity error, posterior stationarity error, detailed-balance error, strongly connected components, and empirical versus exact state frequencies from the actual stochastic implementation.
 
-The chordless six-cycle test is required to show that the legacy 2x2-only kernel is disconnected and that the general-cycle kernel is connected, reversible, stationary for the exact target, and empirically calibrated within a prespecified Monte Carlo tolerance.
+For the chordless six-cycle test, the 2x2-only kernel has two strongly connected components. The repaired general-cycle heat-bath kernel has one component, row-sum error below 5e-16, stationarity error below 2e-16, and detailed-balance error below 2e-17. Exact state probabilities were 0.53319 and 0.46681; empirical frequencies were 0.52759 and 0.47241 after simulation.
+
+Thirty additional reproducible bounded fibers, each fully enumerated, also passed. They contained 2-18 feasible states and mixtures of exact and interval county-period margins. The maximum repaired stationarity error was 3.33e-16 and maximum detailed-balance error was 1.53e-16. These finite tests establish correctness for the tested systems, not a theorem covering every possible full-data fiber.
 
 ## Constraint geometry
 
 The v2 identifiability module builds the equality system on free suppressed cells only, after fixed exact and zero cells are removed. Its exact rank calculation uses the bipartite incidence structure linking state-year margins to exact county-period margins. Interval-constrained counties appear as half-edges. A connected component without an interval half-edge contributes one margin dependency; a component with a half-edge has full row rank.
 
-National-year rows are algebraic sums of state-year rows over the same modeled universe, and the grand total is their sum. They remain important reconciliation checks but are not counted as independent identifying information. The generated report distinguishes nominal rows, nonzero reduced rows, independent equality rank, affine nullity, interval inequalities, and cell bounds.
+The application has 9,695 free latent variables and 1,256 independent public equalities, leaving equality nullity 8,439 before county-year bounds and 1,722 county-period interval inequalities are applied. Six national-year rows are algebraic sums of state-year rows over the same modeled universe, and the grand total is their sum. These seven rows remain important reconciliation checks but are not counted as independent identifying information.
 
-## Gate status
+## Full-data movement pilot
 
-This execution unit can pass only when:
+Four independently generated feasible allocations were evolved for 25,000 fixed-parameter heat-bath proposals each. Every recorded state remained constraint-valid. The median chain changed 13.62% of free cells relative to its own start, versus approximately 9% under the earlier single-unit pilot. Pairwise cell-space distance declined only modestly, with a median final-to-start L1 ratio of 0.970. The interval-margin move changed state most often; cycle blocks changed state least often because randomly selected long supports frequently had only zero as an admissible amplitude.
+
+This pilot supports the heat-bath repair but does not establish full posterior convergence. Proposal-profile tuning and joint parameter/latent pilots are therefore required before HPC production.
+
+## Current gate status
+
+The first inference-engine gate has passed:
 
 1. the corrected target-density tests pass;
 2. local and HPC count/parameter bookkeeping are aligned;
 3. the six-cycle counterexample is reproduced;
-4. the repaired exact transition matrix has one strongly connected component, negligible stationarity and detailed-balance errors, and empirical frequencies agreeing with the exact posterior;
-5. the full model-frame rank/nullity report is generated without changing source data.
+4. exact repaired transition matrices are connected and stationary in the tested fibers;
+5. randomized exact validation passes 30 of 30 systems;
+6. the full model-frame rank/nullity and support-graph reports are generated without changing source data;
+7. all recorded fixed-parameter pilot states satisfy every public constraint.
 
-Passing this gate does not authorize manuscript submission or validate the old 1.23 estimate under the corrected model. It authorizes pilot tuning, latent-space diagnostics, and the corrected eight-chain production rerun.
+Passing this gate does not authorize manuscript submission or validate the archived 1.23 estimate under the corrected joint sampler. It authorizes proposal tuning, a short corrected joint pilot, and then—only if those diagnostics pass—the corrected eight-chain production run.
