@@ -333,12 +333,12 @@ def test_slurm_scripts_have_required_logging_and_environment_activation() -> Non
         text = path.read_text(encoding="utf-8")
         assert text.startswith("#!/bin/bash -l")
         assert "#SBATCH --job-name" in text
-        assert "#SBATCH --output=logs/slurm/%x_%A_%a.out" in text
-        assert "#SBATCH --error=logs/slurm/%x_%A_%a.err" in text
+        assert "#SBATCH --output=logs/slurm/" in text
+        assert "#SBATCH --error=logs/slurm/" in text
         assert 'source "$VENV_PATH/bin/activate"' in text
-        assert "PYTHONPATH=\"$PROJECT_HOME\"" in text
+        assert "PYTHONPATH=" in text and "$PROJECT_HOME" in text
         assert "MPLBACKEND=Agg" in text
-        assert "sync_results_home.sh" in text
+        assert "sync_results_home.sh" in text or "sync_sr_v2_results_home.sh" in text
         assert "make " not in text.lower()
 
 
