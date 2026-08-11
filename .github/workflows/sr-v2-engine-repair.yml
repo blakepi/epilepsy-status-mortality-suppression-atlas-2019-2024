@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - scientific-reports-v2
+    paths:
+      - 'outputs/scientific_reports_v2/engine_gate_requested.json'
 
 concurrency:
   group: scientific-reports-v2-engine-${{ github.ref }}
@@ -14,7 +16,6 @@ permissions:
 
 jobs:
   repair-and-validate:
-    if: ${{ !contains(github.event.head_commit.message, '[skip sr-v2]') }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
@@ -81,6 +82,6 @@ jobs:
             echo "No generated repair changes to commit."
             exit 0
           fi
-          git commit -m "test: update v2 circuit validation and pilot evidence [skip sr-v2]"
+          git commit -m "test: update v2 circuit validation and pilot evidence [skip tuning] [skip joint-pilot]"
           git pull --rebase origin scientific-reports-v2
           git push origin HEAD:scientific-reports-v2
