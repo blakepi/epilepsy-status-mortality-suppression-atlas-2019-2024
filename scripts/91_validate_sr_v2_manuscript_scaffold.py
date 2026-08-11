@@ -58,7 +58,11 @@ def main() -> None:
     keyword_line = next(
         line for line in manuscript.splitlines() if line.startswith("**Keywords:**")
     )
-    keywords = [value.strip() for value in keyword_line.split(":", 1)[1].split(";") if value.strip()]
+    keywords = [
+        value.strip()
+        for value in keyword_line.split(":", 1)[1].split(";")
+        if value.strip()
+    ]
 
     required_main_sections = [
         "## Abstract",
@@ -80,8 +84,18 @@ def main() -> None:
         "### Residual spatial diagnostic",
         "### Ethics, data availability, code availability, and generative AI",
     ]
-    prohibited = list(manifest.get("prohibited_literal_fragments") or [])
-    prohibited_hits = [value for value in prohibited if value in manuscript or value in supplement]
+    # YAML parses unquoted numeric literals as numbers. Normalize every entry to
+    # text before scanning so the QC remains robust even if the manifest is
+    # hand-edited later.
+    prohibited = [
+        str(value)
+        for value in (manifest.get("prohibited_literal_fragments") or [])
+    ]
+    prohibited_hits = [
+        value
+        for value in prohibited
+        if value in manuscript or value in supplement
+    ]
     structured_abstract_labels = [
         label
         for label in ["Objective:", "Methods:", "Results:", "Conclusions:"]
@@ -91,22 +105,46 @@ def main() -> None:
     checks = [
         check("title_word_limit", len(title_words) <= 20, f"{len(title_words)} words"),
         check("abstract_word_limit", len(abstract_words) <= 200, f"{len(abstract_words)} words"),
-        check("abstract_unstructured", not structured_abstract_labels, str(structured_abstract_labels)),
+        check(
+            "abstract_unstructured",
+            not structured_abstract_labels,
+            str(structured_abstract_labels),
+        ),
         check("keyword_limit", len(keywords) <= 6, f"{len(keywords)} keywords"),
         check(
             "required_main_sections",
             all(section in manuscript for section in required_main_sections),
-            str([section for section in required_main_sections if section not in manuscript]),
+            str(
+                [
+                    section
+                    for section in required_main_sections
+                    if section not in manuscript
+                ]
+            ),
         ),
         check(
             "required_method_subsections",
             all(section in manuscript for section in required_method_subsections),
-            str([section for section in required_method_subsections if section not in manuscript]),
+            str(
+                [
+                    section
+                    for section in required_method_subsections
+                    if section not in manuscript
+                ]
+            ),
         ),
         check("all_placeholders_registered", not unregistered, str(unregistered)),
         check("prohibited_fragments_absent", not prohibited_hits, str(prohibited_hits)),
-        check("elsevier_policy_absent", "Elsevier" not in manuscript, "Elsevier reference removed"),
-        check("wahab_not_scientific_label", "Final Wahab HPC" not in manuscript, "cluster label absent"),
+        check(
+            "elsevier_policy_absent",
+            "Elsevier" not in manuscript,
+            "Elsevier reference removed",
+        ),
+        check(
+            "wahab_not_scientific_label",
+            "Final Wahab HPC" not in manuscript,
+            "cluster label absent",
+        ),
         check(
             "supplement_identifies_rank_and_nullity",
             all(token in supplement for token in ["9,695", "1,256", "8,439"]),
@@ -131,10 +169,21 @@ def main() -> None:
                 str(sorted(found_all)),
             )
         )
-        gate_path = ROOT / "outputs" / "scientific_reports_v2" / "production_8chain" / "production_gate.json"
+        gate_path = (
+            ROOT
+            / "outputs"
+            / "scientific_reports_v2"
+            / "production_8chain"
+            / "production_gate.json"
+        )
         gate_passed = False
         if gate_path.exists():
-            gate_passed = bool(json.loads(gate_path.read_text(encoding="utf-8")).get("passed", False))
+            gate_passed = bool(
+                json.loads(gate_path.read_text(encoding="utf-8")).get(
+                    "passed",
+                    False,
+                )
+            )
         checks.append(
             check(
                 "corrected_production_gate_passed",
@@ -178,7 +227,8 @@ def main() -> None:
         "| --- | --- | --- |",
     ]
     lines.extend(
-        f"| {row['check']} | {row['passed']} | {row['detail']} |" for row in checks
+        f"| {row['check']} | {row['passed']} | {row['detail']} |"
+        for row in checks
     )
     (OUTPUT_ROOT / f"manuscript_qc_{args.mode}.md").write_text(
         "\n".join(lines) + "\n",
