@@ -142,6 +142,7 @@ def validate_random_cases(*, cases: int = 30, seed: int = 20260810) -> tuple[pd.
             weights={
                 "state_year_transfer": 0.55,
                 "county_period_exploration": 0.20,
+                "interval_path_transfer": 0.0,
                 "swap_2x2": 0.25,
                 "cycle_swap": 0.0,
             },
@@ -153,9 +154,10 @@ def validate_random_cases(*, cases: int = 30, seed: int = 20260810) -> tuple[pd.
             theta,
             design,
             weights={
-                "state_year_transfer": 0.45,
-                "county_period_exploration": 0.20,
-                "swap_2x2": 0.20,
+                "state_year_transfer": 0.05,
+                "county_period_exploration": 0.25,
+                "interval_path_transfer": 0.30,
+                "swap_2x2": 0.25,
                 "cycle_swap": 0.15,
             },
             max_cycle_half_length=3,
