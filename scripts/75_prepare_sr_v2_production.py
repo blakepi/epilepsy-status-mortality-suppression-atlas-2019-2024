@@ -13,8 +13,11 @@ import yaml
 ROOT = Path(__file__).resolve().parents[1]
 OUTPUT_ROOT = ROOT / "outputs" / "scientific_reports_v2" / "production_8chain"
 EXTENDED_ROOT = ROOT / "outputs" / "scientific_reports_v2" / "extended_joint_pilot"
+CALIBRATION_ROOT = ROOT / "outputs" / "scientific_reports_v2" / "calibration_pilot" / "replicate_001"
 LATENT_TUNING = ROOT / "outputs" / "scientific_reports_v2" / "latent_tuning" / "selected_latent_tuning.yaml"
 HPC_CONFIG_DIR = ROOT / "hpc" / "wahab" / "configs"
+BASELINE_COMMIT = "50b468d212616ee80be55045dedf8a696db14df5"
+EXPECTED_BRANCH = "scientific-reports-v2"
 
 
 def sha256(path: Path) -> str:
@@ -34,6 +37,17 @@ def main() -> None:
     parser.add_argument("--force", action="store_true")
     args = parser.parse_args()
 
+    current_branch = git_value("branch", "--show-current")
+    if current_branch != EXPECTED_BRANCH:
+        raise SystemExit(
+            f"Production preparation requires branch {EXPECTED_BRANCH!r}; current branch is {current_branch!r}."
+        )
+    baseline_tag_commit = git_value("rev-list", "-n", "1", "v1.1.1")
+    if baseline_tag_commit != BASELINE_COMMIT:
+        raise SystemExit(
+            f"v1.1.1 resolves to {baseline_tag_commit}, not the frozen baseline {BASELINE_COMMIT}."
+        )
+
     extended_summary_path = EXTENDED_ROOT / "extended_joint_summary.json"
     recommended_path = EXTENDED_ROOT / "recommended_production_tuning.yaml"
     if not extended_summary_path.exists() or not recommended_path.exists():
@@ -41,6 +55,14 @@ def main() -> None:
     extended = json.loads(extended_summary_path.read_text(encoding="utf-8"))
     if not extended.get("pilot_pass", False):
         raise SystemExit("Extended corrected joint pilot did not pass; production is blocked.")
+
+    calibration_summary_path = CALIBRATION_ROOT / "calibration_pilot_summary.json"
+    if not calibration_summary_path.exists():
+        raise SystemExit("Truth-known calibration-pilot evidence is not available.")
+    calibration = json.loads(calibration_summary_path.read_text(encoding="utf-8"))
+    if not calibration.get("computational_gate_pass", False):
+        raise SystemExit("Truth-known calibration computational gate did not pass; production is blocked.")
+
     if not LATENT_TUNING.exists():
         raise SystemExit(f"Missing fixed-theta latent tuning: {LATENT_TUNING}")
 
@@ -68,6 +90,7 @@ def main() -> None:
         "max_cycle_half_length": int(recommended["max_cycle_half_length"]),
         "source_extended_joint_summary_sha256": sha256(extended_summary_path),
         "source_extended_joint_tuning_sha256": sha256(recommended_path),
+        "source_calibration_pilot_summary_sha256": sha256(calibration_summary_path),
         "source_fixed_theta_tuning_sha256": sha256(LATENT_TUNING),
         "fixed_theta_selected_profile": latent.get("selected_profile"),
     }
@@ -79,6 +102,7 @@ def main() -> None:
 
     seeds = list(range(58291, 58299))
     initialization_seeds = list(range(57291, 57299))
+    preparation_commit = git_value("rev-parse", "HEAD")
     config = {
         "run": {
             "n_chains": 8,
@@ -130,9 +154,11 @@ def main() -> None:
         },
         "scientific_reports_v2": {
             "frozen_baseline_tag": "v1.1.1",
-            "frozen_baseline_commit": "50b468d212616ee80be55045dedf8a696db14df5",
-            "branch": "scientific-reports-v2",
-            "preparation_commit": git_value("rev-parse", "HEAD"),
+            "frozen_baseline_commit": BASELINE_COMMIT,
+            "branch": EXPECTED_BRANCH,
+            "preparation_commit": preparation_commit,
+            "extended_joint_pilot_pass": True,
+            "calibration_computational_gate_pass": True,
             "interpretation_boundary": (
                 "No corrected empirical estimate is authorized until the eight-chain "
                 "production gate passes and downstream summaries are frozen."
@@ -147,10 +173,10 @@ def main() -> None:
 
     manifest = {
         "generated_utc": datetime.now(timezone.utc).isoformat(),
-        "git_commit": git_value("rev-parse", "HEAD"),
-        "git_branch": git_value("branch", "--show-current"),
+        "git_commit": preparation_commit,
+        "git_branch": current_branch,
         "frozen_baseline_tag": "v1.1.1",
-        "frozen_baseline_commit": "50b468d212616ee80be55045dedf8a696db14df5",
+        "frozen_baseline_commit": BASELINE_COMMIT,
         "config_path": str(config_path.relative_to(ROOT)).replace("\\", "/"),
         "config_sha256": sha256(config_path),
         "hpc_config_path": str(hpc_config_path.relative_to(ROOT)).replace("\\", "/"),
@@ -160,7 +186,9 @@ def main() -> None:
         "hpc_tuning_path": str(hpc_tuning_path.relative_to(ROOT)).replace("\\", "/"),
         "hpc_tuning_sha256": sha256(hpc_tuning_path),
         "extended_joint_summary_sha256": sha256(extended_summary_path),
+        "calibration_pilot_summary_sha256": sha256(calibration_summary_path),
         "extended_joint_pilot_pass": True,
+        "calibration_computational_gate_pass": True,
         "n_chains": 8,
         "iterations_per_chain": 300000,
         "burn_in": 75000,
