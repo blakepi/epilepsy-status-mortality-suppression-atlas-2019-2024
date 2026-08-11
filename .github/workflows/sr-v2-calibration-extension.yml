@@ -1,0 +1,137 @@
+name: Scientific Reports v2 tuned calibration extension
+
+on:
+  push:
+    branches:
+      - scientific-reports-v2
+    paths:
+      - 'outputs/scientific_reports_v2/calibration_extension_requested.json'
+
+concurrency:
+  group: scientific-reports-v2-calibration-extension-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  run-chain:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        chain: [1, 2, 3, 4]
+    steps:
+      - name: Check out extension request
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Install chain dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pandas numpy scipy pyarrow statsmodels PyYAML
+
+      - name: Download original calibration chain
+        uses: actions/download-artifact@v4
+        with:
+          name: calibration-pilot-chain-${{ matrix.chain }}
+          path: outputs/scientific_reports_v2/calibration_pilot/replicate_001
+          run-id: 31448594506
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Resume tuned calibration chain
+        run: python scripts/79_run_sr_v2_calibration_extension_chain.py --chain-id ${{ matrix.chain }}
+
+      - name: Upload extended calibration chain
+        uses: actions/upload-artifact@v4
+        with:
+          name: calibration-extension-chain-${{ matrix.chain }}
+          path: |
+            outputs/scientific_reports_v2/calibration_pilot/replicate_001_extended/chains/chain_*
+            outputs/scientific_reports_v2/calibration_pilot/replicate_001_extended/calibration_extension_chain_*_config.yaml
+          if-no-files-found: error
+          retention-days: 14
+
+  summarize:
+    needs: run-chain
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Check out extension request
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Install summary dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pandas numpy scipy pyarrow statsmodels matplotlib PyYAML arviz
+
+      - name: Download all extended calibration chains
+        uses: actions/download-artifact@v4
+        with:
+          pattern: calibration-extension-chain-*
+          path: outputs/scientific_reports_v2/calibration_pilot/replicate_001_extended
+          merge-multiple: true
+
+      - name: Summarize tuned calibration extension
+        continue-on-error: true
+        run: python scripts/80_summarize_sr_v2_calibration_extension.py
+
+      - name: Verify extension evidence
+        run: |
+          test -s outputs/scientific_reports_v2/calibration_pilot/replicate_001_extended/calibration_extension_summary.json
+          test -s outputs/scientific_reports_v2/calibration_pilot/replicate_001_extended/calibration_extension_summary.md
+          test -s outputs/scientific_reports_v2/calibration_pilot/replicate_001_extended/calibration_extension_primary_recovery.csv
+          test -s outputs/scientific_reports_v2/calibration_pilot/replicate_001_extended/calibration_extension_acceptance_summary.csv
+          git diff --check
+
+      - name: Commit compact extension evidence
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            outputs/scientific_reports_v2/calibration_pilot/replicate_001_extended/calibration_extension_acceptance.csv \
+            outputs/scientific_reports_v2/calibration_pilot/replicate_001_extended/calibration_extension_acceptance_summary.csv \
+            outputs/scientific_reports_v2/calibration_pilot/replicate_001_extended/calibration_extension_chain_status.csv \
+            outputs/scientific_reports_v2/calibration_pilot/replicate_001_extended/calibration_extension_parameter_diagnostics.csv \
+            outputs/scientific_reports_v2/calibration_pilot/replicate_001_extended/calibration_extension_primary_recovery.csv \
+            outputs/scientific_reports_v2/calibration_pilot/replicate_001_extended/calibration_extension_cell_recovery.csv \
+            outputs/scientific_reports_v2/calibration_pilot/replicate_001_extended/calibration_extension_latent_recovery_summary.csv \
+            outputs/scientific_reports_v2/calibration_pilot/replicate_001_extended/calibration_extension_summary.json \
+            outputs/scientific_reports_v2/calibration_pilot/replicate_001_extended/calibration_extension_summary.md
+          if git diff --cached --quiet; then
+            echo "No calibration-extension evidence to commit."
+          else
+            git commit -m "test: record tuned truth-known calibration extension [skip sr-v2] [skip tuning] [skip joint-pilot]"
+            git pull --rebase origin scientific-reports-v2
+            git push origin HEAD:scientific-reports-v2
+          fi
+
+      - name: Enforce tuned calibration gate
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          path = Path('outputs/scientific_reports_v2/calibration_pilot/replicate_001_extended/calibration_extension_summary.json')
+          summary = json.loads(path.read_text(encoding='utf-8'))
+          if not summary.get('computational_gate_pass', False):
+              raise SystemExit('Tuned truth-known calibration extension is on HOLD; evidence was committed for diagnosis.')
+          PY
