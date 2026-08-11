@@ -1,0 +1,6 @@
+{
+  "source_calibration_workflow_run_id": 31448594506,
+  "source_summary_commit": "77a941e1efc8788098663187c206734039062c63",
+  "purpose": "Resume all four truth-known calibration chains for 20,000 additional iterations using proposal scales derived from the initial acceptance profile, then diagnose only the final 1,800 retained draws per chain.",
+  "interpretation_boundary": "Tuned single-replicate computational evidence only; no nominal coverage or empirical manuscript claim."
+}
