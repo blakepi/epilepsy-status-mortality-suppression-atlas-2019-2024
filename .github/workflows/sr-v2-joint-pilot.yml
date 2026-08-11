@@ -1,0 +1,108 @@
+name: Scientific Reports v2 corrected joint pilot
+
+on:
+  push:
+    branches:
+      - scientific-reports-v2
+    paths:
+      - 'outputs/scientific_reports_v2/latent_tuning/selected_latent_tuning.yaml'
+
+concurrency:
+  group: scientific-reports-v2-joint-pilot-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  run-chain:
+    if: ${{ !contains(github.event.head_commit.message, '[skip joint-pilot]') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        chain: [1, 2, 3, 4]
+    steps:
+      - name: Check out frozen tuning commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Install pilot dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pandas numpy scipy pyarrow statsmodels PyYAML
+
+      - name: Run corrected joint pilot chain
+        run: python scripts/68_run_sr_v2_joint_pilot_chain.py --chain-id ${{ matrix.chain }}
+
+      - name: Upload chain outputs
+        uses: actions/upload-artifact@v4
+        with:
+          name: joint-pilot-chain-${{ matrix.chain }}
+          path: |
+            outputs/scientific_reports_v2/joint_pilot/chains/chain_*
+            outputs/scientific_reports_v2/joint_pilot/joint_pilot_chain_*_config.yaml
+          if-no-files-found: error
+          retention-days: 14
+
+  summarize:
+    if: ${{ !contains(github.event.head_commit.message, '[skip joint-pilot]') }}
+    needs: run-chain
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out frozen tuning commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Install summary dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pandas numpy scipy pyarrow statsmodels PyYAML arviz
+
+      - name: Download all joint-pilot chains
+        uses: actions/download-artifact@v4
+        with:
+          pattern: joint-pilot-chain-*
+          path: outputs/scientific_reports_v2/joint_pilot
+          merge-multiple: true
+
+      - name: Summarize corrected joint pilot
+        run: python scripts/69_summarize_sr_v2_joint_pilot.py
+
+      - name: Verify summary evidence
+        run: |
+          test -s outputs/scientific_reports_v2/joint_pilot/joint_pilot_summary.json
+          test -s outputs/scientific_reports_v2/joint_pilot/recommended_joint_tuning.yaml
+          git diff --check
+
+      - name: Commit joint-pilot evidence
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add outputs/scientific_reports_v2/joint_pilot
+          if git diff --cached --quiet; then
+            echo "No joint-pilot changes to commit."
+            exit 0
+          fi
+          git commit -m "test: record corrected v2 joint pilot [skip sr-v2] [skip tuning] [skip joint-pilot]"
+          git pull --rebase origin scientific-reports-v2
+          git push origin HEAD:scientific-reports-v2
