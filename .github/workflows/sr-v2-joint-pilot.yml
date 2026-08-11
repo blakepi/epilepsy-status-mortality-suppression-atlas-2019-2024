@@ -5,7 +5,7 @@ on:
     branches:
       - scientific-reports-v2
     paths:
-      - 'outputs/scientific_reports_v2/latent_tuning/selected_latent_tuning.yaml'
+      - 'outputs/scientific_reports_v2/joint_pilot_ready.json'
 
 concurrency:
   group: scientific-reports-v2-joint-pilot-${{ github.ref }}
@@ -24,7 +24,7 @@ jobs:
       matrix:
         chain: [1, 2, 3, 4]
     steps:
-      - name: Check out frozen tuning commit
+      - name: Check out frozen pilot-ready commit
         uses: actions/checkout@v4
         with:
           ref: ${{ github.sha }}
@@ -60,7 +60,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - name: Check out frozen tuning commit
+      - name: Check out frozen pilot-ready commit
         uses: actions/checkout@v4
         with:
           ref: ${{ github.sha }}
