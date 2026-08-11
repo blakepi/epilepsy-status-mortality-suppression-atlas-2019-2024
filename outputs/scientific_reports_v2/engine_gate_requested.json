@@ -1,0 +1,8 @@
+{
+  "requested_at_utc": "2026-08-11T00:20:00Z",
+  "gate": "corrected_target_heatbath_cycle_and_interval_path_validation",
+  "baseline_tag": "v1.1.1",
+  "baseline_commit": "50b468d212616ee80be55045dedf8a696db14df5",
+  "manuscript_results_frozen": true,
+  "production_inference_authorized": false
+}
