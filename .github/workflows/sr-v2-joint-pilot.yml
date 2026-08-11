@@ -85,6 +85,8 @@ jobs:
           merge-multiple: true
 
       - name: Summarize corrected joint pilot
+        id: summarize
+        continue-on-error: true
         run: python scripts/69_summarize_sr_v2_joint_pilot.py
 
       - name: Verify summary evidence
@@ -101,8 +103,19 @@ jobs:
           git add outputs/scientific_reports_v2/joint_pilot
           if git diff --cached --quiet; then
             echo "No joint-pilot changes to commit."
-            exit 0
+          else
+            git commit -m "test: record corrected v2 joint pilot [skip sr-v2] [skip tuning] [skip joint-pilot]"
+            git pull --rebase origin scientific-reports-v2
+            git push origin HEAD:scientific-reports-v2
           fi
-          git commit -m "test: record corrected v2 joint pilot [skip sr-v2] [skip tuning] [skip joint-pilot]"
-          git pull --rebase origin scientific-reports-v2
-          git push origin HEAD:scientific-reports-v2
+
+      - name: Enforce pilot gate after evidence is committed
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          path = Path('outputs/scientific_reports_v2/joint_pilot/joint_pilot_summary.json')
+          summary = json.loads(path.read_text(encoding='utf-8'))
+          if not summary.get('pilot_pass', False):
+              raise SystemExit('Corrected joint pilot is on HOLD; evidence was committed for diagnosis.')
+          PY
