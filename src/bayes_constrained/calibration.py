@@ -194,7 +194,6 @@ def public_frame_from_complete_counts(
     out["q004_state_year_total"] = state_year_total.to_numpy(dtype=int)
     out["q003_national_year_total"] = national_year_total.to_numpy(dtype=int)
     out.attrs["grand_total"] = int(counts.sum())
-    out.attrs["calibration_complete_counts"] = counts
     assert_constraints(counts, out, label="synthetic_truth")
     return out
 
@@ -231,8 +230,12 @@ def save_calibration_case(
     truth: CalibrationTruth,
 ) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
-    complete_frame.to_parquet(output_dir / "complete_frame.parquet", index=False)
-    public_frame.to_parquet(output_dir / "public_suppressed_frame.parquet", index=False)
+    complete_for_storage = complete_frame.copy()
+    public_for_storage = public_frame.copy()
+    complete_for_storage.attrs = {}
+    public_for_storage.attrs = {}
+    complete_for_storage.to_parquet(output_dir / "complete_frame.parquet", index=False)
+    public_for_storage.to_parquet(output_dir / "public_suppressed_frame.parquet", index=False)
     pd.DataFrame(
         {
             "county_fips": public_frame["county_fips"].astype(str),
