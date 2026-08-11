@@ -8,7 +8,7 @@ VENV_PATH="${VENV_PATH:-/home/pierpogb/.venvs/epimort_bayes}"
 cd "$PROJECT_HOME"
 source "$VENV_PATH/bin/activate"
 python scripts/75_prepare_sr_v2_production.py
-bash hpc/wahab/stage_to_scratch.sh
+bash hpc/wahab/stage_sr_v2_to_scratch.sh
 
 cd "$PROJECT_SCRATCH"
 mkdir -p logs/slurm outputs/scientific_reports_v2/production_8chain
