@@ -1,0 +1,5 @@
+{
+  "purpose": "Confirm that all exact-kernel, constraint-geometry, extended real-data pilot, tuned truth-known calibration, final infrastructure, shell-ordering, and fail-closed dependency gates pass before the manual Wahab production launch.",
+  "authoritative_command": "bash hpc/wahab/submit_sr_v2_production_ready.sh",
+  "production_launched": false
+}
