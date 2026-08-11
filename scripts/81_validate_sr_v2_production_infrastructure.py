@@ -118,14 +118,22 @@ def main() -> None:
 
     preparation = (ROOT / "scripts" / "75_prepare_sr_v2_production.py").read_text(encoding="utf-8")
     gate = (ROOT / "scripts" / "78_gate_sr_v2_production.py").read_text(encoding="utf-8")
+    chain_seed_range_present = (
+        "list(range(58291, 58299))" in preparation
+        or all(str(seed) in preparation for seed in range(58291, 58299))
+    )
+    initialization_seed_range_present = (
+        "list(range(57291, 57299))" in preparation
+        or all(str(seed) in preparation for seed in range(57291, 57299))
+    )
     rows.extend(
         [
             check("baseline_commit_guard", "BASELINE_COMMIT" in preparation and "v1.1.1" in preparation, "tag and commit guard"),
             check("branch_guard", "EXPECTED_BRANCH" in preparation, "scientific-reports-v2 branch guard"),
             check("extended_pilot_guard", "extended_joint_pilot" in preparation and "pilot_pass" in preparation, "extended pilot required"),
             check("calibration_guard", "calibration_pilot_summary.json" in preparation and "computational_gate_pass" in preparation, "truth-known calibration required"),
-            check("new_random_seeds", "58291" in preparation and "58298" in preparation, "new v2 chain seeds"),
-            check("new_initialization_seeds", "57291" in preparation and "57298" in preparation, "new dispersed-start seeds"),
+            check("new_random_seeds", chain_seed_range_present, "new v2 chain seeds 58291–58298"),
+            check("new_initialization_seeds", initialization_seed_range_present, "new dispersed-start seeds 57291–57298"),
             check("all_parameter_gate", "rhat_max_all" in gate and "ess_bulk_min_all" in gate and "ess_tail_min_all" in gate, "all-parameter convergence gate"),
             check("latent_summary_gate", "latent_summary_rhat" in gate and "latent_summary_bulk_ess" in gate, "latent aggregate convergence gate"),
             check("validation_gate", "zero_constraint_failures" in gate, "zero-failure constraint gate"),
