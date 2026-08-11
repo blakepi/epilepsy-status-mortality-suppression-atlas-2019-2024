@@ -1,5 +1,5 @@
 {
-  "attempt": 2,
-  "purpose": "Compile and test the updated isolated Scientific Reports v2 production scripts, Slurm wiring, namespace boundaries, frozen-baseline guards, calibration requirement, and fail-closed diagnostic gates without launching production inference.",
+  "attempt": 3,
+  "purpose": "Compile and test the isolated Scientific Reports v2 production scripts, Slurm wiring, namespace boundaries, frozen-baseline guards, calibration requirement, and fail-closed diagnostic gates using an anchored drive-path detector.",
   "production_launched": false
 }
