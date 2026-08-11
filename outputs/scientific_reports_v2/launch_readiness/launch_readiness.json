@@ -1,0 +1,69 @@
+{
+  "authoritative_command": "bash hpc/wahab/submit_sr_v2_production_ready.sh",
+  "checks": [
+    {
+      "check": "v111_frozen",
+      "detail": "v1.1.1 remains the immutable baseline tag",
+      "passed": true
+    },
+    {
+      "check": "exact_kernel_pass",
+      "detail": "True",
+      "passed": true
+    },
+    {
+      "check": "randomized_exact_kernel_pass",
+      "detail": "True",
+      "passed": true
+    },
+    {
+      "check": "constraint_geometry_matches",
+      "detail": "latent=9695 rank=1256 nullity=8439",
+      "passed": true
+    },
+    {
+      "check": "extended_real_pilot_pass",
+      "detail": "max_primary_rhat=1.0631317259532127 min_bulk_ess=73.16747911375178",
+      "passed": true
+    },
+    {
+      "check": "calibration_design_pass",
+      "detail": "True",
+      "passed": true
+    },
+    {
+      "check": "tuned_calibration_extension_pass",
+      "detail": "max_primary_rhat=1.021967606648702 min_bulk_ess=152.5878092124334 primary_coverage=1.0",
+      "passed": true
+    },
+    {
+      "check": "final_infrastructure_pass",
+      "detail": "True",
+      "passed": true
+    },
+    {
+      "check": "ready_helper_strict_shell",
+      "detail": "login shell and fail-closed mode",
+      "passed": true
+    },
+    {
+      "check": "ready_helper_order",
+      "detail": "audit \u2192 prepare \u2192 stage \u2192 production array \u2192 dependent final gate",
+      "passed": true
+    },
+    {
+      "check": "ready_helper_fail_closed_dependency",
+      "detail": "final gate launches only after the entire array succeeds",
+      "passed": true
+    },
+    {
+      "check": "ready_helper_records_jobs",
+      "detail": "job IDs and dependencies persisted",
+      "passed": true
+    }
+  ],
+  "generated_utc": "2026-08-11T01:49:00.248589+00:00",
+  "interpretation_boundary": "Launch-readiness validation only. The corrected empirical result remains unauthorized until the eight-chain production gate passes.",
+  "passed": true,
+  "production_launched": false
+}
