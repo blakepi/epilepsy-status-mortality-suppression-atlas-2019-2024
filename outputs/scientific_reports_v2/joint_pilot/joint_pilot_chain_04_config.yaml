@@ -1,0 +1,39 @@
+run:
+  n_chains: 4
+  n_iter: 1500
+  burn_in: 500
+  thin: 10
+  count_move_sweeps_per_iter: 0.02
+  max_count_proposals_per_iter: 200
+  blocked_refresh_frequency: 25
+  blocked_refresh_attempts: 8
+  checkpoint_every: 500
+  random_seeds:
+  - 28291
+  - 28292
+  - 28293
+  - 28294
+  max_extensions: 0
+  move_weights:
+    state_year_transfer: 0.05
+    county_period_exploration: 0.3
+    interval_path_transfer: 0.25
+    swap_2x2: 0.3
+    cycle_swap: 0.1
+  max_cycle_half_length: 6
+  proposal_scale_multipliers:
+    beta: 0.6
+    state: 1.3
+    year: 1.5
+    log_sigma_state: 4.0
+    log_sigma_year: 6.0
+    log_kappa: 2.4
+  latent_tuning_profile: balanced_circuit_heatbath
+  pilot_only: true
+model:
+  outcome: MCOD G40/G41, 2019-2024
+  rurality_reference: metro_large
+  svi_reference: Q1_lowest
+  target_density: Scientific Reports v2 corrected centered-prior target
+outputs:
+  hpc_root: /home/runner/work/epilepsy-status-mortality-suppression-atlas-2019-2024/epilepsy-status-mortality-suppression-atlas-2019-2024/outputs/scientific_reports_v2/joint_pilot

@@ -1,0 +1,16 @@
+proposal_scale_multipliers:
+  beta: 0.6
+  state: 1.3
+  year: 1.5
+  log_sigma_state: 5.0
+  log_sigma_year: 9.0
+  log_kappa: 2.4
+move_weights:
+  state_year_transfer: 0.05
+  county_period_exploration: 0.3
+  interval_path_transfer: 0.25
+  swap_2x2: 0.3
+  cycle_swap: 0.1
+max_cycle_half_length: 6
+source: Scientific Reports v2 four-chain short joint pilot
+not_for_inference: true
