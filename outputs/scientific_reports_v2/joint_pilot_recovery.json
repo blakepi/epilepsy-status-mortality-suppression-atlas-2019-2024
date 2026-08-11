@@ -1,0 +1,6 @@
+{
+  "source_workflow_run_id": 31446816642,
+  "source_commit": "cc0e9405e5a1ff2b53326a6dcb4e7196373ecb1c",
+  "reason": "All four corrected joint-pilot chains completed, but the summarizer intentionally exited nonzero on a gross-gate HOLD before committing its already-written evidence.",
+  "action": "Download the completed chain artifacts, regenerate the summary, and commit PASS-or-HOLD evidence without rerunning the chains."
+}
