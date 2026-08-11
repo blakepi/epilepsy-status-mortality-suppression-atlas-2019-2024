@@ -1,0 +1,122 @@
+{
+  "abstract_words": 184,
+  "checks": [
+    {
+      "check": "title_word_limit",
+      "detail": "14 words",
+      "passed": true
+    },
+    {
+      "check": "abstract_word_limit",
+      "detail": "184 words",
+      "passed": true
+    },
+    {
+      "check": "abstract_unstructured",
+      "detail": "[]",
+      "passed": true
+    },
+    {
+      "check": "keyword_limit",
+      "detail": "6 keywords",
+      "passed": true
+    },
+    {
+      "check": "required_main_sections",
+      "detail": "[]",
+      "passed": true
+    },
+    {
+      "check": "required_method_subsections",
+      "detail": "[]",
+      "passed": true
+    },
+    {
+      "check": "all_placeholders_registered",
+      "detail": "[]",
+      "passed": true
+    },
+    {
+      "check": "prohibited_fragments_absent",
+      "detail": "[]",
+      "passed": true
+    },
+    {
+      "check": "elsevier_policy_absent",
+      "detail": "Elsevier reference removed",
+      "passed": true
+    },
+    {
+      "check": "wahab_not_scientific_label",
+      "detail": "cluster label absent",
+      "passed": true
+    },
+    {
+      "check": "supplement_identifies_rank_and_nullity",
+      "detail": "latent count, rank, and nullity stated",
+      "passed": true
+    },
+    {
+      "check": "supplement_documents_cycle_move",
+      "detail": "connectivity repair documented",
+      "passed": true
+    },
+    {
+      "check": "supplement_documents_exact_validation",
+      "detail": "finite-state target validation documented",
+      "passed": true
+    }
+  ],
+  "generated_utc": "2026-08-11T04:01:43.590276+00:00",
+  "interpretation_boundary": "Working mode validates the method-forward scaffold while permitting registered locked placeholders. Submission mode additionally requires a passed corrected production gate and zero unresolved placeholders.",
+  "keywords": [
+    "** Bayesian hierarchical modeling",
+    "small-area estimation",
+    "data suppression",
+    "CDC WONDER",
+    "epilepsy mortality",
+    "rural health"
+  ],
+  "main_placeholders": [
+    "ADJACENCY_ACCESS_DATE",
+    "AUTHOR_BLOCK",
+    "CALIBRATION_BATCH_RESULTS",
+    "COUNTY_SUMMARY_RESULT",
+    "DISCUSSION_PRIMARY_FINDING",
+    "DISCUSSION_SUPPRESSION_RESULT",
+    "ETHICS_DETERMINATION",
+    "FINAL_DISCUSSION_SENTENCE",
+    "ONE_SENTENCE_ROBUSTNESS_RESULT",
+    "PRIMARY_CRI",
+    "PRIMARY_IRR",
+    "PRIMARY_POSTERIOR_PROBABILITY_STATEMENT",
+    "PRODUCTION_DIAGNOSTIC_SUMMARY",
+    "REPOSITORY_DOI",
+    "REPOSITORY_DOI_AND_VERSION",
+    "REPOSITORY_VERSION",
+    "ROBUSTNESS_RESULTS_PARAGRAPH",
+    "RURALITY_RESULTS_SENTENCE",
+    "SPATIAL_DIAGNOSTIC_RESULT",
+    "SPATIAL_MODEL_RESULT",
+    "SUPPLEMENT_ACCEPTANCE_TABLE",
+    "SUPPLEMENT_PARAMETER_TABLE",
+    "SUPPRESSION_SENSITIVITY_RESULT",
+    "SVI_RESULTS_SENTENCE"
+  ],
+  "mode": "working",
+  "passed": true,
+  "supplement_placeholders": [
+    "ACCEPTANCE_TABLE",
+    "ALL_PARAMETER_DIAGNOSTICS_TABLE",
+    "AUTHOR_BLOCK",
+    "CALIBRATION_TABLE",
+    "COVARIATE_IMPUTATION_TABLE",
+    "LATENT_SUMMARY_DIAGNOSTICS_TABLE",
+    "PRIOR_SENSITIVITY_TABLE",
+    "SPATIAL_SENSITIVITY_TABLE",
+    "SUPPRESSION_HANDLING_TABLE",
+    "TEMPORAL_MODEL_FAMILY_TABLE"
+  ],
+  "title": "Suppression-aware Bayesian estimation of county mortality using public aggregate constraints: U.S. epilepsy, 2019\u20132024",
+  "title_words": 14
+}
