@@ -1,5 +1,6 @@
 {
   "branch": "scientific-reports-v2",
-  "purpose": "Validate a truth-known state-clustered synthetic suppression design, aggregate construction, and dispersed feasible initializations before estimator-performance simulations.",
+  "attempt": 2,
+  "purpose": "Validate a truth-known state-clustered synthetic suppression design, aggregate construction, and dispersed feasible initializations after making the test import path explicit.",
   "interpretation_boundary": "Design smoke test only; no estimator-performance or epidemiologic claim."
 }
