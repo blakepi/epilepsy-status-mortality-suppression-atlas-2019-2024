@@ -1,0 +1,18 @@
+{
+  "all_initializations_valid": true,
+  "counties": 72,
+  "county_period_exact": 28,
+  "county_period_suppressed": 40,
+  "county_period_zero": 4,
+  "county_year_rows": 432,
+  "design_pass": true,
+  "exact_county_year_cells": 41,
+  "grand_total": 3023,
+  "interpretation_boundary": "Synthetic design and initialization smoke test only; no method-performance claim.",
+  "median_pairwise_initialization_l1": 337.0,
+  "minimum_pairwise_initialization_l1": 296,
+  "states": 6,
+  "suppressed_county_year_cells": 227,
+  "suppressed_fraction": 0.5254629629629629,
+  "zero_county_year_cells": 164
+}

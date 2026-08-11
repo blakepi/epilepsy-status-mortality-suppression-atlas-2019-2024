@@ -1,0 +1,5 @@
+initialization,seed,grand_total,l1_distance_from_truth,changed_cells_from_truth,validation_passed
+1,31001,3023,320,144,True
+2,31002,3023,340,141,True
+3,31003,3023,312,136,True
+4,31004,3023,354,143,True

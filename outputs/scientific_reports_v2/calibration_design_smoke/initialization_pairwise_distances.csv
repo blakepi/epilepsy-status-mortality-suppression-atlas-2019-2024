@@ -1,0 +1,7 @@
+left_initialization,right_initialization,l1_distance,different_cells
+1,2,340,86
+1,3,356,91
+1,4,348,100
+2,3,334,84
+2,4,296,74
+3,4,326,91
