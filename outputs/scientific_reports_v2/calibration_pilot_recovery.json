@@ -1,0 +1,6 @@
+{
+  "source_workflow_run_id": 31448594506,
+  "source_commit": "d98815e1bf900f30f9fd38c15023248fd729e223",
+  "reason": "All four truth-known calibration chains completed successfully, but the summary job omitted matplotlib and failed before committing its evidence.",
+  "action": "Download the completed chain artifacts, regenerate the compact PASS-or-HOLD summary with the corrected dependency set, and commit the evidence without rerunning the chains."
+}
