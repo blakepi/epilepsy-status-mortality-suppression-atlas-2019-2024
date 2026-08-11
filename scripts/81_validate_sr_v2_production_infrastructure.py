@@ -18,6 +18,7 @@ PYTHON_FILES = [
     ROOT / "scripts" / "78_gate_sr_v2_production.py",
 ]
 SHELL_FILES = [
+    ROOT / "hpc" / "wahab" / "stage_sr_v2_to_scratch.sh",
     ROOT / "hpc" / "wahab" / "sync_sr_v2_results_home.sh",
     ROOT / "hpc" / "wahab" / "submit_sr_v2_production.sh",
     ROOT / "hpc" / "wahab" / "slurm" / "60_sr_v2_production_chain_array.sbatch",
@@ -31,12 +32,7 @@ def check(name: str, passed: bool, detail: str) -> dict[str, object]:
 
 
 def contains_windows_drive_path(text: str) -> bool:
-    """Return True only for an actual drive-qualified path such as C:\\ or C:/.
-
-    The previous literal substring check was over-broad in the generated audit
-    context and could fail despite portable shell content. This anchored regular
-    expression deliberately ignores ordinary uses of the letter C and colons.
-    """
+    """Return True only for a drive-qualified path such as a Windows drive root."""
 
     return WINDOWS_DRIVE_PATH.search(text) is not None
 
@@ -63,6 +59,7 @@ def main() -> None:
         )
 
     submit = (ROOT / "hpc" / "wahab" / "submit_sr_v2_production.sh").read_text(encoding="utf-8")
+    stage = (ROOT / "hpc" / "wahab" / "stage_sr_v2_to_scratch.sh").read_text(encoding="utf-8")
     array = (ROOT / "hpc" / "wahab" / "slurm" / "60_sr_v2_production_chain_array.sbatch").read_text(encoding="utf-8")
     finalize = (ROOT / "hpc" / "wahab" / "slurm" / "61_sr_v2_finalize_production.sbatch").read_text(encoding="utf-8")
     sync = (ROOT / "hpc" / "wahab" / "sync_sr_v2_results_home.sh").read_text(encoding="utf-8")
@@ -77,7 +74,43 @@ def main() -> None:
             check("finalize_uses_v2_merger", "scripts/77_merge_sr_v2_production.py" in finalize, "v2 merger"),
             check("finalize_uses_v2_gate", "scripts/78_gate_sr_v2_production.py" in finalize, "v2 gate"),
             check("submission_has_afterok_dependency", "afterok:${production_job}" in submit, "fail-closed dependency"),
-            check("submission_prepares_before_staging", submit.index("scripts/75_prepare_sr_v2_production.py") < submit.index("stage_to_scratch.sh"), "prepare then stage"),
+            check(
+                "submission_prepares_before_v2_staging",
+                submit.index("scripts/75_prepare_sr_v2_production.py")
+                < submit.index("stage_sr_v2_to_scratch.sh"),
+                "prepare then stage frozen v2 evidence",
+            ),
+            check(
+                "submission_uses_v2_staging",
+                "stage_sr_v2_to_scratch.sh" in submit and "bash hpc/wahab/stage_to_scratch.sh" not in submit,
+                "dedicated v2 staging path",
+            ),
+            check(
+                "staging_calls_base_code_stage",
+                "stage_to_scratch.sh" in stage,
+                "base code/data stage retained",
+            ),
+            check(
+                "staging_includes_validation_evidence",
+                all(
+                    token in stage
+                    for token in [
+                        "exact_kernel_validation",
+                        "random_exact_validation",
+                        "constraint_geometry",
+                        "extended_joint_pilot",
+                        "calibration_design_smoke",
+                        "calibration_pilot/replicate_001",
+                    ]
+                ),
+                "all preproduction validation evidence staged",
+            ),
+            check(
+                "staging_includes_prepared_config",
+                "production_8chain/config" in stage
+                and "production_preparation_manifest.json" in stage,
+                "frozen production config and manifest staged",
+            ),
             check("sync_scope_is_v2_only", 'RELATIVE_ROOT="outputs/scientific_reports_v2/production_8chain"' in sync, "v2-only relative root"),
             check("legacy_sync_not_used", "sync_results_home.sh" not in array and "sync_results_home.sh" not in finalize, "legacy sync excluded"),
         ]
@@ -146,7 +179,7 @@ def main() -> None:
     lines.extend(
         [
             "",
-            "No production chain was launched. The audit checks namespace isolation, fail-closed gates, frozen-baseline guards, Slurm wiring, and syntax-level integrity.",
+            "No production chain was launched. The audit checks namespace isolation, required-evidence staging, fail-closed gates, frozen-baseline guards, Slurm wiring, and syntax-level integrity.",
         ]
     )
     (OUTPUT / "production_infrastructure_smoke.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
