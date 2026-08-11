@@ -14,6 +14,7 @@ ROOT = Path(__file__).resolve().parents[1]
 OUTPUT_ROOT = ROOT / "outputs" / "scientific_reports_v2" / "production_8chain"
 EXTENDED_ROOT = ROOT / "outputs" / "scientific_reports_v2" / "extended_joint_pilot"
 LATENT_TUNING = ROOT / "outputs" / "scientific_reports_v2" / "latent_tuning" / "selected_latent_tuning.yaml"
+HPC_CONFIG_DIR = ROOT / "hpc" / "wahab" / "configs"
 
 
 def sha256(path: Path) -> str:
@@ -60,6 +61,7 @@ def main() -> None:
     OUTPUT_ROOT.mkdir(parents=True, exist_ok=True)
     config_dir = OUTPUT_ROOT / "config"
     config_dir.mkdir(parents=True, exist_ok=True)
+    HPC_CONFIG_DIR.mkdir(parents=True, exist_ok=True)
     frozen_tuning = {
         "proposal_scale_multipliers": recommended["proposal_scale_multipliers"],
         "move_weights": recommended["move_weights"],
@@ -70,7 +72,10 @@ def main() -> None:
         "fixed_theta_selected_profile": latent.get("selected_profile"),
     }
     frozen_tuning_path = config_dir / "frozen_production_tuning.yaml"
-    frozen_tuning_path.write_text(yaml.safe_dump(frozen_tuning, sort_keys=False), encoding="utf-8")
+    hpc_tuning_path = HPC_CONFIG_DIR / "sr_v2_frozen_production_tuning.yaml"
+    tuning_text = yaml.safe_dump(frozen_tuning, sort_keys=False)
+    frozen_tuning_path.write_text(tuning_text, encoding="utf-8")
+    hpc_tuning_path.write_text(tuning_text, encoding="utf-8")
 
     seeds = list(range(58291, 58299))
     initialization_seeds = list(range(57291, 57299))
@@ -134,8 +139,11 @@ def main() -> None:
             ),
         },
     }
+    config_text = yaml.safe_dump(config, sort_keys=False)
     config_path = config_dir / "sr_v2_production.yaml"
-    config_path.write_text(yaml.safe_dump(config, sort_keys=False), encoding="utf-8")
+    hpc_config_path = HPC_CONFIG_DIR / "sr_v2_production.yaml"
+    config_path.write_text(config_text, encoding="utf-8")
+    hpc_config_path.write_text(config_text, encoding="utf-8")
 
     manifest = {
         "generated_utc": datetime.now(timezone.utc).isoformat(),
@@ -145,8 +153,12 @@ def main() -> None:
         "frozen_baseline_commit": "50b468d212616ee80be55045dedf8a696db14df5",
         "config_path": str(config_path.relative_to(ROOT)).replace("\\", "/"),
         "config_sha256": sha256(config_path),
+        "hpc_config_path": str(hpc_config_path.relative_to(ROOT)).replace("\\", "/"),
+        "hpc_config_sha256": sha256(hpc_config_path),
         "frozen_tuning_path": str(frozen_tuning_path.relative_to(ROOT)).replace("\\", "/"),
         "frozen_tuning_sha256": sha256(frozen_tuning_path),
+        "hpc_tuning_path": str(hpc_tuning_path.relative_to(ROOT)).replace("\\", "/"),
+        "hpc_tuning_sha256": sha256(hpc_tuning_path),
         "extended_joint_summary_sha256": sha256(extended_summary_path),
         "extended_joint_pilot_pass": True,
         "n_chains": 8,
@@ -158,8 +170,11 @@ def main() -> None:
         "initialization_seeds": initialization_seeds,
         "status": "prepared_not_run",
     }
+    manifest_text = json.dumps(manifest, indent=2, sort_keys=True) + "\n"
     manifest_path = OUTPUT_ROOT / "production_preparation_manifest.json"
-    manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    hpc_manifest_path = HPC_CONFIG_DIR / "sr_v2_production_preparation_manifest.json"
+    manifest_path.write_text(manifest_text, encoding="utf-8")
+    hpc_manifest_path.write_text(manifest_text, encoding="utf-8")
     print(json.dumps(manifest, sort_keys=True))
 
 
