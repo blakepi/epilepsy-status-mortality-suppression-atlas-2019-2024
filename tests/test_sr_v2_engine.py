@@ -24,10 +24,19 @@ from bayes_constrained.identifiability import (  # noqa: E402
     build_reduced_equality_matrix,
 )
 from bayes_constrained.model import log_prior, make_design  # noqa: E402
-from bayes_constrained.sampler import build_move_state, run_mcmc, state_cycle_swap  # noqa: E402
+from bayes_constrained.sampler import (  # noqa: E402
+    interval_path_transfer,
+    run_mcmc,
+    state_cycle_swap,
+)
 from bayes_constrained.support_graph import analyze_state_support, overall_support_summary  # noqa: E402
 from bayes_constrained.target_density import centered_normal_log_density  # noqa: E402
-from bayes_constrained.validation_cases import structural_six_cycle_frame, structural_six_cycle_theta  # noqa: E402
+from bayes_constrained.validation_cases import (  # noqa: E402
+    structural_interval_path_frame,
+    structural_interval_path_theta,
+    structural_six_cycle_frame,
+    structural_six_cycle_theta,
+)
 
 
 def interval_half_edge_frame() -> pd.DataFrame:
@@ -79,9 +88,10 @@ def test_heatbath_enumerates_complete_integer_line() -> None:
 
 
 def test_count_moves_use_heatbath_block_updates() -> None:
-    source = inspect.getsource(state_cycle_swap)
-    assert "_apply_heatbath_direction" in source
-    assert "_try_apply_delta" not in source
+    for function in [state_cycle_swap, interval_path_transfer]:
+        source = inspect.getsource(function)
+        assert "_apply_heatbath_direction" in source
+        assert "_try_apply_delta" not in source
 
 
 def test_graph_rank_matches_dense_linear_algebra_on_exact_margin_toy() -> None:
@@ -133,6 +143,7 @@ def test_v111_two_by_two_kernel_is_disconnected_on_a_six_cycle_support() -> None
         weights={
             "state_year_transfer": 0.0,
             "county_period_exploration": 0.0,
+            "interval_path_transfer": 0.0,
             "swap_2x2": 1.0,
             "cycle_swap": 0.0,
         },
@@ -157,6 +168,7 @@ def test_general_cycle_heatbath_connects_and_preserves_exact_posterior() -> None
         weights={
             "state_year_transfer": 0.0,
             "county_period_exploration": 0.0,
+            "interval_path_transfer": 0.0,
             "swap_2x2": 0.0,
             "cycle_swap": 1.0,
         },
@@ -166,6 +178,50 @@ def test_general_cycle_heatbath_connects_and_preserves_exact_posterior() -> None
     assert diagnostics.stationarity_error < 1e-12
     assert diagnostics.detailed_balance_error < 1e-12
     assert diagnostics.strongly_connected_components == 1
+
+
+def test_interval_path_is_required_for_cross_year_interval_endpoints() -> None:
+    frame = structural_interval_path_frame()
+    states = enumerate_feasible_states(frame)
+    assert len(states) == 2
+    theta = structural_interval_path_theta(frame)
+    design = make_design(frame)
+    probabilities = exact_conditional_probabilities(states, theta, design)
+    blocked = exact_transition_matrix(
+        states,
+        frame,
+        theta,
+        design,
+        weights={
+            "state_year_transfer": 0.25,
+            "county_period_exploration": 0.25,
+            "interval_path_transfer": 0.0,
+            "swap_2x2": 0.25,
+            "cycle_swap": 0.25,
+        },
+        max_cycle_half_length=2,
+    )
+    repaired = exact_transition_matrix(
+        states,
+        frame,
+        theta,
+        design,
+        weights={
+            "state_year_transfer": 0.0,
+            "county_period_exploration": 0.0,
+            "interval_path_transfer": 1.0,
+            "swap_2x2": 0.0,
+            "cycle_swap": 0.0,
+        },
+        max_cycle_half_length=2,
+    )
+    blocked_diagnostics = exact_kernel_diagnostics(probabilities, blocked)
+    repaired_diagnostics = exact_kernel_diagnostics(probabilities, repaired)
+    assert blocked_diagnostics.strongly_connected_components == 2
+    assert repaired_diagnostics.strongly_connected_components == 1
+    assert repaired_diagnostics.row_sum_error < 1e-12
+    assert repaired_diagnostics.stationarity_error < 1e-12
+    assert repaired_diagnostics.detailed_balance_error < 1e-12
 
 
 def test_empirical_cycle_heatbath_matches_exact_toy_posterior() -> None:
@@ -184,8 +240,34 @@ def test_empirical_cycle_heatbath_matches_exact_toy_posterior() -> None:
         weights={
             "state_year_transfer": 0.0,
             "county_period_exploration": 0.0,
+            "interval_path_transfer": 0.0,
             "swap_2x2": 0.0,
             "cycle_swap": 1.0,
         },
+    )
+    np.testing.assert_allclose(empirical, probabilities, atol=0.02, rtol=0.0)
+
+
+def test_empirical_interval_path_heatbath_matches_exact_toy_posterior() -> None:
+    frame = structural_interval_path_frame()
+    states = enumerate_feasible_states(frame)
+    theta = structural_interval_path_theta(frame)
+    probabilities = exact_conditional_probabilities(states, theta, make_design(frame))
+    empirical = empirical_count_kernel_frequencies(
+        states[0],
+        states,
+        frame,
+        theta,
+        steps=30_000,
+        burn_in=1_000,
+        seed=20260811,
+        weights={
+            "state_year_transfer": 0.0,
+            "county_period_exploration": 0.0,
+            "interval_path_transfer": 1.0,
+            "swap_2x2": 0.0,
+            "cycle_swap": 0.0,
+        },
+        max_cycle_half_length=2,
     )
     np.testing.assert_allclose(empirical, probabilities, atol=0.02, rtol=0.0)
