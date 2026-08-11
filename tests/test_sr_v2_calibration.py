@@ -1,16 +1,22 @@
 from __future__ import annotations
 
+import sys
+from pathlib import Path
+
 import numpy as np
 
-from bayes_constrained.calibration import (
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "src"))
+
+from bayes_constrained.calibration import (  # noqa: E402
     make_calibration_truth,
     public_frame_from_complete_counts,
     simulate_complete_counts,
     suppression_summary,
 )
-from bayes_constrained.calibration_design import select_state_clustered_panel
-from bayes_constrained.constraints import solve_feasible_allocation, validate_constraints
-from bayes_constrained.data import load_model_frame
+from bayes_constrained.calibration_design import select_state_clustered_panel  # noqa: E402
+from bayes_constrained.constraints import solve_feasible_allocation, validate_constraints  # noqa: E402
+from bayes_constrained.data import load_model_frame  # noqa: E402
 
 
 def test_state_clustered_calibration_panel_is_complete_and_nontrivial() -> None:
