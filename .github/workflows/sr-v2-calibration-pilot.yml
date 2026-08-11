@@ -73,7 +73,7 @@ jobs:
       - name: Install summary dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install pandas numpy scipy pyarrow statsmodels PyYAML arviz
+          python -m pip install pandas numpy scipy pyarrow statsmodels matplotlib PyYAML arviz
 
       - name: Download all calibration chains
         uses: actions/download-artifact@v4
