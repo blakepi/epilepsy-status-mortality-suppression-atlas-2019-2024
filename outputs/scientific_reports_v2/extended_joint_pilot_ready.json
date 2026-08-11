@@ -1,0 +1,6 @@
+{
+  "branch": "scientific-reports-v2",
+  "source_short_pilot_commit": "86bf040f03177404db66f6f19e88fa6f34f933f6",
+  "purpose": "Resume each corrected short-pilot chain for 8,500 additional iterations, then diagnose the final 650 retained draws per chain before authorizing an eight-chain production run.",
+  "interpretation_boundary": "Extended tuning evidence only. No corrected epidemiologic estimate is authorized for manuscript use."
+}
