@@ -1,0 +1,66 @@
+name: Scientific Reports v2 citation normalization
+
+on:
+  push:
+    branches:
+      - scientific-reports-v2
+    paths:
+      - 'outputs/scientific_reports_v2/citation_normalization_requested.json'
+
+permissions:
+  contents: write
+
+jobs:
+  normalize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out citation-normalization request
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Compile citation normalizer
+        run: python -m py_compile scripts/92_normalize_sr_v2_citations.py
+
+      - name: Normalize and validate working citations
+        continue-on-error: true
+        run: python scripts/92_normalize_sr_v2_citations.py --write
+
+      - name: Verify citation evidence
+        run: |
+          test -s outputs/scientific_reports_v2/citation_qc/citation_qc.json
+          test -s outputs/scientific_reports_v2/citation_qc/citation_qc.md
+          git diff --check
+
+      - name: Commit normalized manuscript and citation evidence
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add manuscript/scientific_reports_v2/manuscript_draft_nonfinal.md
+          git add outputs/scientific_reports_v2/citation_qc
+          if git diff --cached --quiet; then
+            echo "No citation changes to commit."
+          else
+            git commit -m "edit: normalize v2 manuscript numeric citations [skip sr-v2] [skip tuning] [skip joint-pilot]"
+            git pull --rebase origin scientific-reports-v2
+            git push origin HEAD:scientific-reports-v2
+          fi
+
+      - name: Enforce citation gate after evidence is committed
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          path = Path('outputs/scientific_reports_v2/citation_qc/citation_qc.json')
+          report = json.loads(path.read_text(encoding='utf-8'))
+          if not report.get('passed', False):
+              raise SystemExit(f'Citation normalization is on HOLD: {report}')
+          PY
