@@ -1,0 +1,85 @@
+version: 1
+manuscript: manuscript/scientific_reports_v2/manuscript_draft_nonfinal.md
+policy:
+  unresolved_placeholders_allowed_in_working_draft: true
+  unresolved_placeholders_allowed_in_submission_package: false
+  pilot_estimates_allowed_in_results: false
+  final_empirical_results_require_passed_production_gate: true
+placeholders:
+  AUTHOR_BLOCK:
+    source: verified_author_and_affiliation_record
+  PRIMARY_IRR:
+    source: outputs/scientific_reports_v2/production_8chain/posterior_primary_summary.csv
+    gate: outputs/scientific_reports_v2/production_8chain/production_gate.json
+  PRIMARY_CRI:
+    source: outputs/scientific_reports_v2/production_8chain/posterior_primary_summary.csv
+    gate: outputs/scientific_reports_v2/production_8chain/production_gate.json
+  PRIMARY_POSTERIOR_PROBABILITY_STATEMENT:
+    source: outputs/scientific_reports_v2/production_8chain/posterior_primary_summary.csv
+    gate: outputs/scientific_reports_v2/production_8chain/production_gate.json
+  ONE_SENTENCE_ROBUSTNESS_RESULT:
+    source: frozen_robustness_summary
+    gate: manuscript_result_freeze
+  CALIBRATION_BATCH_RESULTS:
+    source: multi_batch_truth_known_calibration_summary
+    gate: calibration_reporting_gate
+  PRODUCTION_DIAGNOSTIC_SUMMARY:
+    source: outputs/scientific_reports_v2/production_8chain/production_gate.json
+    gate: outputs/scientific_reports_v2/production_8chain/production_gate.json
+  SUPPLEMENT_ACCEPTANCE_TABLE:
+    source: final_supplement_table_map
+  RURALITY_RESULTS_SENTENCE:
+    source: outputs/scientific_reports_v2/production_8chain/posterior_primary_summary.csv
+    gate: outputs/scientific_reports_v2/production_8chain/production_gate.json
+  SVI_RESULTS_SENTENCE:
+    source: outputs/scientific_reports_v2/production_8chain/posterior_primary_summary.csv
+    gate: outputs/scientific_reports_v2/production_8chain/production_gate.json
+  SUPPLEMENT_PARAMETER_TABLE:
+    source: final_supplement_table_map
+  SUPPRESSION_SENSITIVITY_RESULT:
+    source: corrected_suppression_sensitivity_summary
+    gate: robustness_result_freeze
+  COUNTY_SUMMARY_RESULT:
+    source: outputs/scientific_reports_v2/production_8chain/county_posterior_summary.csv
+    gate: outputs/scientific_reports_v2/production_8chain/production_gate.json
+  SPATIAL_DIAGNOSTIC_RESULT:
+    source: outputs/scientific_reports_v2/spatial_residual_diagnostics/spatial_residual_summary.json
+    gate: spatial_diagnostic_complete
+  SPATIAL_MODEL_RESULT:
+    source: spatial_sensitivity_summary
+    gate: spatial_sensitivity_complete_or_documented_not_triggered
+  ROBUSTNESS_RESULTS_PARAGRAPH:
+    source: frozen_robustness_summary
+    gate: robustness_result_freeze
+  DISCUSSION_PRIMARY_FINDING:
+    source: outputs/scientific_reports_v2/production_8chain/posterior_primary_summary.csv
+    gate: outputs/scientific_reports_v2/production_8chain/production_gate.json
+  DISCUSSION_SUPPRESSION_RESULT:
+    source: corrected_suppression_sensitivity_summary
+    gate: robustness_result_freeze
+  FINAL_DISCUSSION_SENTENCE:
+    source: frozen_primary_and_robustness_results
+    gate: manuscript_result_freeze
+  COVARIATE_IMPUTATION_TABLE:
+    source: final_supplement_table_map
+  ETHICS_DETERMINATION:
+    source: verified_institutional_record
+  REPOSITORY_DOI_AND_VERSION:
+    source: immutable_final_archive
+    gate: archive_freeze
+  REPOSITORY_VERSION:
+    source: immutable_final_archive
+    gate: archive_freeze
+  REPOSITORY_DOI:
+    source: immutable_final_archive
+    gate: archive_freeze
+  ADJACENCY_ACCESS_DATE:
+    source: spatial_diagnostic_source_manifest
+    gate: spatial_diagnostic_complete
+prohibited_literal_fragments:
+  - Final Wahab HPC
+  - Elsevier. Generative AI policies
+  - 1.1389170338925112
+  - 1.270073064645214
+  - 1.233448734647677
+  - 1.4346561967266265
