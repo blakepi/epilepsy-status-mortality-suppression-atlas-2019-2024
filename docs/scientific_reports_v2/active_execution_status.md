@@ -19,20 +19,22 @@ The archived `v1.1.1` release remains the immutable baseline. No corrected empir
 - Passed a tuned one-replicate calibration extension with zero constraint failures and all six prespecified coefficient truths covered.
 - Passed final production-infrastructure and launch-readiness audits.
 
-## Substantive work started in the current execution tranche
+## Substantive work completed in the current execution tranche
 
-### Multi-replicate truth-known calibration
+### Multi-replicate truth-known calibration, batch 1
 
-A reusable four-replicate batch has been implemented and launched through GitHub Actions. Batch 1 spans:
+A reusable four-replicate batch was implemented and completed through GitHub Actions. Batch 1 spans:
 
 1. baseline rate 3.4 per 100,000 with NB2 kappa 10;
 2. lower rate 2.4 per 100,000 with kappa 10;
 3. higher rate 5.0 per 100,000 with kappa 10;
 4. baseline rate 3.4 per 100,000 with stronger overdispersion, kappa 4.
 
-Each replicate creates a truth-known 72-county panel, applies the public 1–9 suppression rule, constructs compatible county-period and geographic aggregates, generates four dispersed feasible starts, runs four corrected chains for 24,000 iterations, and aggregates coefficient and suppressed-cell recovery. Exact binomial intervals are reported so four replicates cannot be misrepresented as a precise nominal-coverage study.
+Each replicate used a truth-known 72-county panel, the public 1–9 suppression rule, compatible county-period and geographic aggregates, four dispersed feasible starts, and four corrected chains of 24,000 iterations with 6,000 burn-in iterations and thinning of 10. All four replicates passed the computational gate with zero constraint-validation failures.
 
-Active workflow: `Scientific Reports v2 calibration study batch 1`.
+Across the 24 prespecified coefficient-by-replicate intervals, 22 covered the true IRR (91.7%; exact binomial 95% interval 73.0%–99.0%). This is promising but not a precise nominal-coverage estimate. The nonmetro-adjacent and highest-SVI contrasts each covered in three of four replicates; the other four contrasts covered in all four. Across 857 suppressed cells, cell-weighted 95% interval coverage was 99.18% and posterior-mean RMSE was 1.05 deaths. The repository explicitly records `final_nominal_coverage_claim_authorized: false`; additional prespecified batches remain required before a manuscript coverage claim.
+
+Evidence: `outputs/scientific_reports_v2/calibration_study_batch1/`.
 
 ### Method-forward manuscript and technical supplement
 
@@ -52,11 +54,16 @@ A new nonfinal Scientific Reports manuscript was created under `manuscript/scien
 
 A technical supplement now contains the full target density, move definitions, exact-validation evidence, production gate, calibration design, robustness registry, and shells for final tables.
 
-### Manuscript fail-closed QC
+### Manuscript fail-closed QC and citation normalization
 
-A placeholder manifest maps every locked result sentence to its required source and gate. Working-draft QC checks title length, abstract length and structure, keyword count, required mathematical sections, unregistered placeholders, prohibited pilot literals, Elsevier-policy text, cluster-result language, and required supplement content. Submission mode additionally requires zero unresolved placeholders and a passed corrected production gate.
+Working-draft QC passed. The title contains 14 words, the unstructured abstract contains 184 words, six keywords are present, all required sections and mathematical subsections were detected, all locked placeholders are registered, prohibited pilot literals are absent, and the supplement states the constraint rank/nullity and kernel-validation evidence.
 
-Active workflow: `Scientific Reports v2 substantive scaffold audit`.
+The numeric citation normalizer corrected four semantic reference mappings, confirmed 17 contiguous references, and found no out-of-range citations. Bibliographic metadata and DOI resolution remain separate final-package gates.
+
+Evidence:
+
+- `outputs/scientific_reports_v2/manuscript_scaffold_qc/`
+- `outputs/scientific_reports_v2/citation_qc/`
 
 ### Spatial-dependence work
 
@@ -70,6 +77,14 @@ A reproducible county-adjacency and Moran diagnostic module has been implemented
 - records a prespecified trigger for a structured county spatial-effect sensitivity model.
 
 The diagnostic refuses to run unless the corrected production gate has passed.
+
+### Explicit prior profiles and prior-sensitivity infrastructure
+
+The primary prior is now represented as an explicit immutable `PriorSpecification` with default values identical to the corrected primary target. Broader and regularizing profiles can be activated through an exception-safe process context that reuses the same validated sampler instead of duplicating transition code. Unit tests verify default equivalence, profile parsing, target-density changes, context restoration, and fail-closed invalid-scale handling.
+
+Guarded preparation, chain, and summary scripts have been added for four broader-prior and four regularizing-prior chains. They require a passed corrected production gate, generate fresh feasible starts with profile-specific seeds, report all-parameter diagnostics, and compare material IRR shifts and interval overlap with the primary posterior. The infrastructure audit passed; no prior-sensitivity chain has been launched before production.
+
+Evidence: `outputs/scientific_reports_v2/prior_sensitivity_infrastructure/`.
 
 ### Robustness registry
 
@@ -89,7 +104,7 @@ That helper reruns launch-readiness checks, freezes configuration and evidence h
 
 1. Freeze corrected parameter and county summaries.
 2. Run the spatial residual diagnostic and trigger the spatial sensitivity if required.
-3. Run broader and regularizing prior profiles.
+3. Run broader and regularizing prior profiles using the validated sensitivity runner.
 4. Run model-family and pandemic-period sensitivities.
 5. Complete additional truth-known calibration batches before making nominal coverage claims.
 6. Populate manuscript placeholders only from frozen machine-readable outputs.
