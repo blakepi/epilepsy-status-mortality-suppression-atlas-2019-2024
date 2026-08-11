@@ -1,0 +1,172 @@
+version: 1
+status: prespecified_before_corrected_production_results
+frozen_baseline:
+  tag: v1.1.1
+  commit: 50b468d212616ee80be55045dedf8a696db14df5
+corrected_branch: scientific-reports-v2
+primary_estimand:
+  outcome: multiple-cause mortality mention of ICD-10 G40 or G41
+  period: 2019-2024
+  contrast: nonmetro_nonadjacent_vs_metro_large
+  scale: incidence_rate_ratio
+  interpretation: ecological model-based mortality-mention association
+  prohibited_interpretations:
+    - person-level causal effect
+    - recovered confidential count
+    - observed county count for a suppressed cell
+primary_model:
+  likelihood: negative_binomial_2
+  offset: log_population
+  fixed_effects:
+    - primary_rurality
+    - svi_quartile
+    - z_pct_age65
+    - z_pct_male
+  hierarchical_effects:
+    - centered_state_effect
+    - centered_year_effect
+  latent_count_support:
+    exact_cells: fixed_at_public_count
+    explicit_zero_cells: fixed_at_zero
+    suppressed_cells: integer_1_through_9
+  public_constraints:
+    - county_period_exact_or_interval
+    - state_year_equalities
+    - national_year_validation_equalities
+    - grand_total_validation_equality
+  primary_prior_profile: default
+prior_profiles:
+  default:
+    intercept_sd: 5.0
+    nonintercept_beta_sd: 1.5
+    state_scale_halfnormal_sd: 1.0
+    year_scale_halfnormal_sd: 1.0
+    log_kappa_mean: 2.302585092994046
+    log_kappa_sd: 1.5
+    role: primary
+  broader:
+    intercept_sd: 10.0
+    nonintercept_beta_sd: 3.0
+    state_scale_halfnormal_sd: 2.0
+    year_scale_halfnormal_sd: 2.0
+    log_kappa_mean: 2.302585092994046
+    log_kappa_sd: 2.5
+    role: sensitivity
+  regularizing:
+    intercept_sd: 2.5
+    nonintercept_beta_sd: 0.75
+    state_scale_halfnormal_sd: 0.5
+    year_scale_halfnormal_sd: 0.5
+    log_kappa_mean: 2.302585092994046
+    log_kappa_sd: 0.75
+    role: sensitivity
+production_gate:
+  chains: 8
+  iterations_per_chain: 300000
+  burn_in: 75000
+  thin: 50
+  expected_draws_per_chain: 4500
+  chain_seeds: [58291, 58292, 58293, 58294, 58295, 58296, 58297, 58298]
+  initialization_seeds: [57291, 57292, 57293, 57294, 57295, 57296, 57297, 57298]
+  all_parameter_rhat_max: 1.01
+  all_parameter_bulk_ess_min: 400
+  all_parameter_tail_ess_min: 400
+  primary_bulk_ess_min: 1000
+  primary_tail_ess_min: 1000
+  latent_summary_rhat_max: 1.01
+  latent_summary_bulk_ess_min: 400
+  latent_summary_tail_ess_min: 400
+  constraint_failures_allowed: 0
+analyses:
+  - id: corrected_primary
+    status: blocked_on_authenticated_wahab_launch
+    family: primary_inference
+    specification: primary_model_default_prior
+    minimum_reporting:
+      - all_parameter_convergence
+      - representative_latent_summary_convergence
+      - count_move_acceptance
+      - parameter_block_acceptance
+      - constraint_validation
+      - county_posterior_uncertainty
+  - id: prior_broader
+    status: prespecified_waiting_for_primary_production
+    family: prior_sensitivity
+    specification: primary_model_broader_prior
+    comparison_rule: report_absolute_and_relative_change_in_all_primary_irrs_and_interval_widths
+  - id: prior_regularizing
+    status: prespecified_waiting_for_primary_production
+    family: prior_sensitivity
+    specification: primary_model_regularizing_prior
+    comparison_rule: report_absolute_and_relative_change_in_all_primary_irrs_and_interval_widths
+  - id: model_family_poisson
+    status: prespecified_waiting_for_primary_production
+    family: likelihood_sensitivity
+    specification: constrained_poisson_or_practically_poisson_limit
+    comparison_rule: emphasize_direction_interval_overlap_and_predictive_fit_not_third_decimal_agreement
+  - id: pandemic_exclusion
+    status: prespecified_waiting_for_primary_production
+    family: temporal_sensitivity
+    specification: exclude_2020_and_2021
+    comparison_rule: compare_primary_rurality_and_svi_contrasts_with_full_period
+  - id: pandemic_interaction
+    status: prespecified_waiting_for_primary_production
+    family: temporal_sensitivity
+    specification: rurality_by_pandemic_period_interaction
+    periods:
+      pre_pandemic: [2019]
+      acute_pandemic: [2020, 2021]
+      later_period: [2022, 2023, 2024]
+  - id: age_structure
+    status: requires_covariate_inventory
+    family: confounding_sensitivity
+    specification: replace_or_augment_pct_age65_with_more_granular_public_age_composition_if_reproducibly_available
+    fallback: retain_pct_age65_and_explicitly_label_residual_age_structure_confounding
+  - id: residual_spatial_autocorrelation
+    status: implementation_started
+    family: spatial_diagnostic
+    adjacency_source: U.S._Census_Bureau_2024_county_adjacency_file
+    primary_statistic: global_morans_i
+    secondary_outputs:
+      - permutation_p_value
+      - within_state_morans_i_where_estimable
+      - residual_neighbor_scatter
+    residual_definition: posterior_mean_county_period_deaths_minus_posterior_mean_expected_county_period_deaths
+  - id: spatial_random_effect
+    status: prespecified_after_residual_spatial_diagnostic
+    family: spatial_sensitivity
+    specification: county_structured_plus_unstructured_effect_with_identifiable_scaling
+    decision_rule: run_if_global_or_repeated_within_state_residual_autocorrelation_is_material_or_if_review_requires_it
+  - id: suppression_handling
+    status: existing_requires_refresh_after_corrected_production
+    family: disclosure_control_sensitivity
+    scenarios:
+      - visible_exact_and_zero_only
+      - suppressed_equals_1
+      - suppressed_equals_5
+      - suppressed_equals_9
+      - population_favoring_feasible_allocation
+      - constrained_bayesian_primary
+  - id: truth_known_calibration
+    status: multi_replicate_batch_1_started
+    family: method_calibration
+    batch_1_scenarios:
+      - baseline_rate_3_4_kappa_10
+      - lower_rate_2_4_kappa_10
+      - higher_rate_5_0_kappa_10
+      - baseline_rate_3_4_kappa_4
+    required_outputs:
+      - coefficient_bias
+      - coefficient_rmse
+      - coefficient_interval_coverage
+      - suppressed_cell_rmse
+      - suppressed_cell_interval_coverage
+      - convergence_pass_rate
+      - suppression_fraction
+reporting_rules:
+  no_pilot_estimates_in_manuscript: true
+  no_corrected_empirical_estimate_before_production_gate: true
+  report_all_prespecified_analyses_regardless_of_direction: true
+  distinguish_validation_from_identification: true
+  distinguish_public_observations_from_latent_posterior_quantities: true
+  treat_higher_level_redundant_totals_as_validation_checks: true
