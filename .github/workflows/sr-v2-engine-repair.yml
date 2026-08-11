@@ -35,10 +35,12 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install pandas numpy scipy pyarrow statsmodels matplotlib openpyxl PyYAML pytest python-docx arviz
 
-      - name: Apply exact heat-bath repair
+      - name: Apply exact heat-bath and interval-path repairs
         run: |
           python scripts/sr_v2_heatbath_patch.py
           python scripts/sr_v2_heatbath_exact_patch.py
+          python scripts/sr_v2_interval_path_patch.py
+          python scripts/sr_v2_interval_path_exact_patch.py
 
       - name: Run existing and v2 validation tests
         run: python -m pytest -q tests/test_bayes_constrained.py tests/test_sr_v2_engine.py
@@ -72,11 +74,13 @@ jobs:
           git add \
             src/bayes_constrained/model.py \
             src/bayes_constrained/sampler.py \
+            src/bayes_constrained/latent_pilot.py \
             src/bayes_constrained/exact_validation.py \
             outputs/scientific_reports_v2
           if git diff --cached --quiet; then
             echo "No generated repair changes to commit."
             exit 0
           fi
-          git commit -m "test: update v2 heat-bath validation and pilot evidence [skip sr-v2]"
+          git commit -m "test: update v2 circuit validation and pilot evidence [skip sr-v2]"
+          git pull --rebase origin scientific-reports-v2
           git push origin HEAD:scientific-reports-v2
