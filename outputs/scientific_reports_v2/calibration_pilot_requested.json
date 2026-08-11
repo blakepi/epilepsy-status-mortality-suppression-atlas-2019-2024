@@ -1,0 +1,6 @@
+{
+  "branch": "scientific-reports-v2",
+  "design_commit": "30f73858c20750a1eae1e4ea7b639f8993c676df",
+  "purpose": "Run a four-chain end-to-end corrected constrained-model fit on one truth-known synthetic suppressed data set and compare coefficient and latent-count recovery with transparent baseline handling methods.",
+  "interpretation_boundary": "Single-replicate computational pilot only. No empirical manuscript estimate or nominal coverage claim."
+}
