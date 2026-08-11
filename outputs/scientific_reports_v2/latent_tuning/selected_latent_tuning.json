@@ -1,0 +1,31 @@
+{
+  "interpretation_boundary": "Fixed-theta tuning only; does not estimate the corrected epidemiologic posterior.",
+  "max_cycle_half_length": 6,
+  "move_weights": {
+    "county_period_exploration": 0.2,
+    "cycle_swap": 0.15,
+    "state_year_transfer": 0.45,
+    "swap_2x2": 0.2
+  },
+  "pilot_proposals_per_chain": 20000,
+  "profile_metrics": {
+    "elapsed_seconds": 73.042986209,
+    "median_change_fraction_county_period_exploration": 0.1547817897592451,
+    "median_change_fraction_cycle_swap": 0.006456650195101862,
+    "median_change_fraction_state_year_transfer": 0.037151336589768665,
+    "median_change_fraction_swap_2x2": 0.03576607973224337,
+    "median_final_fraction_free_cells_changed": 0.11949458483754513,
+    "median_pairwise_final_to_start_cell_l1_ratio": 0.9771693399300299,
+    "median_pairwise_final_to_start_rurality_svi_ratio": 0.3815136775187825,
+    "overall_changed_proposal_fraction": 0.0555625,
+    "profile": "balanced_heatbath",
+    "proposals_per_chain": 20000,
+    "selection_score": 0.29492529870312034,
+    "weight_county_period_exploration": 0.2,
+    "weight_cycle_swap": 0.15,
+    "weight_state_year_transfer": 0.45,
+    "weight_swap_2x2": 0.2
+  },
+  "selected_profile": "balanced_heatbath",
+  "selection_rule": "0.35*cell exploration + 0.25*cell-distance reduction + 0.40*rurality/SVI-distance reduction"
+}
