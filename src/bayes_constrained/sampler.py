@@ -14,6 +14,7 @@ import pandas as pd
 from .constraints import append_validation, assert_constraints, solve_and_save_initial_allocations
 from .data import load_config
 from .heatbath import feasible_amplitudes, sample_amplitude
+from .interval_paths import IntervalPathSupport, build_interval_path_support, interval_path_direction
 from .model import Design, Theta, initialize_theta, log_posterior_theta, make_design, mu, nb2_logpmf, crude_intercept_prior
 from .paths import BAYES_DATA, OUTPUT_DIR, PROJECT_ROOT, rel
 
@@ -36,6 +37,7 @@ class MoveState:
     interval_counties: set[int]
     years: np.ndarray
     cycle_state_counties: list[tuple[int, np.ndarray]]
+    interval_path_support: IntervalPathSupport
 
 
 def _codes(series: pd.Series) -> tuple[np.ndarray, list[str]]:
@@ -87,6 +89,15 @@ def build_move_state(frame: pd.DataFrame, y: np.ndarray) -> MoveState:
                 candidates.append(int(county))
         if len(candidates) >= 3 and len(years) >= 3:
             cycle_state_counties.append((int(state), np.asarray(candidates, dtype=int)))
+    interval_path_support = build_interval_path_support(
+        lower=lower,
+        upper=upper,
+        county_code=county_code,
+        state_code=state_code,
+        year_code=year_code,
+        interval_counties=interval_counties,
+        county_year_to_row=county_year_to_row,
+    )
     return MoveState(
         lower=lower,
         upper=upper,
@@ -104,6 +115,7 @@ def build_move_state(frame: pd.DataFrame, y: np.ndarray) -> MoveState:
         interval_counties=interval_counties,
         years=years,
         cycle_state_counties=cycle_state_counties,
+        interval_path_support=interval_path_support,
     )
 
 
@@ -199,6 +211,33 @@ def period_interval_transfer(y: np.ndarray, move: MoveState, current_mu: np.ndar
     a, b = rng.choice(group, size=2, replace=False)
     return _apply_heatbath_direction(
         y, move, np.asarray([a, b]), np.asarray([-1, 1]), current_mu, kappa, rng
+    )
+
+
+def interval_path_transfer(
+    y: np.ndarray,
+    move: MoveState,
+    current_mu: np.ndarray,
+    kappa: float,
+    rng: np.random.Generator,
+) -> bool:
+    groups = move.interval_path_support.endpoint_groups
+    if not groups:
+        return False
+    group = groups[int(rng.integers(0, len(groups)))]
+    endpoint_a, endpoint_b = rng.choice(group, size=2, replace=False)
+    proposal = interval_path_direction(
+        int(endpoint_a),
+        int(endpoint_b),
+        state_code=move.state_code,
+        year_code=move.year_code,
+        support=move.interval_path_support,
+    )
+    if proposal is None:
+        return False
+    indices, direction = proposal
+    return _apply_heatbath_direction(
+        y, move, indices, direction, current_mu, kappa, rng
     )
 
 def state_2x2_swap(y: np.ndarray, move: MoveState, current_mu: np.ndarray, kappa: float, rng: np.random.Generator) -> bool:
@@ -307,8 +346,9 @@ def _normalized_move_weights(settings: dict) -> dict[str, float]:
     configured = settings.get("move_weights", {}) or {}
     values = {
         "state_year_transfer": float(configured.get("state_year_transfer", configured.get("transfer", 0.50))),
-        "county_period_exploration": float(configured.get("county_period_exploration", configured.get("interval_transfer", 0.20))),
-        "swap_2x2": float(configured.get("swap_2x2", 0.20)),
+        "county_period_exploration": float(configured.get("county_period_exploration", configured.get("interval_transfer", 0.25))),
+        "interval_path_transfer": float(configured.get("interval_path_transfer", 0.20)),
+        "swap_2x2": float(configured.get("swap_2x2", 0.25)),
         "cycle_swap": float(configured.get("cycle_swap", 0.10)),
     }
     values = {key: max(value, 0.0) for key, value in values.items()}
@@ -730,6 +770,7 @@ def run_mcmc_chain_hpc(
     move_weights = _normalized_move_weights(settings)
     weight_transfer = move_weights["state_year_transfer"]
     weight_interval = move_weights["county_period_exploration"]
+    weight_path = move_weights["interval_path_transfer"]
     weight_swap = move_weights["swap_2x2"]
     weight_cycle = move_weights["cycle_swap"]
     max_cycle_half_length = int(settings.get("max_cycle_half_length", 6))
@@ -763,7 +804,7 @@ def run_mcmc_chain_hpc(
         theta = initialize_theta(frame, y, design)
         current_lp = log_posterior_theta(y, theta, design, intercept_mean=intercept_mean)
         scales0 = _proposal_scales(theta, settings.get("proposal_scale_multipliers"))
-        accepted = {"transfer": 0, "interval_transfer": 0, "swap_2x2": 0, "cycle_swap": 0, "blocked_refresh": 0}
+        accepted = {"transfer": 0, "interval_transfer": 0, "interval_path": 0, "swap_2x2": 0, "cycle_swap": 0, "blocked_refresh": 0}
         proposed = {key: 0 for key in accepted}
         param_accept = {key: 0 for key in scales0}
         param_prop = {key: 0 for key in scales0}
@@ -801,7 +842,10 @@ def run_mcmc_chain_hpc(
                 elif r < weight_transfer + weight_interval:
                     proposed["interval_transfer"] += 1
                     accepted["interval_transfer"] += int(period_interval_transfer(y, move, current_mu, kappa, rng))
-                elif r < weight_transfer + weight_interval + weight_swap:
+                elif r < weight_transfer + weight_interval + weight_path:
+                    proposed["interval_path"] += 1
+                    accepted["interval_path"] += int(interval_path_transfer(y, move, current_mu, kappa, rng))
+                elif r < weight_transfer + weight_interval + weight_path + weight_swap:
                     proposed["swap_2x2"] += 1
                     accepted["swap_2x2"] += int(state_2x2_swap(y, move, current_mu, kappa, rng))
                 else:
@@ -968,6 +1012,7 @@ def run_mcmc(frame: pd.DataFrame, *, mode: str = "production", model_name: str =
     move_weights = _normalized_move_weights(settings)
     weight_transfer = move_weights["state_year_transfer"]
     weight_interval = move_weights["county_period_exploration"]
+    weight_path = move_weights["interval_path_transfer"]
     weight_swap = move_weights["swap_2x2"]
     weight_cycle = move_weights["cycle_swap"]
     max_cycle_half_length = int(settings.get("max_cycle_half_length", 6))
@@ -987,7 +1032,7 @@ def run_mcmc(frame: pd.DataFrame, *, mode: str = "production", model_name: str =
         theta = initialize_theta(frame, y, design)
         current_lp = log_posterior_theta(y, theta, design, intercept_mean=intercept_mean)
         scales = _proposal_scales(theta)
-        accepted = {"transfer": 0, "interval_transfer": 0, "swap_2x2": 0, "cycle_swap": 0, "blocked_refresh": 0}
+        accepted = {"transfer": 0, "interval_transfer": 0, "interval_path": 0, "swap_2x2": 0, "cycle_swap": 0, "blocked_refresh": 0}
         proposed = {key: 0 for key in accepted}
         param_accept = {key: 0 for key in scales}
         param_prop = {key: 0 for key in scales}

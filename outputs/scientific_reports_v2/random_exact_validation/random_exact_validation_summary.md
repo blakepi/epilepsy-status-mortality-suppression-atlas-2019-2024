@@ -8,9 +8,9 @@ Thirty reproducible one-state, three-county, three-year bounded fibers were gene
 | passed | 30 |
 | failed | 0 |
 | cases where legacy kernel was disconnected | 0 |
-| maximum repaired row sum error | 6.661338147750939e-16 |
+| maximum repaired row sum error | 8.881784197001252e-16 |
 | maximum repaired stationarity error | 3.3306690738754696e-16 |
-| maximum repaired detailed balance error | 1.5265566588595902e-16 |
+| maximum repaired detailed balance error | 1.6653345369377348e-16 |
 | minimum feasible states | 2 |
 | maximum feasible states | 18 |
 | pass | True |

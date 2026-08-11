@@ -13,6 +13,7 @@ from .sampler import (
     _normalized_move_weights,
     build_move_state,
     period_interval_transfer,
+    interval_path_transfer,
     state_2x2_swap,
     state_cycle_swap,
     state_year_transfer,
@@ -156,6 +157,8 @@ def run_fixed_theta_latent_pilot(
                 ok = state_year_transfer(y, move, current_mu, kappa, rng)
             elif name == "county_period_exploration":
                 ok = period_interval_transfer(y, move, current_mu, kappa, rng)
+            elif name == "interval_path_transfer":
+                ok = interval_path_transfer(y, move, current_mu, kappa, rng)
             elif name == "swap_2x2":
                 ok = state_2x2_swap(y, move, current_mu, kappa, rng)
             elif name == "cycle_swap":

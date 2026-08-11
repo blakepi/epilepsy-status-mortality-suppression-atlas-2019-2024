@@ -12,11 +12,13 @@ from scipy.sparse.csgraph import connected_components
 
 from .constraints import validate_constraints
 from .heatbath import amplitude_log_weights, amplitude_probabilities, feasible_amplitudes
+from .interval_paths import interval_path_direction
 from .model import Design, Theta, log_likelihood, make_design, mu
 from .sampler import (
     MoveState,
     build_move_state,
     period_interval_transfer,
+    interval_path_transfer,
     state_2x2_swap,
     state_cycle_swap,
     state_year_transfer,
@@ -108,6 +110,29 @@ def _interval_events(move: MoveState) -> list[ProposalEvent]:
             raw.append(((int(a), int(b)), (-1, 1), base))
     return _coalesce(raw)
 
+
+def _interval_path_events(move: MoveState) -> list[ProposalEvent]:
+    groups = move.interval_path_support.endpoint_groups
+    if not groups:
+        return [ProposalEvent(None, None, 1.0)]
+    raw: list[tuple[tuple[int, ...] | None, tuple[int, ...] | None, float]] = []
+    for group in groups:
+        base = 1.0 / len(groups) / (len(group) * (len(group) - 1))
+        for endpoint_a, endpoint_b in permutations(group.tolist(), 2):
+            proposal = interval_path_direction(
+                int(endpoint_a),
+                int(endpoint_b),
+                state_code=move.state_code,
+                year_code=move.year_code,
+                support=move.interval_path_support,
+            )
+            if proposal is None:
+                raw.append((None, None, base))
+            else:
+                indices, direction = proposal
+                raw.append((tuple(indices.tolist()), tuple(direction.tolist()), base))
+    return _coalesce(raw)
+
 def _swap_2x2_events(move: MoveState) -> list[ProposalEvent]:
     states = [int(state) for state, counties in move.state_counties.items() if len(counties) >= 2]
     years = [int(year) for year in move.years]
@@ -197,6 +222,8 @@ def proposal_events(move: MoveState, move_name: str, *, max_cycle_half_length: i
         return _state_year_events(move)
     if move_name == "county_period_exploration":
         return _interval_events(move)
+    if move_name == "interval_path_transfer":
+        return _interval_path_events(move)
     if move_name == "swap_2x2":
         return _swap_2x2_events(move)
     if move_name == "cycle_swap":
@@ -206,10 +233,11 @@ def proposal_events(move: MoveState, move_name: str, *, max_cycle_half_length: i
 
 def normalized_weights(weights: dict[str, float] | None = None) -> dict[str, float]:
     values = {
-        "state_year_transfer": 0.50,
-        "county_period_exploration": 0.20,
-        "swap_2x2": 0.20,
-        "cycle_swap": 0.10,
+        "state_year_transfer": 0.10,
+        "county_period_exploration": 0.25,
+        "interval_path_transfer": 0.20,
+        "swap_2x2": 0.25,
+        "cycle_swap": 0.20,
     }
     if weights:
         for key, value in weights.items():
@@ -369,6 +397,8 @@ def empirical_count_kernel_frequencies(
             state_year_transfer(y, move, current_mu, kappa, rng)
         elif move_name == "county_period_exploration":
             period_interval_transfer(y, move, current_mu, kappa, rng)
+        elif move_name == "interval_path_transfer":
+            interval_path_transfer(y, move, current_mu, kappa, rng)
         elif move_name == "swap_2x2":
             state_2x2_swap(y, move, current_mu, kappa, rng)
         else:
