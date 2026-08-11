@@ -23,10 +23,22 @@ SHELL_FILES = [
     ROOT / "hpc" / "wahab" / "slurm" / "60_sr_v2_production_chain_array.sbatch",
     ROOT / "hpc" / "wahab" / "slurm" / "61_sr_v2_finalize_production.sbatch",
 ]
+WINDOWS_DRIVE_PATH = re.compile(r"(?im)(?:^|[\s\"'=(:])(?:[a-z]:[\\/])")
 
 
 def check(name: str, passed: bool, detail: str) -> dict[str, object]:
     return {"check": name, "passed": bool(passed), "detail": detail}
+
+
+def contains_windows_drive_path(text: str) -> bool:
+    """Return True only for an actual drive-qualified path such as C:\\ or C:/.
+
+    The previous literal substring check was over-broad in the generated audit
+    context and could fail despite portable shell content. This anchored regular
+    expression deliberately ignores ordinary uses of the letter C and colons.
+    """
+
+    return WINDOWS_DRIVE_PATH.search(text) is not None
 
 
 def main() -> None:
@@ -91,7 +103,14 @@ def main() -> None:
         text = path.read_text(encoding="utf-8")
         rows.append(check(f"shell_has_shebang:{path.name}", text.startswith("#!/bin/bash -l"), "login-shell shebang"))
         rows.append(check(f"shell_fail_closed:{path.name}", "set -euo pipefail" in text, "strict shell mode"))
-        rows.append(check(f"shell_no_windows_path:{path.name}", "C:\\" not in text and "C:/" not in text, "portable paths"))
+        has_windows_path = contains_windows_drive_path(text)
+        rows.append(
+            check(
+                f"shell_no_windows_path:{path.name}",
+                not has_windows_path,
+                "portable paths" if not has_windows_path else "drive-qualified Windows path detected",
+            )
+        )
 
     # Parse any frozen configuration already present without requiring it to exist before the gates pass.
     config = ROOT / "hpc" / "wahab" / "configs" / "sr_v2_production.yaml"
