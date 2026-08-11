@@ -20,7 +20,7 @@ def replace_exact(path: Path, old: str, new: str, *, expected: int = 1) -> bool:
 PATH_MOVE = '''\n\ndef interval_path_transfer(\n    y: np.ndarray,\n    move: MoveState,\n    current_mu: np.ndarray,\n    kappa: float,\n    rng: np.random.Generator,\n) -> bool:\n    groups = move.interval_path_support.endpoint_groups\n    if not groups:\n        return False\n    group = groups[int(rng.integers(0, len(groups)))]\n    endpoint_a, endpoint_b = rng.choice(group, size=2, replace=False)\n    proposal = interval_path_direction(\n        int(endpoint_a),\n        int(endpoint_b),\n        state_code=move.state_code,\n        year_code=move.year_code,\n        support=move.interval_path_support,\n    )\n    if proposal is None:\n        return False\n    indices, direction = proposal\n    return _apply_heatbath_direction(\n        y, move, indices, direction, current_mu, kappa, rng\n    )\n'''
 
 
-def main() -> None:
+def patch_sampler() -> bool:
     path = ROOT / "src" / "bayes_constrained" / "sampler.py"
     changed = False
     changed |= replace_exact(
@@ -71,6 +71,28 @@ def main() -> None:
         '''                elif r < weight_transfer + weight_interval:\n                    proposed["interval_transfer"] += 1\n                    accepted["interval_transfer"] += int(period_interval_transfer(y, move, current_mu, kappa, rng))\n                elif r < weight_transfer + weight_interval + weight_path:\n                    proposed["interval_path"] += 1\n                    accepted["interval_path"] += int(interval_path_transfer(y, move, current_mu, kappa, rng))\n                elif r < weight_transfer + weight_interval + weight_path + weight_swap:\n                    proposed["swap_2x2"] += 1\n                    accepted["swap_2x2"] += int(state_2x2_swap(y, move, current_mu, kappa, rng))\n''',
         expected=2,
     )
+    return changed
+
+
+def patch_latent_pilot() -> bool:
+    path = ROOT / "src" / "bayes_constrained" / "latent_pilot.py"
+    changed = False
+    changed |= replace_exact(
+        path,
+        '''    build_move_state,\n    period_interval_transfer,\n    state_2x2_swap,\n''',
+        '''    build_move_state,\n    period_interval_transfer,\n    interval_path_transfer,\n    state_2x2_swap,\n''',
+    )
+    changed |= replace_exact(
+        path,
+        '''            elif name == "county_period_exploration":\n                ok = period_interval_transfer(y, move, current_mu, kappa, rng)\n            elif name == "swap_2x2":\n''',
+        '''            elif name == "county_period_exploration":\n                ok = period_interval_transfer(y, move, current_mu, kappa, rng)\n            elif name == "interval_path_transfer":\n                ok = interval_path_transfer(y, move, current_mu, kappa, rng)\n            elif name == "swap_2x2":\n''',
+    )
+    return changed
+
+
+def main() -> None:
+    changed = patch_sampler()
+    changed |= patch_latent_pilot()
     print("Interval-endpoint path kernel applied." if changed else "Interval-endpoint path kernel already present.")
 
 
