@@ -15,17 +15,18 @@ from bayes_constrained.sampler import run_mcmc_chain_hpc  # noqa: E402
 
 
 DEFAULT_MOVE_WEIGHTS = {
-    "state_year_transfer": 0.10,
-    "county_period_exploration": 0.55,
+    "state_year_transfer": 0.05,
+    "county_period_exploration": 0.30,
+    "interval_path_transfer": 0.25,
     "swap_2x2": 0.30,
-    "cycle_swap": 0.05,
+    "cycle_swap": 0.10,
 }
 
 
 def selected_move_settings() -> tuple[dict[str, float], int, str]:
     path = ROOT / "outputs" / "scientific_reports_v2" / "latent_tuning" / "selected_latent_tuning.yaml"
     if not path.exists():
-        return DEFAULT_MOVE_WEIGHTS.copy(), 6, "default_interval_heavy"
+        return DEFAULT_MOVE_WEIGHTS.copy(), 6, "default_balanced_circuit_heatbath"
     payload = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
     weights = payload.get("move_weights") or DEFAULT_MOVE_WEIGHTS
     return (
