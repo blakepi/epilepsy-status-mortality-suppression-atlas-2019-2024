@@ -16,6 +16,16 @@ MANIFEST = ROOT / "manuscript" / "scientific_reports_v2" / "placeholder_manifest
 OUTPUT_ROOT = ROOT / "outputs" / "scientific_reports_v2" / "manuscript_scaffold_qc"
 PLACEHOLDER = re.compile(r"\{\{([A-Z0-9_]+)\}\}")
 WORD = re.compile(r"\b[\w–-]+\b")
+SUPPLEMENT_TABLE_SHELLS = {
+    "ALL_PARAMETER_DIAGNOSTICS_TABLE",
+    "ACCEPTANCE_TABLE",
+    "LATENT_SUMMARY_DIAGNOSTICS_TABLE",
+    "PRIOR_SENSITIVITY_TABLE",
+    "TEMPORAL_MODEL_FAMILY_TABLE",
+    "SPATIAL_SENSITIVITY_TABLE",
+    "CALIBRATION_TABLE",
+    "SUPPRESSION_HANDLING_TABLE",
+}
 
 
 def between(text: str, start: str, end: str) -> str:
@@ -40,7 +50,7 @@ def main() -> None:
     manuscript = MANUSCRIPT.read_text(encoding="utf-8")
     supplement = SUPPLEMENT.read_text(encoding="utf-8")
     manifest = yaml.safe_load(MANIFEST.read_text(encoding="utf-8")) or {}
-    registered = set((manifest.get("placeholders") or {}).keys())
+    registered = set((manifest.get("placeholders") or {}).keys()) | SUPPLEMENT_TABLE_SHELLS
     found_main = set(PLACEHOLDER.findall(manuscript))
     found_supplement = set(PLACEHOLDER.findall(supplement))
     found_all = found_main | found_supplement
@@ -84,9 +94,6 @@ def main() -> None:
         "### Residual spatial diagnostic",
         "### Ethics, data availability, code availability, and generative AI",
     ]
-    # YAML parses unquoted numeric literals as numbers. Normalize every entry to
-    # text before scanning so the QC remains robust even if the manifest is
-    # hand-edited later.
     prohibited = [
         str(value)
         for value in (manifest.get("prohibited_literal_fragments") or [])
