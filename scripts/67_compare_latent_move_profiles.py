@@ -17,28 +17,32 @@ from bayes_constrained.latent_pilot import run_fixed_theta_latent_pilot, theta_f
 
 
 PROFILES = {
-    "balanced_heatbath": {
-        "state_year_transfer": 0.45,
-        "county_period_exploration": 0.20,
-        "swap_2x2": 0.20,
-        "cycle_swap": 0.15,
-    },
-    "hybrid_interval": {
-        "state_year_transfer": 0.20,
-        "county_period_exploration": 0.45,
+    "balanced_circuit_heatbath": {
+        "state_year_transfer": 0.05,
+        "county_period_exploration": 0.30,
+        "interval_path_transfer": 0.25,
         "swap_2x2": 0.30,
+        "cycle_swap": 0.10,
+    },
+    "interval_path_heavy": {
+        "state_year_transfer": 0.05,
+        "county_period_exploration": 0.25,
+        "interval_path_transfer": 0.40,
+        "swap_2x2": 0.25,
         "cycle_swap": 0.05,
     },
-    "interval_heavy": {
-        "state_year_transfer": 0.10,
-        "county_period_exploration": 0.55,
-        "swap_2x2": 0.30,
+    "direct_interval_heavy": {
+        "state_year_transfer": 0.05,
+        "county_period_exploration": 0.45,
+        "interval_path_transfer": 0.20,
+        "swap_2x2": 0.25,
         "cycle_swap": 0.05,
     },
     "exact_margin_heavy": {
-        "state_year_transfer": 0.10,
-        "county_period_exploration": 0.30,
-        "swap_2x2": 0.55,
+        "state_year_transfer": 0.05,
+        "county_period_exploration": 0.20,
+        "interval_path_transfer": 0.20,
+        "swap_2x2": 0.50,
         "cycle_swap": 0.05,
     },
 }
@@ -155,7 +159,7 @@ def main() -> None:
     lines = [
         "# Scientific Reports v2 latent-move profile comparison",
         "",
-        "Four proposal mixtures were compared from the same four dispersed feasible allocations with model parameters held fixed. Selection prioritizes convergence of rurality/SVI latent totals, then cell-space distance reduction and breadth of cell exploration.",
+        "Four circuit-aware proposal mixtures were compared from the same four dispersed feasible allocations with model parameters held fixed. Selection prioritizes convergence of rurality/SVI latent totals, then cell-space distance reduction and breadth of cell exploration.",
         "",
         "| Profile | Changed proposals | Free cells changed | Cell-distance ratio | Rurality/SVI-distance ratio | Score | Runtime (s) |",
         "| --- | ---: | ---: | ---: | ---: | ---: | ---: |",
