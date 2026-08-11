@@ -30,6 +30,15 @@ def load_json(path: Path) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def diagnostic_record(row: pd.Series) -> dict[str, object]:
+    return {
+        "parameter": str(row["parameter"]),
+        "r_hat": float(row["r_hat"]),
+        "ess_bulk": float(row["ess_bulk"]),
+        "ess_tail": float(row["ess_tail"]),
+    }
+
+
 def main() -> None:
     config = yaml.safe_load(CONFIG_PATH.read_text(encoding="utf-8"))
     thresholds = config["diagnostics"]
@@ -173,16 +182,25 @@ def main() -> None:
     calibration_design = load_json(
         ROOT / "outputs" / "scientific_reports_v2" / "calibration_design_smoke" / "calibration_design_summary.json"
     )
-    add("exact_kernel_gate", bool(exact.get("overall_pass")), str(exact.get("overall_pass")))
+    add("exact_kernel_gate", bool(exact.get("pass")), str(exact.get("pass")))
     add(
         "randomized_exact_kernel_gate",
-        bool(random_exact.get("overall_pass")),
-        str(random_exact.get("overall_pass")),
+        bool(random_exact.get("pass")),
+        str(random_exact.get("pass")),
+    )
+    geometry_pass = (
+        int(geometry.get("latent_variables", -1)) == 9695
+        and int(geometry.get("independent_equalities", -1)) == 1256
+        and int(geometry.get("equality_nullity", -1)) == 8439
     )
     add(
         "constraint_geometry_recorded",
-        int(geometry.get("free_variables", -1)) == 9695 and int(geometry.get("equality_rank", -1)) > 0,
-        f"free={geometry.get('free_variables')} rank={geometry.get('equality_rank')} nullity={geometry.get('nullity')}",
+        geometry_pass,
+        (
+            f"latent_variables={geometry.get('latent_variables')} "
+            f"rank={geometry.get('independent_equalities')} "
+            f"nullity={geometry.get('equality_nullity')}"
+        ),
     )
     add("extended_pilot_gate", bool(extended.get("pilot_pass")), str(extended.get("pilot_pass")))
     add(
@@ -194,21 +212,15 @@ def main() -> None:
     checks_df = pd.DataFrame(checks)
     checks_df.to_csv(OUTPUT_ROOT / "production_gate_checks.csv", index=False)
     passed = bool(checks_df["passed"].all())
+    worst_parameter = parameters.sort_values("r_hat", ascending=False).iloc[0]
+    worst_latent = stochastic.sort_values("r_hat", ascending=False).iloc[0] if not stochastic.empty else None
     result = {
         "generated_utc": datetime.now(timezone.utc).isoformat(),
         "passed": passed,
         "action": "freeze_corrected_results" if passed else "hold_or_extend",
         "checks": checks,
-        "worst_parameter": parameters.sort_values("r_hat", ascending=False).iloc[0][
-            ["parameter", "r_hat", "ess_bulk", "ess_tail"]
-        ].to_dict(),
-        "worst_stochastic_latent_summary": (
-            stochastic.sort_values("r_hat", ascending=False).iloc[0][
-                ["parameter", "r_hat", "ess_bulk", "ess_tail"]
-            ].to_dict()
-            if not stochastic.empty
-            else None
-        ),
+        "worst_parameter": diagnostic_record(worst_parameter),
+        "worst_stochastic_latent_summary": diagnostic_record(worst_latent) if worst_latent is not None else None,
         "interpretation_boundary": (
             "Passing this gate freezes corrected computational results. Manuscript submission "
             "still requires multi-replicate calibration and prespecified epidemiologic robustness analyses."
