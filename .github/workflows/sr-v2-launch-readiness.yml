@@ -1,0 +1,69 @@
+name: Scientific Reports v2 launch readiness
+
+on:
+  push:
+    branches:
+      - scientific-reports-v2
+    paths:
+      - 'outputs/scientific_reports_v2/launch_readiness_requested.json'
+
+permissions:
+  contents: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out launch-readiness request
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Compile launch-readiness validator
+        run: python -m py_compile scripts/85_validate_sr_v2_launch_readiness.py
+
+      - name: Validate authoritative launch helper syntax
+        run: bash -n hpc/wahab/submit_sr_v2_production_ready.sh
+
+      - name: Evaluate all preproduction gates
+        continue-on-error: true
+        run: python scripts/85_validate_sr_v2_launch_readiness.py
+
+      - name: Verify launch-readiness evidence
+        run: |
+          test -s outputs/scientific_reports_v2/launch_readiness/launch_readiness.json
+          test -s outputs/scientific_reports_v2/launch_readiness/launch_readiness.md
+          git diff --check
+
+      - name: Commit launch-readiness evidence
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add outputs/scientific_reports_v2/launch_readiness
+          if git diff --cached --quiet; then
+            echo "No launch-readiness evidence to commit."
+          else
+            git commit -m "test: record Scientific Reports v2 launch readiness [skip sr-v2] [skip tuning] [skip joint-pilot]"
+            git pull --rebase origin scientific-reports-v2
+            git push origin HEAD:scientific-reports-v2
+          fi
+
+      - name: Enforce launch-readiness gate
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          path = Path('outputs/scientific_reports_v2/launch_readiness/launch_readiness.json')
+          report = json.loads(path.read_text(encoding='utf-8'))
+          if not report.get('passed', False):
+              failed = [row for row in report.get('checks', []) if not row.get('passed', False)]
+              raise SystemExit(f'Launch readiness is on HOLD: {failed}')
+          PY
