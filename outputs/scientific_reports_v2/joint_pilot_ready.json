@@ -1,6 +1,7 @@
 {
   "branch": "scientific-reports-v2",
-  "source_commit": "4e5708400b6ed7d2be14a357cc9dcf4e92ea10c5",
-  "purpose": "Launch the corrected four-chain joint latent-count and parameter pilot after the exact-kernel, constraint-geometry, fixed-theta movement, and proposal-profile gates passed.",
+  "source_commit": "04d6617db60032e20c204996a36f8b1f948bcff3",
+  "attempt": 2,
+  "purpose": "Relaunch the corrected four-chain joint latent-count and parameter pilot after adding the missing matplotlib summary dependency.",
   "interpretation_boundary": "Pilot and tuning evidence only. No corrected epidemiologic estimate is authorized for manuscript use."
 }
