@@ -20,9 +20,6 @@ placeholders:
   ONE_SENTENCE_ROBUSTNESS_RESULT:
     source: frozen_robustness_summary
     gate: manuscript_result_freeze
-  CALIBRATION_BATCH_RESULTS:
-    source: multi_batch_truth_known_calibration_summary
-    gate: calibration_reporting_gate
   PRODUCTION_DIAGNOSTIC_SUMMARY:
     source: outputs/scientific_reports_v2/production_8chain/production_gate.json
     gate: outputs/scientific_reports_v2/production_8chain/production_gate.json

@@ -44,7 +44,7 @@ The legacy 2√ó2-only move family was not connected on an adversarial chordless s
 
 ### Truth-known calibration
 
-The calibration study generated complete negative-binomial county-year counts under prespecified rurality, SVI, age-composition, sex-composition, state, year, and dispersion parameters; imposed the same 1‚Äì9 disclosure rule; reconstructed compatible county-period, state-year, national-year, and grand-total public constraints; and reran the complete constrained analysis from dispersed feasible starts. Batch 1 varied baseline event rate and overdispersion across four synthetic data sets. {{CALIBRATION_BATCH_RESULTS}} Because four replicates provide imprecise coverage estimates, exact binomial intervals are reported and nominal-coverage claims are reserved for the completed multi-batch study.
+The calibration study generated complete negative-binomial county-year counts under prespecified rurality, SVI, age-composition, sex-composition, state, year, and dispersion parameters; imposed the same 1‚Äì9 disclosure rule; reconstructed compatible county-period, state-year, national-year, and grand-total public constraints; and reran the complete constrained analysis from dispersed feasible starts. Twenty independently seeded replicates‚Äîfive under each of four prespecified event-rate and overdispersion conditions‚Äîcompleted their computational gates without constraint-validation failures. Of 120 prespecified coefficient intervals, 114 contained the true IRR (95.0%; exact binomial 95% Monte Carlo interval, 89.4%‚Äì98.1%); contrast-specific coverage ranged from 90% to 100%. Across 4,337 suppressed cells, cell-weighted 95% interval coverage was 99.38% and posterior-mean RMSE was 1.01 deaths. These results authorize descriptive calibration reporting but do not establish that coverage has been estimated precisely or proven equal to the nominal 95% level.
 
 ### Corrected production diagnostics
 
@@ -78,13 +78,7 @@ The suppression-handling comparisons show why disclosure control is not a cleric
 
 The applied result should be interpreted cautiously. Multiple-cause G40/G41 mentions are not equivalent to adjudicated epilepsy-attributable deaths. County covariates are ecological, residual age and comorbidity structure may remain, and death-certificate coding may vary geographically. State effects do not by themselves guarantee the absence of within-state spatial dependence; this motivated the residual-spatial diagnostic and prespecified spatial sensitivity. The period includes substantial pandemic disruption. County-equivalent geography and covariate imputation introduce additional uncertainty. None of the analyses estimates individual risk or a causal effect of rural residence.
 
-Public suppression need not force analysts to choose between discarding small-area information and assigning arbitrary values to hidden counts. Where bounded cell information and compatible aggregate totals are available, constrained Bayesian models can propagate remaining uncertainty while preserving the distinction between released observations and model-derived latent quantities. In this application, {{FINAL_DISCUSSION_SENTENCE}}.
-
-## Methods
-
-### Study design, data sources, and outcome
-
-This ecological study used public aggregate mortality and county covariate data. The outcome was any mention of ICD-10 G40 (epilepsy and recurrent seizures) or G41 (status epilepticus) on a U.S. death certificate in the CDC WONDER Multiple Cause of Death, 2018‚Äì2024 Single Race database, restricted t€≠≠¢Gß≤⁄Óù∆≠y–Counties without direct covariate matches were retained to preserve public-total reconciliation and imputed according to the frozen processing rules documented in the repository.
+Public suppression need not force analysts to choose between discarding small-area information and assigning arbitrary values to hidden counts. Where bounded cell information and compatible aggregate totals are available, constrained Bayesian models can propagate remaining uncertainty while preserving the distinction between released observations and model-derived latent quantities. In this application, {{FINAL_DISCUSSION_SENTENCﬂè-¢Gß≤⁄Óù∆≠y–65 years or older and percentage male were standardized before modeling. Population entered as a log offset [7]. Counties without direct covariate matches were retained to preserve public-total reconciliation and imputed according to the frozen processing rules documented in the repository.
 
 ### Public suppression and feasible latent state space
 
@@ -253,7 +247,6 @@ This study used public, deidentified aggregate data and no individual-level or r
 The following placeholders must remain unresolved until their stated gate passes:
 
 - `{{PRIMARY_IRR}}`, `{{PRIMARY_CRI}}`, all primary and SVI result fields: corrected eight-chain production gate.
-- `{{CALIBRATION_BATCH_RESULTS}}`: completed multi-replicate calibration aggregate, with Monte Carlo uncertainty.
 - `{{SPATIAL_DIAGNOSTIC_RESULT}}`: post-production spatial residual diagnostic.
 - `{{SPATIAL_MODEL_RESULT}}`: prespecified spatial sensitivity, if triggered.
 - `{{ROBUSTNESS_RESULTS_PARAGRAPH}}`: completed prior, temporal, model-family, and age-structure sensitivities.

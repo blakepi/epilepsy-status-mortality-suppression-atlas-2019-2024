@@ -148,7 +148,7 @@ analyses:
       - population_favoring_feasible_allocation
       - constrained_bayesian_primary
   - id: truth_known_calibration
-    status: batch_1_complete_batch_2_requested
+    status: twenty_replicate_program_complete_reporting_gate_passed
     family: method_calibration
     batch_1_scenarios:
       - baseline_rate_3_4_kappa_10

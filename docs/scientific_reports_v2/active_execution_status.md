@@ -21,20 +21,24 @@ The archived `v1.1.1` release remains the immutable baseline. No corrected empir
 
 ## Substantive work completed in the current execution tranche
 
-### Multi-replicate truth-known calibration, batch 1
+### Multi-replicate truth-known calibration, completed 20-replicate program
 
-A reusable four-replicate batch was implemented and completed through GitHub Actions. Batch 1 spans:
+A reusable four-replicate batch was implemented and completed through GitHub Actions. The program was then expanded with 16 independently seeded replicates, producing five replicates under each of four frozen conditions:
 
 1. baseline rate 3.4 per 100,000 with NB2 kappa 10;
 2. lower rate 2.4 per 100,000 with kappa 10;
 3. higher rate 5.0 per 100,000 with kappa 10;
 4. baseline rate 3.4 per 100,000 with stronger overdispersion, kappa 4.
 
-Each replicate used a truth-known 72-county panel, the public 1–9 suppression rule, compatible county-period and geographic aggregates, four dispersed feasible starts, and four corrected chains of 24,000 iterations with 6,000 burn-in iterations and thinning of 10. All four replicates passed the computational gate with zero constraint-validation failures.
+Each replicate used a truth-known 72-county panel, the public 1–9 suppression rule, compatible county-period and geographic aggregates, four dispersed feasible starts, and four corrected chains of 24,000 iterations with 6,000 burn-in iterations and thinning of 10. All 20 replicates passed the computational gate with zero constraint-validation failures.
 
-Across the 24 prespecified coefficient-by-replicate intervals, 22 covered the true IRR (91.7%; exact binomial 95% interval 73.0%–99.0%). This is promising but not a precise nominal-coverage estimate. The nonmetro-adjacent and highest-SVI contrasts each covered in three of four replicates; the other four contrasts covered in all four. Across 857 suppressed cells, cell-weighted 95% interval coverage was 99.18% and posterior-mean RMSE was 1.05 deaths. The repository explicitly records `final_nominal_coverage_claim_authorized: false`; additional prespecified batches remain required before a manuscript coverage claim.
+Across 120 prespecified coefficient-by-replicate intervals, 114 covered the true IRR (95.0%; exact binomial 95% Monte Carlo interval 89.4%–98.1%). Contrast-specific coverage ranged from 90% to 100%. Across 4,337 suppressed cells, cell-weighted 95% interval coverage was 99.38% and posterior-mean RMSE was 1.01 deaths. The descriptive calibration reporting gate passed, while the repository explicitly records `precise_nominal_coverage_claim_authorized: false`.
 
-Evidence: `outputs/scientific_reports_v2/calibration_study_batch1/`.
+Evidence:
+
+- `outputs/scientific_reports_v2/calibration_study_batch1/`
+- `outputs/scientific_reports_v2/calibration_study_batch2/`
+- `outputs/scientific_reports_v2/calibration_program/`
 
 ### Method-forward manuscript and technical supplement
 
@@ -58,7 +62,7 @@ A technical supplement now contains the full target density, move definitions, e
 
 Working-draft QC passed. The title contains 14 words, the unstructured abstract contains 184 words, six keywords are present, all required sections and mathematical subsections were detected, all locked placeholders are registered, prohibited pilot literals are absent, and the supplement states the constraint rank/nullity and kernel-validation evidence.
 
-The numeric citation normalizer corrected four semantic reference mappings, confirmed 17 contiguous references, and found no out-of-range citations. Bibliographic metadata and DOI resolution remain separate final-package gates.
+The numeric citation normalizer corrected four semantic reference mappings, confirmed 17 contiguous references, and found no out-of-range citations. The six journal references were then verified against current PubMed records for title, journal, volume, locator, year, PMID, and DOI; that bibliographic metadata gate passed. Web-source access dates and the final repository DOI remain release-time gates.
 
 Evidence:
 
@@ -106,7 +110,6 @@ That helper reruns launch-readiness checks, freezes configuration and evidence h
 2. Run the spatial residual diagnostic and trigger the spatial sensitivity if required.
 3. Run broader and regularizing prior profiles using the validated sensitivity runner.
 4. Run model-family and pandemic-period sensitivities.
-5. Complete additional truth-known calibration batches before making nominal coverage claims.
-6. Populate manuscript placeholders only from frozen machine-readable outputs.
-7. Generate main figures, supplementary diagnostics, and the immutable archive.
-8. Run submission-mode manuscript and package QC.
+5. Populate manuscript placeholders only from frozen machine-readable outputs.
+6. Generate main figures, supplementary diagnostics, and the immutable archive.
+7. Run submission-mode manuscript and package QC.

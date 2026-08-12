@@ -148,7 +148,7 @@ A deterministic state-clustered panel retained six states, 72 counties, six year
 
 The single-replicate tuning experiment established an operational proposal profile. Its tuned extension used four chains, 1,800 diagnostic tail draws per chain, zero validation failures, maximum primary R-hat 1.0220, minimum primary bulk ESS 152.6, and minimum primary tail ESS 290.8. All six prespecified coefficient truths and the suppressed-cell truths were covered in that replicate, but these values were explicitly treated as one-replicate diagnostics rather than coverage estimates.
 
-Calibration batch 1 contains four prespecified scenarios:
+The completed 20-replicate calibration program contained five independently seeded replicates under each of four prespecified scenarios:
 
 | Scenario | Baseline rate per 100,000 | NB2 kappa | Purpose |
 |---|---:|---:|---|
@@ -157,7 +157,7 @@ Calibration batch 1 contains four prespecified scenarios:
 | Higher event rate | 5.0 | 10 | reduced suppression burden |
 | Stronger overdispersion | 3.4 | 4 | dispersion stress test |
 
-Each replicate uses four corrected chains, 24,000 iterations, 6,000 burn-in iterations, thinning of 10, and 1,800 retained draws per chain. Coefficient and latent-count recovery are aggregated with exact binomial uncertainty. Further batches are required before nominal coverage is asserted.
+Each replicate used four corrected chains, 24,000 iterations, 6,000 burn-in iterations, thinning of 10, and 1,800 retained draws per chain. All 20 replicates passed their computational gates without constraint-validation failures. Coefficient and latent-count recovery were aggregated with exact binomial uncertainty. The reporting gate authorizes descriptive calibration results but not a claim that coverage was estimated precisely or proven equal to the nominal 95% level.
 
 ## Supplementary Methods S10. Prespecified sensitivity registry
 
@@ -208,7 +208,16 @@ This diagnostic conditions on posterior means and is not a full posterior distri
 
 ### Supplementary Table S7. Multi-replicate truth-known calibration
 
-{{CALIBRATION_TABLE}}
+| Parameter | Truth covered, n/N (%) | Exact 95% Monte Carlo interval | IRR RMSE | Median absolute relative bias |
+|---|---:|---:|---:|---:|
+| Other metropolitan vs large metropolitan | 19/20 (95%) | 75.1%–99.9% | 0.169 | 8.76% |
+| Nonmetropolitan adjacent vs large metropolitan | 18/20 (90%) | 68.3%–98.8% | 0.302 | 12.22% |
+| Nonmetropolitan nonadjacent vs large metropolitan | 20/20 (100%) | 83.2%–100% | 0.202 | 13.46% |
+| SVI Q2 vs Q1 | 18/20 (90%) | 68.3%–98.8% | 0.164 | 7.80% |
+| SVI Q3 vs Q1 | 20/20 (100%) | 83.2%–100% | 0.141 | 7.58% |
+| SVI Q4 vs Q1 | 19/20 (95%) | 75.1%–99.9% | 0.230 | 12.93% |
+
+Overall, 114 of 120 coefficient intervals covered truth (95.0%; exact binomial 95% Monte Carlo interval, 89.4%–98.1%). Across 4,337 suppressed cells, cell-weighted interval coverage was 99.38% and posterior-mean RMSE was 1.01 deaths.
 
 ### Supplementary Table S8. Alternative suppression handling
 

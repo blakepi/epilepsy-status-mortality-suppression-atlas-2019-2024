@@ -5,7 +5,7 @@ Status: **PASS**
 - Title words: 14
 - Abstract words: 184
 - Keywords: 6
-- Registered unresolved placeholders: 33
+- Registered unresolved placeholders: 31
 
 | Check | Passed | Detail |
 | --- | --- | --- |
