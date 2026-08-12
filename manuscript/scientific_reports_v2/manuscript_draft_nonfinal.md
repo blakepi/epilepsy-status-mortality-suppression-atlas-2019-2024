@@ -78,7 +78,15 @@ The suppression-handling comparisons show why disclosure control is not a cleric
 
 The applied result should be interpreted cautiously. Multiple-cause G40/G41 mentions are not equivalent to adjudicated epilepsy-attributable deaths. County covariates are ecological, residual age and comorbidity structure may remain, and death-certificate coding may vary geographically. State effects do not by themselves guarantee the absence of within-state spatial dependence; this motivated the residual-spatial diagnostic and prespecified spatial sensitivity. The period includes substantial pandemic disruption. County-equivalent geography and covariate imputation introduce additional uncertainty. None of the analyses estimates individual risk or a causal effect of rural residence.
 
-Public suppression need not force analysts to choose between discarding small-area information and assigning arbitrary values to hidden counts. Where bounded cell information and compatible aggregate totals are available, constrained Bayesian models can propagate remaining uncertainty while preserving the distinction between released observations and model-derived latent quantities. In this application, {{FINAL_DISCUSSION_SENTENCﬂè-¢Gß≤⁄Óù∆≠y–65 years or older and percentage male were standardized before modeling. Population entered as a log offset [7]. Counties without direct covariate matches were retained to preserve public-total reconciliation and imputed according to the frozen processing rules documented in the repository.
+Public suppression need not force analysts to choose between discarding small-area information and assigning arbitrary values to hidden counts. Where bounded cell information and compatible aggregate totals are available, constrained Bayesian models can propagate remaining uncertainty while preserving the distinction between released observations and model-derived latent quantities. In this application, {{FINAL_DISCUSSION_SENTENCE}}.
+
+## Methods
+
+### Study design, data sources, and outcome
+
+This ecological study used public aggregate mortality and county covariate data. The outcome was any mention of ICD-10 G40 (epilepsy and recurrent seizures) or G41 (status epilepticus) on a U.S. death certificate in the CDC WONDER Multiple Cause of Death, 2018‚Äì2024 Single Race database, restricted to calendar years 2019‚Äì2024 [1,2]. The estimand is therefore a county-level mortality-mention rate association, not definitive etiologic attribution. Underlying-cause G40/G41 and COVID-19 co-mention extracts were retained for contextual analyses but did not define the primary likelihood [3,16].
+
+County rurality was derived from Rural-Urban Continuum Codes and grouped as large metropolitan (RUCC 1), other metropolitan (RUCC 2‚Äì3), nonmetropolitan adjacent (RUCC 4, 6, and 8), and nonmetropolitan nonadjacent (RUCC 5, 7, and 9), with large metropolitan counties as the reference [5]. Social Vulnerability Index quartile used Q1 as the reference [4]. Percentage aged 65 years or older and percentage male were standardized before modeling. Population entered as a log offset [7]. Counties without direct covariate matches were retained to preserve public-total reconciliation and imputed according to the frozen processing rules documented in the repository.
 
 ### Public suppression and feasible latent state space
 
