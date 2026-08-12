@@ -1,0 +1,70 @@
+{
+  "generated_utc": "2026-08-12T21:35:48.404605+00:00",
+  "interpretation_boundary": "This gate verifies the six journal records used in the current manuscript against PubMed title, journal, volume, locator, year, PMID, and DOI metadata. Web-database access dates and the final repository DOI remain separate release-time checks.",
+  "journal_references_checked": 6,
+  "passed": true,
+  "records": [
+    {
+      "doi": "10.1371/journal.pmed.0040297",
+      "doi_present": true,
+      "doi_url": "https://doi.org/10.1371/journal.pmed.0040297",
+      "missing_required_fragments": [],
+      "passed": true,
+      "pmid": "17941715",
+      "pubmed_url": "https://pubmed.ncbi.nlm.nih.gov/17941715/",
+      "reference": 8
+    },
+    {
+      "doi": "10.5888/pcd16.180441",
+      "doi_present": true,
+      "doi_url": "https://doi.org/10.5888/pcd16.180441",
+      "missing_required_fragments": [],
+      "passed": true,
+      "pmid": "31198162",
+      "pubmed_url": "https://pubmed.ncbi.nlm.nih.gov/31198162/",
+      "reference": 11
+    },
+    {
+      "doi": "10.1136/bmjopen-2019-035767",
+      "doi_present": true,
+      "doi_url": "https://doi.org/10.1136/bmjopen-2019-035767",
+      "missing_required_fragments": [],
+      "passed": true,
+      "pmid": "32839157",
+      "pubmed_url": "https://pubmed.ncbi.nlm.nih.gov/32839157/",
+      "reference": 12
+    },
+    {
+      "doi": "10.1016/j.yebeh.2024.109770",
+      "doi_present": true,
+      "doi_url": "https://doi.org/10.1016/j.yebeh.2024.109770",
+      "missing_required_fragments": [],
+      "passed": true,
+      "pmid": "38636143",
+      "pubmed_url": "https://pubmed.ncbi.nlm.nih.gov/38636143/",
+      "reference": 13
+    },
+    {
+      "doi": "10.1016/j.yebeh.2021.108181",
+      "doi_present": true,
+      "doi_url": "https://doi.org/10.1016/j.yebeh.2021.108181",
+      "missing_required_fragments": [],
+      "passed": true,
+      "pmid": "34252832",
+      "pubmed_url": "https://pubmed.ncbi.nlm.nih.gov/34252832/",
+      "reference": 14
+    },
+    {
+      "doi": "10.25259/SNI_592_2024",
+      "doi_present": true,
+      "doi_url": "https://doi.org/10.25259/SNI_592_2024",
+      "missing_required_fragments": [],
+      "passed": true,
+      "pmid": "39777187",
+      "pubmed_url": "https://pubmed.ncbi.nlm.nih.gov/39777187/",
+      "reference": 15
+    }
+  ],
+  "source": "NCBI PubMed Entrez ESummary",
+  "source_access_date": "2026-08-12"
+}

@@ -84,9 +84,7 @@ Public suppression need not force analysts to choose between discarding small-ar
 
 ### Study design, data sources, and outcome
 
-This ecological study used public aggregate mortality and county covariate data. The outcome was any mention of ICD-10 G40 (epilepsy and recurrent seizures) or G41 (status epilepticus) on a U.S. death certificate in the CDC WONDER Multiple Cause of Death, 2018‚Äì2024 Single Race database, restricted to calendar years 2019‚Äì2024 [1,2]. The estimand is therefore a county-level mortality-mention rate association, not definitive etiologic attribution. Underlying-cause G40/G41 and COVID-19 co-mention extracts were retained for contextual analyses but did not define the primary likelihood [3,16].
-
-County rurality was derived from Rural-Urban Continuum Codes and grouped as large metropolitan (RUCC 1), other metropolitan (RUCC 2‚Äì3), nonmetropolitan adjacent (RUCC 4, 6, and 8), and nonmetropolitan nonadjacent (RUCC 5, 7, and 9), with large metropolitan counties as the reference [5]. Social Vulnerability Index quartile used Q1 as the reference [4]. Percentage aged 65 years or older and percentage male were standardized before modeling. Population entered as a log offset [7]. Counties without direct covariate matches were retained to preserve public-total reconciliation and imputed according to the frozen processing rules documented in the repository.
+This ecological study used public aggregate mortality and county covariate data. The outcome was any mention of ICD-10 G40 (epilepsy and recurrent seizures) or G41 (status epilepticus) on a U.S. death certificate in the CDC WONDER Multiple Cause of Death, 2018‚Äì2024 Single Race database, restricted t€≠≠¢Gß≤⁄Óù∆≠y–Counties without direct covariate matches were retained to preserve public-total reconciliation and imputed according to the frozen processing rules documented in the repository.
 
 ### Public suppression and feasible latent state space
 
@@ -239,14 +237,14 @@ This study used public, deidentified aggregate data and no individual-level or r
 5. U.S. Department of Agriculture Economic Research Service. Rural‚ÄìUrban Continuum Codes documentation. https://www.ers.usda.gov/data-products/rural-urban-continuum-codes/documentation. Accessed 19 June 2026.
 6. National Center for Health Statistics. Urban‚ÄìRural Classification Scheme for Counties. https://www.cdc.gov/nchs/data-analysis-tools/urban-rural.html. Accessed 19 June 2026.
 7. U.S. Census Bureau. American Community Survey 5-Year Data documentation. https://www.census.gov/data/developers/data-sets/acs-5year.html. Accessed 19 June 2026.
-8. Vandenbroucke, J. P. et al. Strengthening the Reporting of Observational Studies in Epidemiology: explanation and elaboration. PLoS Med. 4, e297 (2007).
+8. Vandenbroucke, J. P. et al. Strengthening the Reporting of Observational Studies in Epidemiology (STROBE): explanation and elaboration. PLoS Med. 4, e297 (2007). doi:10.1371/journal.pmed.0040297.
 9. STROBE Statement. STROBE checklists for observational studies. https://www.strobe-statement.org/checklists/. Accessed 19 June 2026.
 10. Pierpoint, G. Suppression-Aware Bayesian Analysis of County-Level Epilepsy and Status Epilepticus Mortality in the United States, 2019‚Äì2024. Zenodo, version {{REPOSITORY_VERSION}}, {{REPOSITORY_DOI}}.
-11. Quick, H. Estimating county-level mortality rates using highly censored data from CDC WONDER. Prev. Chronic Dis. 16, 180441 (2019). doi:10.5888/pcd16.180441.
-12. DeGiorgio, C. M. et al. Why are epilepsy mortality rates rising in the United States? A population-based multiple cause-of-death study. BMJ Open 10, e035767 (2020).
-13. Tian, N. et al. Mortality and mortality disparities among people with epilepsy in the United States, 2011‚Äì2021. Epilepsy Behav. 155, 109770 (2024).
-14. Duke, S. M. et al. A systematic literature review of health disparities among rural people with epilepsy in the United States and Canada. Epilepsy Behav. 122, 108181 (2021).
-15. Iqbal, J. et al. Demographic and regional patterns of epilepsy-related mortality in the USA: insights from CDC WONDER data. Surg. Neurol. Int. 15, 450 (2024).
+11. Quick, H. Estimating county-level mortality rates using highly censored data from CDC WONDER. Prev. Chronic Dis. 16, E76 (2019). doi:10.5888/pcd16.180441.
+12. DeGiorgio, C. M. et al. Why are epilepsy mortality rates rising in the United States? A population-based multiple cause-of-death study. BMJ Open 10, e035767 (2020). doi:10.1136/bmjopen-2019-035767.
+13. Tian, N. et al. Mortality and mortality disparities among people with epilepsy in the United States, 2011‚Äì2021. Epilepsy Behav. 155, 109770 (2024). doi:10.1016/j.yebeh.2024.109770.
+14. Duke, S. M. et al. A systematic literature review of health disparities among rural people with epilepsy (RPWE) in the United States and Canada. Epilepsy Behav. 122, 108181 (2021). doi:10.1016/j.yebeh.2021.108181.
+15. Iqbal, J. et al. Demographic and regional patterns of epilepsy-related mortality in the USA: insights from CDC WONDER data. Surg. Neurol. Int. 15, 450 (2024). doi:10.25259/SNI_592_2024.
 16. Centers for Disease Control and Prevention. Reporting and coding deaths due to COVID-19. https://www.cdc.gov/nchs/covid19/coding-and-reporting.htm. Accessed 19 June 2026.
 17. U.S. Census Bureau. 2024 County Adjacency File. https://www2.census.gov/geo/docs/reference/county_adjacency/county_adjacency2024.txt. Accessed {{ADJACENCY_ACCESS_DATE}}.
 
