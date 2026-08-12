@@ -12,7 +12,10 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from bayes_constrained.calibration_methods import comparator_scenarios  # noqa: E402
-from bayes_constrained.calibration_study import scenario_for_replicate  # noqa: E402
+from bayes_constrained.calibration_study import (  # noqa: E402
+    scenario_for_replicate,
+    valid_replicates_for_batch,
+)
 from bayes_constrained.constraints import assert_constraints  # noqa: E402
 from bayes_constrained.diagnostics import diagnostics_table  # noqa: E402
 
@@ -41,11 +44,27 @@ def replicate_root(replicate_id: int) -> Path:
 
 
 def main() -> None:
+    global BATCH_ROOT
     parser = argparse.ArgumentParser()
-    parser.add_argument("--replicate-id", type=int, required=True, choices=range(1, 5))
+    parser.add_argument("--batch-id", type=int, default=1, choices=(1, 2))
+    parser.add_argument("--replicate-id", type=int, required=True)
     args = parser.parse_args()
+    valid_replicates = valid_replicates_for_batch(args.batch_id)
+    if args.replicate_id not in valid_replicates:
+        parser.error(
+            f"batch {args.batch_id} replicate must be one of {valid_replicates}"
+        )
+    BATCH_ROOT = (
+        ROOT
+        / "outputs"
+        / "scientific_reports_v2"
+        / f"calibration_study_batch{args.batch_id}"
+    )
 
-    scenario = scenario_for_replicate(args.replicate_id)
+    scenario = scenario_for_replicate(
+        args.replicate_id,
+        batch_id=args.batch_id,
+    )
     root = replicate_root(args.replicate_id)
     design_root = root / "design"
     summary_root = root / "summary"
@@ -89,7 +108,7 @@ def main() -> None:
                 state,
                 public,
                 label=(
-                    f"calibration_batch1_rep{args.replicate_id}_"
+                    f"calibration_batch{args.batch_id}_rep{args.replicate_id}_"
                     f"chain{chain}_draw{draw_index}"
                 ),
             )
@@ -307,7 +326,7 @@ def main() -> None:
         encoding="utf-8",
     )
     lines = [
-        f"# Calibration study batch 1, replicate {args.replicate_id}",
+        f"# Calibration study batch {args.batch_id}, replicate {args.replicate_id}",
         "",
         f"Scenario: `{scenario.scenario_id}`",
         "",
@@ -350,7 +369,7 @@ def main() -> None:
     )
     if not computational_pass:
         raise SystemExit(
-            f"Calibration batch 1 replicate {args.replicate_id} is on HOLD; evidence was written."
+            f"Calibration batch {args.batch_id} replicate {args.replicate_id} is on HOLD; evidence was written."
         )
     print(json.dumps(summary, sort_keys=True))
 

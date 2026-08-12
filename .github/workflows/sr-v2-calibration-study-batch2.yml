@@ -1,0 +1,318 @@
+name: Scientific Reports v2 calibration study batch 2
+
+on:
+  push:
+    branches:
+      - scientific-reports-v2
+    paths:
+      - 'outputs/scientific_reports_v2/calibration_study_batch2_requested.json'
+
+concurrency:
+  group: scientific-reports-v2-calibration-study-batch2-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  validate-code:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Check out frozen batch request
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Install validation dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pandas numpy scipy pyarrow statsmodels matplotlib PyYAML pytest arviz
+
+      - name: Compile calibration-study scripts
+        run: |
+          python -m py_compile \
+            src/bayes_constrained/calibration_study.py \
+            scripts/86_prepare_sr_v2_calibration_batch1_replicate.py \
+            scripts/87_run_sr_v2_calibration_batch1_chain.py \
+            scripts/88_summarize_sr_v2_calibration_batch1_replicate.py \
+            scripts/89_aggregate_sr_v2_calibration_batch1.py \
+            scripts/97_aggregate_sr_v2_calibration_program.py
+
+      - name: Run corrected-engine and calibration tests
+        run: |
+          python -m pytest -q \
+            tests/test_bayes_constrained.py \
+            tests/test_sr_v2_calibration.py \
+            tests/test_sr_v2_spatial_diagnostics.py
+
+  prepare:
+    needs: validate-code
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        replicate: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
+    steps:
+      - name: Check out frozen batch request
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Install design dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pandas numpy scipy pyarrow statsmodels PyYAML
+
+      - name: Generate truth-known suppressed replicate and dispersed starts
+        run: python scripts/86_prepare_sr_v2_calibration_batch1_replicate.py --batch-id 2 --replicate-id ${{ matrix.replicate }}
+
+      - name: Package replicate design
+        run: |
+          printf -v REP '%02d' '${{ matrix.replicate }}'
+          tar -czf "calibration-batch2-design-rep-${REP}.tar.gz" \
+            "outputs/scientific_reports_v2/calibration_study_batch2/replicate_${REP}/design"
+
+      - name: Upload replicate design
+        uses: actions/upload-artifact@v4
+        with:
+          name: calibration-batch2-design-rep-${{ matrix.replicate }}
+          path: calibration-batch2-design-rep-*.tar.gz
+          if-no-files-found: error
+          retention-days: 14
+
+  run-chain:
+    needs: prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        replicate: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
+        chain: [1, 2, 3, 4]
+    steps:
+      - name: Check out frozen batch request
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Install chain dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pandas numpy scipy pyarrow statsmodels PyYAML
+
+      - name: Download replicate design
+        uses: actions/download-artifact@v4
+        with:
+          name: calibration-batch2-design-rep-${{ matrix.replicate }}
+          path: calibration-design-artifact
+
+      - name: Extract replicate design
+        run: tar -xzf calibration-design-artifact/calibration-batch2-design-rep-*.tar.gz
+
+      - name: Run corrected calibration chain
+        run: |
+          python scripts/87_run_sr_v2_calibration_batch1_chain.py \
+            --batch-id 2 \
+            --replicate-id ${{ matrix.replicate }} \
+            --chain-id ${{ matrix.chain }}
+
+      - name: Package chain output
+        run: |
+          printf -v REP '%02d' '${{ matrix.replicate }}'
+          printf -v CHAIN '%02d' '${{ matrix.chain }}'
+          tar -czf "calibration-batch2-rep-${REP}-chain-${CHAIN}.tar.gz" \
+            "outputs/scientific_reports_v2/calibration_study_batch2/replicate_${REP}/chains/chain_${CHAIN}" \
+            "outputs/scientific_reports_v2/calibration_study_batch2/replicate_${REP}/configs/chain_${CHAIN}.yaml"
+
+      - name: Upload chain output
+        uses: actions/upload-artifact@v4
+        with:
+          name: calibration-batch2-rep-${{ matrix.replicate }}-chain-${{ matrix.chain }}
+          path: calibration-batch2-rep-*-chain-*.tar.gz
+          if-no-files-found: error
+          retention-days: 14
+
+  summarize-replicate:
+    needs: run-chain
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        replicate: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
+    steps:
+      - name: Check out frozen batch request
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Install summary dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pandas numpy scipy pyarrow statsmodels matplotlib PyYAML arviz
+
+      - name: Download replicate design
+        uses: actions/download-artifact@v4
+        with:
+          name: calibration-batch2-design-rep-${{ matrix.replicate }}
+          path: calibration-design-artifact
+
+      - name: Download replicate chains
+        uses: actions/download-artifact@v4
+        with:
+          pattern: calibration-batch2-rep-${{ matrix.replicate }}-chain-*
+          path: calibration-chain-artifacts
+
+      - name: Extract replicate evidence
+        run: |
+          tar -xzf calibration-design-artifact/calibration-batch2-design-rep-*.tar.gz
+          find calibration-chain-artifacts -name '*.tar.gz' -print0 | sort -z | xargs -0 -n1 tar -xzf
+
+      - name: Summarize replicate
+        continue-on-error: true
+        run: python scripts/88_summarize_sr_v2_calibration_batch1_replicate.py --batch-id 2 --replicate-id ${{ matrix.replicate }}
+
+      - name: Verify replicate summary
+        run: |
+          printf -v REP '%02d' '${{ matrix.replicate }}'
+          test -s "outputs/scientific_reports_v2/calibration_study_batch2/replicate_${REP}/summary/replicate_summary.json"
+          test -s "outputs/scientific_reports_v2/calibration_study_batch2/replicate_${REP}/summary/primary_recovery.csv"
+          test -s "outputs/scientific_reports_v2/calibration_study_batch2/replicate_${REP}/summary/latent_recovery_summary.csv"
+          git diff --check
+
+      - name: Package compact replicate evidence
+        run: |
+          printf -v REP '%02d' '${{ matrix.replicate }}'
+          tar -czf "calibration-batch2-summary-rep-${REP}.tar.gz" \
+            "outputs/scientific_reports_v2/calibration_study_batch2/replicate_${REP}/design/scenario.json" \
+            "outputs/scientific_reports_v2/calibration_study_batch2/replicate_${REP}/design/truth.json" \
+            "outputs/scientific_reports_v2/calibration_study_batch2/replicate_${REP}/design/suppression_summary.csv" \
+            "outputs/scientific_reports_v2/calibration_study_batch2/replicate_${REP}/design/design_summary.json" \
+            "outputs/scientific_reports_v2/calibration_study_batch2/replicate_${REP}/design/design_summary.md" \
+            "outputs/scientific_reports_v2/calibration_study_batch2/replicate_${REP}/design/initialization_summary.csv" \
+            "outputs/scientific_reports_v2/calibration_study_batch2/replicate_${REP}/design/initialization_pairwise_distances.csv" \
+            "outputs/scientific_reports_v2/calibration_study_batch2/replicate_${REP}/summary"
+
+      - name: Upload compact replicate evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: calibration-batch2-summary-rep-${{ matrix.replicate }}
+          path: calibration-batch2-summary-rep-*.tar.gz
+          if-no-files-found: error
+          retention-days: 14
+
+  aggregate:
+    needs: summarize-replicate
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out frozen batch request
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Install aggregation dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pandas numpy scipy
+
+      - name: Download all compact replicate evidence
+        uses: actions/download-artifact@v4
+        with:
+          pattern: calibration-batch2-summary-rep-*
+          path: calibration-summary-artifacts
+
+      - name: Extract all compact replicate evidence
+        run: find calibration-summary-artifacts -name '*.tar.gz' -print0 | sort -z | xargs -0 -n1 tar -xzf
+
+      - name: Aggregate calibration batch 2
+        continue-on-error: true
+        run: |
+          python scripts/89_aggregate_sr_v2_calibration_batch1.py --batch-id 2
+          python scripts/97_aggregate_sr_v2_calibration_program.py
+
+      - name: Verify aggregate evidence
+        run: |
+          test -s outputs/scientific_reports_v2/calibration_study_batch2/batch2_summary.json
+          test -s outputs/scientific_reports_v2/calibration_study_batch2/batch2_summary.md
+          test -s outputs/scientific_reports_v2/calibration_study_batch2/coefficient_calibration_summary.csv
+          test -s outputs/scientific_reports_v2/calibration_study_batch2/comparator_calibration_summary.csv
+          test -s outputs/scientific_reports_v2/calibration_program/calibration_program_summary.json
+          test -s outputs/scientific_reports_v2/calibration_program/calibration_reporting_gate.json
+          git diff --check
+
+      - name: Commit compact batch evidence
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add outputs/scientific_reports_v2/calibration_study_batch2/replicate_*/design/scenario.json
+          git add outputs/scientific_reports_v2/calibration_study_batch2/replicate_*/design/truth.json
+          git add outputs/scientific_reports_v2/calibration_study_batch2/replicate_*/design/suppression_summary.csv
+          git add outputs/scientific_reports_v2/calibration_study_batch2/replicate_*/design/design_summary.json
+          git add outputs/scientific_reports_v2/calibration_study_batch2/replicate_*/design/design_summary.md
+          git add outputs/scientific_reports_v2/calibration_study_batch2/replicate_*/design/initialization_summary.csv
+          git add outputs/scientific_reports_v2/calibration_study_batch2/replicate_*/design/initialization_pairwise_distances.csv
+          git add outputs/scientific_reports_v2/calibration_study_batch2/replicate_*/summary
+          git add outputs/scientific_reports_v2/calibration_study_batch2/*.csv
+          git add outputs/scientific_reports_v2/calibration_study_batch2/batch2_summary.json
+          git add outputs/scientific_reports_v2/calibration_study_batch2/batch2_summary.md
+          git add outputs/scientific_reports_v2/calibration_program
+          if git diff --cached --quiet; then
+            echo "No calibration batch-2 evidence to commit."
+          else
+            git commit -m "test: record multi-replicate calibration batch 2 [skip sr-v2] [skip tuning] [skip joint-pilot]"
+            git pull --rebase origin scientific-reports-v2
+            git push origin HEAD:scientific-reports-v2
+          fi
+
+      - name: Enforce computational batch gate after evidence is committed
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          path = Path('outputs/scientific_reports_v2/calibration_study_batch2/batch2_summary.json')
+          summary = json.loads(path.read_text(encoding='utf-8'))
+          if not summary.get('computational_gate_pass', False):
+              raise SystemExit('Calibration batch 2 is on HOLD; evidence was committed for diagnosis.')
+          program = json.loads(Path('outputs/scientific_reports_v2/calibration_program/calibration_reporting_gate.json').read_text(encoding='utf-8'))
+          if not program.get('passed', False):
+              raise SystemExit('Combined calibration reporting gate is on HOLD; evidence was committed for diagnosis.')
+          PY

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import argparse
 import json
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -10,8 +12,9 @@ from scipy.stats import beta
 
 
 ROOT = Path(__file__).resolve().parents[1]
-BATCH_ROOT = ROOT / "outputs" / "scientific_reports_v2" / "calibration_study_batch1"
-REPLICATES = range(1, 5)
+sys.path.insert(0, str(ROOT / "src"))
+
+from bayes_constrained.calibration_study import scenarios_for_batch  # noqa: E402
 
 
 def exact_binomial_interval(successes: int, trials: int, alpha: float = 0.05) -> tuple[float, float]:
@@ -23,12 +26,24 @@ def exact_binomial_interval(successes: int, trials: int, alpha: float = 0.05) ->
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--batch-id", type=int, default=1, choices=(1, 2))
+    args = parser.parse_args()
+    batch_id = int(args.batch_id)
+    batch_root = (
+        ROOT
+        / "outputs"
+        / "scientific_reports_v2"
+        / f"calibration_study_batch{batch_id}"
+    )
+    replicates = tuple(item.replicate_id for item in scenarios_for_batch(batch_id))
+
     summary_rows: list[dict[str, object]] = []
     primary_frames: list[pd.DataFrame] = []
     latent_frames: list[pd.DataFrame] = []
     comparator_frames: list[pd.DataFrame] = []
-    for replicate in REPLICATES:
-        root = BATCH_ROOT / f"replicate_{replicate:02d}" / "summary"
+    for replicate in replicates:
+        root = batch_root / f"replicate_{replicate:02d}" / "summary"
         summary_path = root / "replicate_summary.json"
         if not summary_path.exists():
             raise FileNotFoundError(f"Missing calibration replicate summary: {summary_path}")
@@ -41,10 +56,10 @@ def main() -> None:
     primary = pd.concat(primary_frames, ignore_index=True)
     latent = pd.concat(latent_frames, ignore_index=True)
     comparators = pd.concat(comparator_frames, ignore_index=True)
-    summaries.to_csv(BATCH_ROOT / "replicate_status.csv", index=False)
-    primary.to_csv(BATCH_ROOT / "primary_recovery_all_replicates.csv", index=False)
-    latent.to_csv(BATCH_ROOT / "latent_recovery_all_replicates.csv", index=False)
-    comparators.to_csv(BATCH_ROOT / "comparator_results_all_replicates.csv", index=False)
+    summaries.to_csv(batch_root / "replicate_status.csv", index=False)
+    primary.to_csv(batch_root / "primary_recovery_all_replicates.csv", index=False)
+    latent.to_csv(batch_root / "latent_recovery_all_replicates.csv", index=False)
+    comparators.to_csv(batch_root / "comparator_results_all_replicates.csv", index=False)
 
     coefficient_rows: list[dict[str, object]] = []
     for parameter, group in primary.groupby("parameter", sort=False):
@@ -74,7 +89,7 @@ def main() -> None:
             }
         )
     coefficient = pd.DataFrame(coefficient_rows)
-    coefficient.to_csv(BATCH_ROOT / "coefficient_calibration_summary.csv", index=False)
+    coefficient.to_csv(batch_root / "coefficient_calibration_summary.csv", index=False)
 
     suppressed = latent[latent["cell_group"].eq("suppressed_cells")].copy()
     total_suppressed_cells = int(suppressed["cells"].sum())
@@ -98,7 +113,7 @@ def main() -> None:
         "median_replicate_interval_width": float(suppressed["mean_interval_width"].median()),
     }
     pd.DataFrame([pooled_suppressed]).to_csv(
-        BATCH_ROOT / "suppressed_cell_calibration_summary.csv",
+        batch_root / "suppressed_cell_calibration_summary.csv",
         index=False,
     )
 
@@ -122,7 +137,7 @@ def main() -> None:
             }
         )
     comparator_summary = pd.DataFrame(comparator_rows)
-    comparator_summary.to_csv(BATCH_ROOT / "comparator_calibration_summary.csv", index=False)
+    comparator_summary.to_csv(batch_root / "comparator_calibration_summary.csv", index=False)
 
     computational_pass = bool(summaries["computational_gate_pass"].astype(bool).all())
     coverage_total_successes = int(primary["truth_covered_by_95_interval"].astype(bool).sum())
@@ -133,7 +148,7 @@ def main() -> None:
     )
     batch_summary = {
         "generated_utc": datetime.now(timezone.utc).isoformat(),
-        "batch": 1,
+        "batch": batch_id,
         "replicates": int(len(summaries)),
         "scenarios": summaries["scenario_id"].tolist(),
         "computational_gate_pass": computational_pass,
@@ -159,20 +174,24 @@ def main() -> None:
         "final_nominal_coverage_claim_authorized": False,
         "next_action": (
             "run_additional_prespecified_calibration_batches_before_manuscript_claims"
+            if batch_id == 1
+            else "aggregate_batches_1_and_2_for_descriptive_calibration_reporting"
         ),
         "interpretation_boundary": (
-            "This four-replicate batch spans event-rate and overdispersion conditions and is a substantive calibration increment, but it is too small for a precise nominal-coverage claim. Exact binomial intervals are reported to make that Monte Carlo uncertainty explicit."
+            f"This {len(summaries)}-replicate batch spans prespecified event-rate "
+            "and overdispersion conditions. Exact binomial intervals are reported; "
+            "the batch does not by itself authorize a precise nominal-coverage claim."
         ),
     }
-    (BATCH_ROOT / "batch1_summary.json").write_text(
+    (batch_root / f"batch{batch_id}_summary.json").write_text(
         json.dumps(batch_summary, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
     )
 
     lines = [
-        "# Scientific Reports v2 multi-replicate calibration, batch 1",
+        f"# Scientific Reports v2 multi-replicate calibration, batch {batch_id}",
         "",
-        "Four prespecified truth-known data sets varied the baseline event rate and negative-binomial overdispersion while preserving the same rurality, SVI, age-composition, sex-composition, state, and year effect structure.",
+        f"{len(summaries)} prespecified truth-known data sets varied the baseline event rate and negative-binomial overdispersion while preserving the same rurality, SVI, age-composition, sex-composition, state, and year effect structure.",
         "",
         "## Computational status",
         "",
@@ -204,16 +223,16 @@ def main() -> None:
             f"- Cell-weighted 95% interval coverage: {weighted_coverage:.3f}",
             f"- Pooled posterior-mean RMSE: {np.sqrt(weighted_mse):.3f} deaths",
             "",
-            "This batch is deliberately reported with exact binomial uncertainty. Four replicates cannot establish nominal 95% coverage; additional prespecified batches are required before the manuscript makes a calibration-performance claim.",
+            "This batch is deliberately reported with exact binomial uncertainty and does not by itself establish precise nominal 95% coverage.",
         ]
     )
-    (BATCH_ROOT / "batch1_summary.md").write_text(
+    (batch_root / f"batch{batch_id}_summary.md").write_text(
         "\n".join(lines) + "\n",
         encoding="utf-8",
     )
     if not computational_pass:
         raise SystemExit(
-            "Calibration batch 1 is on HOLD; aggregate evidence was written."
+            f"Calibration batch {batch_id} is on HOLD; aggregate evidence was written."
         )
     print(json.dumps(batch_summary, sort_keys=True))
 

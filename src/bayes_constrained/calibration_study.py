@@ -71,13 +71,69 @@ BATCH1_SCENARIOS = (
 )
 
 
-def scenario_for_replicate(replicate_id: int) -> CalibrationScenario:
-    for scenario in BATCH1_SCENARIOS:
+CALIBRATION_SCENARIO_FAMILIES = (
+    ("baseline_rate_3_4_kappa_10", 3.4, 10.0),
+    ("lower_rate_2_4_kappa_10", 2.4, 10.0),
+    ("higher_rate_5_0_kappa_10", 5.0, 10.0),
+    ("baseline_rate_3_4_kappa_4", 3.4, 4.0),
+)
+
+
+def _batch2_scenarios() -> tuple[CalibrationScenario, ...]:
+    """Return 16 frozen replicates: four new seeds per scenario family."""
+
+    scenarios: list[CalibrationScenario] = []
+    for replicate_id in range(1, 17):
+        scenario_id, baseline_rate, kappa = CALIBRATION_SCENARIO_FAMILIES[
+            (replicate_id - 1) % len(CALIBRATION_SCENARIO_FAMILIES)
+        ]
+        scenarios.append(
+            CalibrationScenario(
+                replicate_id=replicate_id,
+                scenario_id=scenario_id,
+                baseline_rate_per_100k=baseline_rate,
+                kappa=kappa,
+                truth_seed=71000 + replicate_id,
+                count_seed=72000 + replicate_id,
+                initialization_seed_base=73000 + replicate_id * 10,
+            )
+        )
+    return tuple(scenarios)
+
+
+BATCH2_SCENARIOS = _batch2_scenarios()
+BATCH_SCENARIOS = {
+    1: BATCH1_SCENARIOS,
+    2: BATCH2_SCENARIOS,
+}
+
+
+def scenarios_for_batch(batch_id: int) -> tuple[CalibrationScenario, ...]:
+    try:
+        return BATCH_SCENARIOS[int(batch_id)]
+    except KeyError as exc:
+        raise ValueError(
+            f"Unknown calibration batch {batch_id}; expected one of "
+            f"{sorted(BATCH_SCENARIOS)}."
+        ) from exc
+
+
+def valid_replicates_for_batch(batch_id: int) -> tuple[int, ...]:
+    return tuple(item.replicate_id for item in scenarios_for_batch(batch_id))
+
+
+def scenario_for_replicate(
+    replicate_id: int,
+    *,
+    batch_id: int = 1,
+) -> CalibrationScenario:
+    scenarios = scenarios_for_batch(batch_id)
+    for scenario in scenarios:
         if scenario.replicate_id == int(replicate_id):
             return scenario
     raise ValueError(
-        f"Unknown batch-1 calibration replicate {replicate_id}; "
-        f"expected one of {[item.replicate_id for item in BATCH1_SCENARIOS]}."
+        f"Unknown batch-{batch_id} calibration replicate {replicate_id}; "
+        f"expected one of {[item.replicate_id for item in scenarios]}."
     )
 
 

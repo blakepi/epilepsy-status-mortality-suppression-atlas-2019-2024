@@ -148,13 +148,24 @@ analyses:
       - population_favoring_feasible_allocation
       - constrained_bayesian_primary
   - id: truth_known_calibration
-    status: multi_replicate_batch_1_started
+    status: batch_1_complete_batch_2_requested
     family: method_calibration
     batch_1_scenarios:
       - baseline_rate_3_4_kappa_10
       - lower_rate_2_4_kappa_10
       - higher_rate_5_0_kappa_10
       - baseline_rate_3_4_kappa_4
+    batch_2_design:
+      replicates: 16
+      replicates_per_batch_1_scenario_family: 4
+      combined_program_replicates: 20
+      combined_replicates_per_scenario_family: 5
+      chains_per_replicate: 4
+      iterations_per_chain: 24000
+      burn_in: 6000
+      thin: 10
+      reporting_rule: descriptive_bias_rmse_coverage_and_convergence_with_exact_binomial_monte_carlo_intervals
+      prohibited_claim: precise_or_proven_nominal_95_percent_coverage
     required_outputs:
       - coefficient_bias
       - coefficient_rmse

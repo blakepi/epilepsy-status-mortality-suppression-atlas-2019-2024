@@ -22,21 +22,37 @@ from bayes_constrained.calibration_design import select_state_clustered_panel  #
 from bayes_constrained.calibration_study import (  # noqa: E402
     make_scenario_truth,
     scenario_for_replicate,
+    valid_replicates_for_batch,
 )
 from bayes_constrained.constraints import solve_feasible_allocation, validate_constraints  # noqa: E402
 from bayes_constrained.data import load_model_frame  # noqa: E402
 
 
-BATCH_ROOT = ROOT / "outputs" / "scientific_reports_v2" / "calibration_study_batch1"
+def batch_root(batch_id: int) -> Path:
+    return (
+        ROOT
+        / "outputs"
+        / "scientific_reports_v2"
+        / f"calibration_study_batch{batch_id}"
+    )
 
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--replicate-id", type=int, required=True, choices=range(1, 5))
+    parser.add_argument("--batch-id", type=int, default=1, choices=(1, 2))
+    parser.add_argument("--replicate-id", type=int, required=True)
     args = parser.parse_args()
+    valid_replicates = valid_replicates_for_batch(args.batch_id)
+    if args.replicate_id not in valid_replicates:
+        parser.error(
+            f"batch {args.batch_id} replicate must be one of {valid_replicates}"
+        )
 
-    scenario = scenario_for_replicate(args.replicate_id)
-    replicate_root = BATCH_ROOT / f"replicate_{args.replicate_id:02d}"
+    scenario = scenario_for_replicate(
+        args.replicate_id,
+        batch_id=args.batch_id,
+    )
+    replicate_root = batch_root(args.batch_id) / f"replicate_{args.replicate_id:02d}"
     design_root = replicate_root / "design"
     design_root.mkdir(parents=True, exist_ok=True)
 
@@ -154,7 +170,7 @@ def main() -> None:
         encoding="utf-8",
     )
     lines = [
-        f"# Calibration batch 1, replicate {args.replicate_id}",
+        f"# Calibration batch {args.batch_id}, replicate {args.replicate_id}",
         "",
         f"Scenario: `{scenario.scenario_id}`",
         "",
