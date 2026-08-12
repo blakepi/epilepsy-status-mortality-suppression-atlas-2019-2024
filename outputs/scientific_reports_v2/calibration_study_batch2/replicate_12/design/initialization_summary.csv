@@ -1,0 +1,5 @@
+chain,seed,grand_total,l1_distance_from_truth,different_cells_from_truth,validation_passed
+1,73121,3108,290,123,True
+2,73122,3108,276,116,True
+3,73123,3108,302,118,True
+4,73124,3108,266,118,True

@@ -1,0 +1,5 @@
+replicate,scenario,cell_group,cells,mean_absolute_error,root_mean_squared_error,coverage_95,mean_interval_width
+7,higher_rate_5_0_kappa_10,all_cells,432,0.47685249485596704,0.8140969852162352,0.9930555555555556,2.0023726851851844
+7,higher_rate_5_0_kappa_10,suppressed_cells,247,0.8340092217723798,1.0766376009586145,0.9878542510121457,3.502125506072873
+7,higher_rate_5_0_kappa_10,exact_cells,49,0.0,0.0,1.0,0.0
+7,higher_rate_5_0_kappa_10,zero_cells,136,0.0,0.0,1.0,0.0

@@ -1,0 +1,22 @@
+{
+  "all_initializations_valid": true,
+  "baseline_rate_per_100k": 5.0,
+  "count_seed": 72003,
+  "counties": 72,
+  "county_year_rows": 432,
+  "design_pass": true,
+  "exact_cells": 45,
+  "grand_total": 3538,
+  "initialization_seed_base": 73030,
+  "interpretation_boundary": "Truth-known calibration replicate design only; no empirical epidemiologic inference.",
+  "kappa": 10.0,
+  "median_pairwise_initialization_l1": 454.0,
+  "minimum_pairwise_initialization_l1": 430,
+  "replicate_id": 3,
+  "scenario_id": "higher_rate_5_0_kappa_10",
+  "states": 6,
+  "suppressed_cells": 265,
+  "suppressed_fraction": 0.6134259259259259,
+  "truth_seed": 71003,
+  "zero_cells": 122
+}
