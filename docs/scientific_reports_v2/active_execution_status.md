@@ -1,6 +1,6 @@
 # Scientific Reports v2 active execution status
 
-Updated: 2026-08-11
+Updated: 2026-08-13
 
 ## Interpretation boundary
 
@@ -94,15 +94,14 @@ Evidence: `outputs/scientific_reports_v2/prior_sensitivity_infrastructure/`.
 
 `config/scientific_reports_v2_robustness_registry.yaml` freezes the primary estimand, default/broader/regularizing priors, production seeds and thresholds, suppression comparators, pandemic analyses, model-family sensitivity, age-structure plan, spatial diagnostic, spatial-model trigger, and truth-known calibration scenarios before corrected results are available.
 
-## Authenticated compute boundary
+## Corrected production submission
 
-The only step that cannot be launched through the repository connector is the full Wahab Slurm production run. The guarded command remains:
+The authenticated Wahab launch completed on 2026-08-13 UTC from commit `11691bd882020f76e1b6eb6224e4789a6534f65c` after the launch-readiness audit passed and the frozen evidence/configuration hashes were recorded. Slurm accepted:
 
-```bash
-bash hpc/wahab/submit_sr_v2_production_ready.sh
-```
+- eight-chain production array job `6647934` (`epi_sr_v2_prod`); and
+- dependent merger/final-gate job `6647935` (`epi_sr_v2_final`), scheduled with `afterok:6647934`.
 
-That helper reruns launch-readiness checks, freezes configuration and evidence hashes, stages the required code and validation evidence, submits eight independent corrected production chains, and schedules the merger/final gate with an `afterok` dependency.
+The submission record is `outputs/scientific_reports_v2/production_8chain/submitted_jobs.tsv` in the authenticated Wahab checkout. Submission is not completion: live scheduler state and chain outputs remain pending, and no corrected empirical estimate is authorized until all chains finish and `production_gate.json` records `passed: true`.
 
 ## Immediate sequence after corrected production passes
 
