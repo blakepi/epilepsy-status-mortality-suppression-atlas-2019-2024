@@ -379,6 +379,7 @@ The outcome is a multiple-cause mortality mention of ICD-10 G40/G41, not person-
 def build_main_manuscript(config: dict | None = None) -> dict[str, Path]:
     config = config or load_config()
     dirs = ensure_output_dirs(config)
+    (ROOT / "manuscript").mkdir(parents=True, exist_ok=True)
     md = dirs["manuscript"] / "manuscript_submission.md"
     docx = dirs["manuscript"] / "manuscript_submission.docx"
     md.write_text(_main_markdown(config), encoding="utf-8")
@@ -394,6 +395,7 @@ def build_main_manuscript(config: dict | None = None) -> dict[str, Path]:
 def build_supplement(config: dict | None = None) -> dict[str, Path]:
     config = config or load_config()
     dirs = ensure_output_dirs(config)
+    (ROOT / "supplement").mkdir(parents=True, exist_ok=True)
     md = dirs["manuscript"] / "supplement_submission.md"
     docx = dirs["manuscript"] / "supplement_submission.docx"
     md.write_text(_supplement_markdown(config), encoding="utf-8")

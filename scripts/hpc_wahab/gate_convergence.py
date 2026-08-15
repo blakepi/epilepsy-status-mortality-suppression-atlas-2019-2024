@@ -235,15 +235,24 @@ def write_markdown(result: dict, path: Path) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", default="hpc/wahab/configs/bayes_constrained_hpc_production.yaml")
+    parser.add_argument(
+        "--hpc-out",
+        type=Path,
+        default=HPC_OUT,
+        help="Directory containing diagnostics, validation, and chain-status summaries.",
+    )
     parser.add_argument("--fail-on-stop-nonfinal", action="store_true")
     args = parser.parse_args()
     config_path = Path(args.config)
     if not config_path.is_absolute():
         config_path = PROJECT_ROOT / config_path
-    result = gate(config_path)
-    write_json(HPC_OUT / "convergence_gate.json", result)
-    write_markdown(result, HPC_OUT / "convergence_gate.md")
-    print(f"convergence_gate={rel(HPC_OUT / 'convergence_gate.json')}")
+    hpc_out = args.hpc_out
+    if not hpc_out.is_absolute():
+        hpc_out = PROJECT_ROOT / hpc_out
+    result = gate(config_path, hpc_out)
+    write_json(hpc_out / "convergence_gate.json", result)
+    write_markdown(result, hpc_out / "convergence_gate.md")
+    print(f"convergence_gate={rel(hpc_out / 'convergence_gate.json')}")
     print(f"action={result['action']}")
     if args.fail_on_stop_nonfinal and result["action"] == "stop_nonfinal":
         raise SystemExit(2)
