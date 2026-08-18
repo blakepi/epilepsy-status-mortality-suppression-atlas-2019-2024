@@ -1,10 +1,10 @@
 # Scientific Reports v2 active execution status
 
-Updated: 2026-08-13
+Updated: 2026-08-18
 
 ## Interpretation boundary
 
-The archived `v1.1.1` release remains the immutable baseline. No corrected empirical estimate is authorized until the new eight-chain production run completes and `outputs/scientific_reports_v2/production_8chain/production_gate.json` records `passed: true`. Pilot values are tuning evidence and must not be copied into the manuscript.
+The archived `v1.1.1` release remains the immutable baseline. The corrected eight-chain production run completed, and `outputs/scientific_reports_v2/production_8chain/production_gate.json` records `passed: true` with action `freeze_corrected_results`; those corrected outputs are frozen computational evidence for downstream sensitivity analyses. Manuscript result freeze remains on HOLD until the triggered identifiable structured-plus-unstructured county spatial sensitivity passes, along with the other prespecified robustness and package gates. Pilot values are tuning evidence and must not be copied into the manuscript.
 
 ## Completed technical-soundness gates
 
@@ -106,14 +106,14 @@ Evidence: `outputs/scientific_reports_v2/prior_sensitivity_infrastructure/`.
 
 `config/scientific_reports_v2_robustness_registry.yaml` freezes the primary estimand, default/broader/regularizing priors, production seeds and thresholds, suppression comparators, pandemic analyses, model-family sensitivity, age-structure plan, spatial diagnostic, spatial-model trigger, and truth-known calibration scenarios before corrected results are available.
 
-## Corrected production submission
+## Corrected production completion
 
 The authenticated Wahab launch completed on 2026-08-13 UTC from commit `11691bd882020f76e1b6eb6224e4789a6534f65c` after the launch-readiness audit passed and the frozen evidence/configuration hashes were recorded. Slurm accepted:
 
 - eight-chain production array job `6647934` (`epi_sr_v2_prod`); and
 - dependent merger/final-gate job `6647935` (`epi_sr_v2_final`), scheduled with `afterok:6647934`.
 
-The submission record is `outputs/scientific_reports_v2/production_8chain/submitted_jobs.tsv` in the authenticated Wahab checkout. Submission is not completion: live scheduler state and chain outputs remain pending, and no corrected empirical estimate is authorized until all chains finish and `production_gate.json` records `passed: true`.
+The historical submission record is `outputs/scientific_reports_v2/production_8chain/submitted_jobs.tsv` in the authenticated Wahab checkout. The eight production chains and dependent merger/final-gate workflow subsequently completed. The gate generated on 2026-08-14 UTC records eight completed 300,000-iteration chains, 4,500 saved draws per chain, zero constraint failures across 489,696 validation records, `passed: true`, and action `freeze_corrected_results`. Corrected primary results are therefore frozen for downstream analysis; the distinct current HOLD is the triggered identifiable structured-plus-unstructured county spatial sensitivity, which must pass before manuscript result freeze.
 
 ## Immediate sequence after corrected production passes
 
