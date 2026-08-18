@@ -13,7 +13,14 @@ from scipy.sparse.csgraph import connected_components
 from .constraints import validate_constraints
 from .heatbath import amplitude_log_weights, amplitude_probabilities, feasible_amplitudes
 from .interval_paths import interval_path_direction
-from .model import Design, Theta, log_likelihood, make_design, mu
+from .model import (
+    DEFAULT_LIKELIHOOD_FAMILY,
+    Design,
+    Theta,
+    log_likelihood,
+    make_design,
+    mu,
+)
 from .sampler import (
     MoveState,
     build_move_state,
@@ -287,7 +294,11 @@ def exact_transition_matrix(
     mixture = normalized_weights(weights)
     matrix = np.zeros((len(states), len(states)), dtype=float)
     current_mu = mu(theta, design)
-    kappa = float(np.exp(theta.log_kappa))
+    kappa = (
+        None
+        if design.likelihood_family == "poisson"
+        else float(np.exp(theta.log_kappa))
+    )
 
     # Block selection depends only on the static free-cell support. Conditional
     # on a selected direction, the production kernel samples every feasible
@@ -336,6 +347,7 @@ def exact_transition_matrix(
                         amplitudes,
                         current_mu[indices],
                         kappa,
+                        likelihood_family=design.likelihood_family,
                     )
                 )
                 for amplitude, probability in zip(amplitudes, probabilities):
@@ -375,12 +387,17 @@ def empirical_count_kernel_frequencies(
     seed: int = 20260810,
     weights: dict[str, float] | None = None,
     max_cycle_half_length: int = 6,
+    likelihood_family: str = DEFAULT_LIKELIHOOD_FAMILY,
 ) -> np.ndarray:
     if burn_in >= steps:
         raise ValueError("burn_in must be less than steps")
-    design = make_design(frame)
+    design = make_design(frame, likelihood_family=likelihood_family)
     current_mu = mu(theta, design)
-    kappa = float(np.exp(theta.log_kappa))
+    kappa = (
+        None
+        if design.likelihood_family == "poisson"
+        else float(np.exp(theta.log_kappa))
+    )
     mixture = normalized_weights(weights)
     thresholds = np.cumsum([mixture[key] for key in mixture])
     names = list(mixture)
@@ -394,15 +411,51 @@ def empirical_count_kernel_frequencies(
         draw = float(rng.uniform())
         move_name = names[int(np.searchsorted(thresholds, draw, side="right"))]
         if move_name == "state_year_transfer":
-            state_year_transfer(y, move, current_mu, kappa, rng)
+            state_year_transfer(
+                y,
+                move,
+                current_mu,
+                kappa,
+                rng,
+                likelihood_family=design.likelihood_family,
+            )
         elif move_name == "county_period_exploration":
-            period_interval_transfer(y, move, current_mu, kappa, rng)
+            period_interval_transfer(
+                y,
+                move,
+                current_mu,
+                kappa,
+                rng,
+                likelihood_family=design.likelihood_family,
+            )
         elif move_name == "interval_path_transfer":
-            interval_path_transfer(y, move, current_mu, kappa, rng)
+            interval_path_transfer(
+                y,
+                move,
+                current_mu,
+                kappa,
+                rng,
+                likelihood_family=design.likelihood_family,
+            )
         elif move_name == "swap_2x2":
-            state_2x2_swap(y, move, current_mu, kappa, rng)
+            state_2x2_swap(
+                y,
+                move,
+                current_mu,
+                kappa,
+                rng,
+                likelihood_family=design.likelihood_family,
+            )
         else:
-            state_cycle_swap(y, move, current_mu, kappa, rng, max_cycle_half_length=max_cycle_half_length)
+            state_cycle_swap(
+                y,
+                move,
+                current_mu,
+                kappa,
+                rng,
+                max_cycle_half_length=max_cycle_half_length,
+                likelihood_family=design.likelihood_family,
+            )
         if step >= burn_in:
             index = state_lookup.get(_state_key(y))
             if index is None:

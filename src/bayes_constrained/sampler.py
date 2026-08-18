@@ -15,7 +15,18 @@ from .constraints import append_validation, assert_constraints, solve_and_save_i
 from .data import load_config
 from .heatbath import feasible_amplitudes, sample_amplitude
 from .interval_paths import IntervalPathSupport, build_interval_path_support, interval_path_direction
-from .model import Design, Theta, initialize_theta, log_posterior_theta, make_design, mu, nb2_logpmf, crude_intercept_prior
+from .model import (
+    DEFAULT_LIKELIHOOD_FAMILY,
+    Design,
+    Theta,
+    count_logpmf,
+    crude_intercept_prior,
+    initialize_theta,
+    log_posterior_theta,
+    make_design,
+    mu,
+    normalize_likelihood_family,
+)
 from .paths import BAYES_DATA, OUTPUT_DIR, PROJECT_ROOT, rel
 
 
@@ -119,8 +130,21 @@ def build_move_state(frame: pd.DataFrame, y: np.ndarray) -> MoveState:
     )
 
 
-def _local_loglik(y_values: np.ndarray, mu_values: np.ndarray, kappa: float) -> float:
-    return float(nb2_logpmf(y_values, mu_values, kappa).sum())
+def _local_loglik(
+    y_values: np.ndarray,
+    mu_values: np.ndarray,
+    kappa: float | None,
+    *,
+    likelihood_family: str = DEFAULT_LIKELIHOOD_FAMILY,
+) -> float:
+    return float(
+        count_logpmf(
+            y_values,
+            mu_values,
+            likelihood_family=likelihood_family,
+            kappa=kappa,
+        ).sum()
+    )
 
 
 def _try_apply_delta(
@@ -129,8 +153,10 @@ def _try_apply_delta(
     idx: np.ndarray,
     delta: np.ndarray,
     current_mu: np.ndarray,
-    kappa: float,
+    kappa: float | None,
     rng: np.random.Generator,
+    *,
+    likelihood_family: str = DEFAULT_LIKELIHOOD_FAMILY,
 ) -> bool:
     old = y[idx]
     new = old + delta
@@ -142,8 +168,12 @@ def _try_apply_delta(
         new_period_total[affected_counties == c] += int(delta[move.county_code[idx] == c].sum())
     if np.any(new_period_total < move.period_lower[affected_counties]) or np.any(new_period_total > move.period_upper[affected_counties]):
         return False
-    old_ll = _local_loglik(old, current_mu[idx], kappa)
-    new_ll = _local_loglik(new, current_mu[idx], kappa)
+    old_ll = _local_loglik(
+        old, current_mu[idx], kappa, likelihood_family=likelihood_family
+    )
+    new_ll = _local_loglik(
+        new, current_mu[idx], kappa, likelihood_family=likelihood_family
+    )
     if np.log(rng.uniform()) < new_ll - old_ll:
         y[idx] = new
         for c in affected_counties:
@@ -159,8 +189,10 @@ def _apply_heatbath_direction(
     indices: np.ndarray,
     direction: np.ndarray,
     current_mu: np.ndarray,
-    kappa: float,
+    kappa: float | None,
     rng: np.random.Generator,
+    *,
+    likelihood_family: str = DEFAULT_LIKELIHOOD_FAMILY,
 ) -> bool:
     indices = np.asarray(indices, dtype=int)
     direction = np.asarray(direction, dtype=int)
@@ -176,7 +208,14 @@ def _apply_heatbath_direction(
         period_upper=move.period_upper,
     )
     amplitude = sample_amplitude(
-        y, indices, direction, amplitudes, current_mu[indices], kappa, rng
+        y,
+        indices,
+        direction,
+        amplitudes,
+        current_mu[indices],
+        kappa,
+        rng,
+        likelihood_family=likelihood_family,
     )
     if amplitude == 0:
         return False
@@ -186,17 +225,40 @@ def _apply_heatbath_direction(
         move.period_total[county] += int(change[move.county_code[indices] == county].sum())
     return True
 
-def state_year_transfer(y: np.ndarray, move: MoveState, current_mu: np.ndarray, kappa: float, rng: np.random.Generator) -> bool:
+def state_year_transfer(
+    y: np.ndarray,
+    move: MoveState,
+    current_mu: np.ndarray,
+    kappa: float | None,
+    rng: np.random.Generator,
+    *,
+    likelihood_family: str = DEFAULT_LIKELIHOOD_FAMILY,
+) -> bool:
     groups = [g for g in move.free_by_state_year if len(g) >= 2]
     if not groups:
         return False
     group = groups[int(rng.integers(0, len(groups)))]
     a, b = rng.choice(group, size=2, replace=False)
     return _apply_heatbath_direction(
-        y, move, np.asarray([a, b]), np.asarray([-1, 1]), current_mu, kappa, rng
+        y,
+        move,
+        np.asarray([a, b]),
+        np.asarray([-1, 1]),
+        current_mu,
+        kappa,
+        rng,
+        likelihood_family=likelihood_family,
     )
 
-def period_interval_transfer(y: np.ndarray, move: MoveState, current_mu: np.ndarray, kappa: float, rng: np.random.Generator) -> bool:
+def period_interval_transfer(
+    y: np.ndarray,
+    move: MoveState,
+    current_mu: np.ndarray,
+    kappa: float | None,
+    rng: np.random.Generator,
+    *,
+    likelihood_family: str = DEFAULT_LIKELIHOOD_FAMILY,
+) -> bool:
     groups = []
     for group in move.free_by_state_year:
         if len(group) < 2:
@@ -210,7 +272,14 @@ def period_interval_transfer(y: np.ndarray, move: MoveState, current_mu: np.ndar
     group = groups[int(rng.integers(0, len(groups)))]
     a, b = rng.choice(group, size=2, replace=False)
     return _apply_heatbath_direction(
-        y, move, np.asarray([a, b]), np.asarray([-1, 1]), current_mu, kappa, rng
+        y,
+        move,
+        np.asarray([a, b]),
+        np.asarray([-1, 1]),
+        current_mu,
+        kappa,
+        rng,
+        likelihood_family=likelihood_family,
     )
 
 
@@ -218,8 +287,10 @@ def interval_path_transfer(
     y: np.ndarray,
     move: MoveState,
     current_mu: np.ndarray,
-    kappa: float,
+    kappa: float | None,
     rng: np.random.Generator,
+    *,
+    likelihood_family: str = DEFAULT_LIKELIHOOD_FAMILY,
 ) -> bool:
     groups = move.interval_path_support.endpoint_groups
     if not groups:
@@ -237,10 +308,25 @@ def interval_path_transfer(
         return False
     indices, direction = proposal
     return _apply_heatbath_direction(
-        y, move, indices, direction, current_mu, kappa, rng
+        y,
+        move,
+        indices,
+        direction,
+        current_mu,
+        kappa,
+        rng,
+        likelihood_family=likelihood_family,
     )
 
-def state_2x2_swap(y: np.ndarray, move: MoveState, current_mu: np.ndarray, kappa: float, rng: np.random.Generator) -> bool:
+def state_2x2_swap(
+    y: np.ndarray,
+    move: MoveState,
+    current_mu: np.ndarray,
+    kappa: float | None,
+    rng: np.random.Generator,
+    *,
+    likelihood_family: str = DEFAULT_LIKELIHOOD_FAMILY,
+) -> bool:
     states = [state for state, counties in move.state_counties.items() if len(counties) >= 2]
     if not states:
         return False
@@ -261,17 +347,25 @@ def state_2x2_swap(y: np.ndarray, move: MoveState, current_mu: np.ndarray, kappa
     if np.any(move.upper[indices] <= move.lower[indices]):
         return False
     return _apply_heatbath_direction(
-        y, move, indices, np.asarray([1, -1, -1, 1]), current_mu, kappa, rng
+        y,
+        move,
+        indices,
+        np.asarray([1, -1, -1, 1]),
+        current_mu,
+        kappa,
+        rng,
+        likelihood_family=likelihood_family,
     )
 
 def state_cycle_swap(
     y: np.ndarray,
     move: MoveState,
     current_mu: np.ndarray,
-    kappa: float,
+    kappa: float | None,
     rng: np.random.Generator,
     *,
     max_cycle_half_length: int = 6,
+    likelihood_family: str = DEFAULT_LIKELIHOOD_FAMILY,
 ) -> bool:
     """Propose an alternating move around a simple bipartite support cycle.
 
@@ -315,17 +409,47 @@ def state_cycle_swap(
     indices_array = np.asarray(indices, dtype=int)
     direction = np.asarray(delta, dtype=int)
     return _apply_heatbath_direction(
-        y, move, indices_array, direction, current_mu, kappa, rng
+        y,
+        move,
+        indices_array,
+        direction,
+        current_mu,
+        kappa,
+        rng,
+        likelihood_family=likelihood_family,
     )
 
-def blocked_refresh(y: np.ndarray, move: MoveState, current_mu: np.ndarray, kappa: float, rng: np.random.Generator, attempts: int = 12) -> int:
+def blocked_refresh(
+    y: np.ndarray,
+    move: MoveState,
+    current_mu: np.ndarray,
+    kappa: float | None,
+    rng: np.random.Generator,
+    attempts: int = 12,
+    *,
+    likelihood_family: str = DEFAULT_LIKELIHOOD_FAMILY,
+) -> int:
     accepted = 0
     for _ in range(attempts):
-        accepted += int(state_year_transfer(y, move, current_mu, kappa, rng))
+        accepted += int(
+            state_year_transfer(
+                y,
+                move,
+                current_mu,
+                kappa,
+                rng,
+                likelihood_family=likelihood_family,
+            )
+        )
     return accepted
 
 
-def _proposal_scales(theta: Theta, multipliers: dict[str, float] | None = None) -> dict[str, float]:
+def _proposal_scales(
+    theta: Theta,
+    multipliers: dict[str, float] | None = None,
+    *,
+    likelihood_family: str = DEFAULT_LIKELIHOOD_FAMILY,
+) -> dict[str, float]:
     base = {
         "beta": 0.01,
         "state": 0.01,
@@ -338,6 +462,8 @@ def _proposal_scales(theta: Theta, multipliers: dict[str, float] | None = None) 
         for key, value in multipliers.items():
             if key in base:
                 base[key] *= float(value)
+    if normalize_likelihood_family(likelihood_family) == "poisson":
+        del base["log_kappa"]
     return base
 
 
@@ -369,9 +495,12 @@ def _theta_to_rows(theta: Theta, design: Design, chain: int, draw: int, iteratio
         [
             {"chain": chain, "draw": draw, "iteration": iteration, "parameter": "sigma_state", "value": float(np.exp(theta.log_sigma_state))},
             {"chain": chain, "draw": draw, "iteration": iteration, "parameter": "sigma_year", "value": float(np.exp(theta.log_sigma_year))},
-            {"chain": chain, "draw": draw, "iteration": iteration, "parameter": "kappa", "value": float(np.exp(theta.log_kappa))},
         ]
     )
+    if design.likelihood_family == "negative_binomial_2":
+        rows.append(
+            {"chain": chain, "draw": draw, "iteration": iteration, "parameter": "kappa", "value": float(np.exp(theta.log_kappa))}
+        )
     return rows
 
 
@@ -727,6 +856,13 @@ def run_mcmc_chain_hpc(
 ) -> dict:
     config = _load_config_path(config_path)
     settings = _hpc_settings(config, mode, array_task_id)
+    likelihood_family = normalize_likelihood_family(
+        settings.get(
+            "likelihood_family",
+            settings.get("likelihood", DEFAULT_LIKELIHOOD_FAMILY),
+        )
+    )
+    settings["likelihood_family"] = likelihood_family
     seeds = list(settings.get("random_seeds") or config.get("run", {}).get("random_seeds") or [17291])
     if seed is None:
         seed = int(seeds[(chain_id - 1) % len(seeds)]) + (100000 if mode == "extend" else 0)
@@ -758,7 +894,9 @@ def run_mcmc_chain_hpc(
         },
     )
 
-    design = make_design(frame, model=model_name)
+    design = make_design(
+        frame, model=model_name, likelihood_family=likelihood_family
+    )
     intercept_mean = crude_intercept_prior(frame)
     n_iter = int(settings["n_iter"])
     burn_in = int(settings.get("burn_in", 0))
@@ -803,7 +941,11 @@ def run_mcmc_chain_hpc(
         assert_constraints(y, frame, label=f"chain{chain_id}_start")
         theta = initialize_theta(frame, y, design)
         current_lp = log_posterior_theta(y, theta, design, intercept_mean=intercept_mean)
-        scales0 = _proposal_scales(theta, settings.get("proposal_scale_multipliers"))
+        scales0 = _proposal_scales(
+            theta,
+            settings.get("proposal_scale_multipliers"),
+            likelihood_family=likelihood_family,
+        )
         accepted = {"transfer": 0, "interval_transfer": 0, "interval_path": 0, "swap_2x2": 0, "cycle_swap": 0, "blocked_refresh": 0}
         proposed = {key: 0 for key in accepted}
         param_accept = {key: 0 for key in scales0}
@@ -831,35 +973,93 @@ def run_mcmc_chain_hpc(
     try:
         for iteration in range(start_iteration + 1, target_iteration + 1):
             current_mu = mu(theta, design)
-            kappa = float(np.exp(theta.log_kappa))
+            kappa = (
+                None
+                if likelihood_family == "poisson"
+                else float(np.exp(theta.log_kappa))
+            )
             free_cells = int((move.upper > move.lower).sum())
             count_moves = min(max_count_proposals, max(1, int(free_cells * float(settings.get("count_move_sweeps_per_iter", 0.1)))))
             for _ in range(count_moves):
                 r = rng.uniform()
                 if r < weight_transfer:
                     proposed["transfer"] += 1
-                    accepted["transfer"] += int(state_year_transfer(y, move, current_mu, kappa, rng))
+                    accepted["transfer"] += int(
+                        state_year_transfer(
+                            y,
+                            move,
+                            current_mu,
+                            kappa,
+                            rng,
+                            likelihood_family=likelihood_family,
+                        )
+                    )
                 elif r < weight_transfer + weight_interval:
                     proposed["interval_transfer"] += 1
-                    accepted["interval_transfer"] += int(period_interval_transfer(y, move, current_mu, kappa, rng))
+                    accepted["interval_transfer"] += int(
+                        period_interval_transfer(
+                            y,
+                            move,
+                            current_mu,
+                            kappa,
+                            rng,
+                            likelihood_family=likelihood_family,
+                        )
+                    )
                 elif r < weight_transfer + weight_interval + weight_path:
                     proposed["interval_path"] += 1
-                    accepted["interval_path"] += int(interval_path_transfer(y, move, current_mu, kappa, rng))
+                    accepted["interval_path"] += int(
+                        interval_path_transfer(
+                            y,
+                            move,
+                            current_mu,
+                            kappa,
+                            rng,
+                            likelihood_family=likelihood_family,
+                        )
+                    )
                 elif r < weight_transfer + weight_interval + weight_path + weight_swap:
                     proposed["swap_2x2"] += 1
-                    accepted["swap_2x2"] += int(state_2x2_swap(y, move, current_mu, kappa, rng))
+                    accepted["swap_2x2"] += int(
+                        state_2x2_swap(
+                            y,
+                            move,
+                            current_mu,
+                            kappa,
+                            rng,
+                            likelihood_family=likelihood_family,
+                        )
+                    )
                 else:
                     proposed["cycle_swap"] += 1
                     accepted["cycle_swap"] += int(
                         state_cycle_swap(
-                            y, move, current_mu, kappa, rng, max_cycle_half_length=max_cycle_half_length
+                            y,
+                            move,
+                            current_mu,
+                            kappa,
+                            rng,
+                            max_cycle_half_length=max_cycle_half_length,
+                            likelihood_family=likelihood_family,
                         )
                     )
             if blocked_frequency and iteration % blocked_frequency == 0:
                 proposed["blocked_refresh"] += blocked_attempts
-                accepted["blocked_refresh"] += blocked_refresh(y, move, current_mu, kappa, rng, attempts=blocked_attempts)
+                accepted["blocked_refresh"] += blocked_refresh(
+                    y,
+                    move,
+                    current_mu,
+                    kappa,
+                    rng,
+                    attempts=blocked_attempts,
+                    likelihood_family=likelihood_family,
+                )
             current_lp = log_posterior_theta(y, theta, design, intercept_mean=intercept_mean)
-            scales = _proposal_scales(theta, settings.get("proposal_scale_multipliers"))
+            scales = _proposal_scales(
+                theta,
+                settings.get("proposal_scale_multipliers"),
+                likelihood_family=likelihood_family,
+            )
             for block, scale in scales.items():
                 param_prop[block] += 1
                 theta, current_lp, ok = _update_theta_block(y, theta, design, intercept_mean, rng, block, scale, current_lp)
@@ -907,6 +1107,7 @@ def run_mcmc_chain_hpc(
                         "iteration": iteration,
                         "target_iteration": target_iteration,
                         "saved_draws": saved,
+                        "likelihood_family": likelihood_family,
                         "latest_checkpoint": rel(checkpoint_path),
                         "resume_source": resume_source,
                     },
@@ -951,6 +1152,7 @@ def run_mcmc_chain_hpc(
             "iteration": final_iteration,
             "target_iteration": target_iteration,
             "saved_draws": saved,
+            "likelihood_family": likelihood_family,
             "seed": int(seed),
             "config_path": config.get("_config_path", ""),
             "resume_source": resume_source,
@@ -985,7 +1187,13 @@ def run_mcmc_chain_hpc(
             validation_rows=validation_rows,
             acceptance_rows=_acceptance_rows(chain_id, accepted, proposed, param_accept, param_prop),
             runtime_rows=runtime_rows,
-            status={"status": "failed", "mode": mode, "error": repr(exc), "saved_draws": saved},
+            status={
+                "status": "failed",
+                "mode": mode,
+                "error": repr(exc),
+                "saved_draws": saved,
+                "likelihood_family": likelihood_family,
+            },
         )
         raise
     finally:
@@ -996,12 +1204,21 @@ def run_mcmc_chain_hpc(
 def run_mcmc(frame: pd.DataFrame, *, mode: str = "production", model_name: str = "primary") -> dict:
     config = load_config()
     settings = _settings(config, mode)
+    likelihood_family = normalize_likelihood_family(
+        settings.get(
+            "likelihood_family",
+            settings.get("likelihood", DEFAULT_LIKELIHOOD_FAMILY),
+        )
+    )
+    settings["likelihood_family"] = likelihood_family
     seeds = config["run"].get("random_seeds", [17291, 17292, 17293, 17294])
     manifest_path = OUTPUT_DIR / "initial_allocation_manifest.csv"
     if not manifest_path.exists():
         solve_and_save_initial_allocations(frame, seeds=seeds)
 
-    design = make_design(frame, model=model_name)
+    design = make_design(
+        frame, model=model_name, likelihood_family=likelihood_family
+    )
     intercept_mean = crude_intercept_prior(frame)
     n_iter = int(settings["n_iter"])
     burn_in = int(settings["burn_in"])
@@ -1031,7 +1248,7 @@ def run_mcmc(frame: pd.DataFrame, *, mode: str = "production", model_name: str =
         move = build_move_state(frame, y)
         theta = initialize_theta(frame, y, design)
         current_lp = log_posterior_theta(y, theta, design, intercept_mean=intercept_mean)
-        scales = _proposal_scales(theta)
+        scales = _proposal_scales(theta, likelihood_family=likelihood_family)
         accepted = {"transfer": 0, "interval_transfer": 0, "interval_path": 0, "swap_2x2": 0, "cycle_swap": 0, "blocked_refresh": 0}
         proposed = {key: 0 for key in accepted}
         param_accept = {key: 0 for key in scales}
@@ -1039,23 +1256,62 @@ def run_mcmc(frame: pd.DataFrame, *, mode: str = "production", model_name: str =
         saved = 0
         for iteration in range(1, n_iter + 1):
             current_mu = mu(theta, design)
-            kappa = float(np.exp(theta.log_kappa))
+            kappa = (
+                None
+                if likelihood_family == "poisson"
+                else float(np.exp(theta.log_kappa))
+            )
             free_cells = int((move.upper > move.lower).sum())
             count_moves = min(max_count_proposals, max(1, int(free_cells * float(settings.get("count_move_sweeps_per_iter", 0.1)))))
             for _ in range(count_moves):
                 r = rng.uniform()
                 if r < 0.55:
                     proposed["transfer"] += 1
-                    accepted["transfer"] += int(state_year_transfer(y, move, current_mu, kappa, rng))
+                    accepted["transfer"] += int(
+                        state_year_transfer(
+                            y,
+                            move,
+                            current_mu,
+                            kappa,
+                            rng,
+                            likelihood_family=likelihood_family,
+                        )
+                    )
                 elif r < 0.75:
                     proposed["interval_transfer"] += 1
-                    accepted["interval_transfer"] += int(period_interval_transfer(y, move, current_mu, kappa, rng))
+                    accepted["interval_transfer"] += int(
+                        period_interval_transfer(
+                            y,
+                            move,
+                            current_mu,
+                            kappa,
+                            rng,
+                            likelihood_family=likelihood_family,
+                        )
+                    )
                 else:
                     proposed["swap_2x2"] += 1
-                    accepted["swap_2x2"] += int(state_2x2_swap(y, move, current_mu, kappa, rng))
+                    accepted["swap_2x2"] += int(
+                        state_2x2_swap(
+                            y,
+                            move,
+                            current_mu,
+                            kappa,
+                            rng,
+                            likelihood_family=likelihood_family,
+                        )
+                    )
             if blocked_frequency and iteration % blocked_frequency == 0:
                 proposed["blocked_refresh"] += 12
-                accepted["blocked_refresh"] += blocked_refresh(y, move, current_mu, kappa, rng, attempts=12)
+                accepted["blocked_refresh"] += blocked_refresh(
+                    y,
+                    move,
+                    current_mu,
+                    kappa,
+                    rng,
+                    attempts=12,
+                    likelihood_family=likelihood_family,
+                )
             # Count moves mutate y. Refresh the current target value before any
             # parameter Metropolis ratio is evaluated. The v1 local runner
             # compared proposals against a log posterior from the previous y.
@@ -1112,6 +1368,7 @@ def run_mcmc(frame: pd.DataFrame, *, mode: str = "production", model_name: str =
     run_meta = {
         "mode": settings["mode"],
         "model_name": model_name,
+        "likelihood_family": likelihood_family,
         "started": run_started,
         "finished": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "n_chains": n_chains,

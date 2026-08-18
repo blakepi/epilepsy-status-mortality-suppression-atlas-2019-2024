@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from .model import nb2_logpmf
+from .model import DEFAULT_LIKELIHOOD_FAMILY, count_logpmf
 
 
 def feasible_amplitudes(
@@ -69,7 +69,9 @@ def amplitude_log_weights(
     direction: np.ndarray,
     amplitudes: np.ndarray,
     mu_values: np.ndarray,
-    kappa: float,
+    kappa: float | None,
+    *,
+    likelihood_family: str = DEFAULT_LIKELIHOOD_FAMILY,
 ) -> np.ndarray:
     indices = np.asarray(indices, dtype=int)
     direction = np.asarray(direction, dtype=int)
@@ -77,7 +79,17 @@ def amplitude_log_weights(
     current = np.asarray(y[indices], dtype=int)
     values = current[None, :] + amplitudes[:, None] * direction[None, :]
     return np.asarray(
-        [float(nb2_logpmf(row, mu_values, kappa).sum()) for row in values],
+        [
+            float(
+                count_logpmf(
+                    row,
+                    mu_values,
+                    likelihood_family=likelihood_family,
+                    kappa=kappa,
+                ).sum()
+            )
+            for row in values
+        ],
         dtype=float,
     )
 
@@ -96,10 +108,20 @@ def sample_amplitude(
     direction: np.ndarray,
     amplitudes: np.ndarray,
     mu_values: np.ndarray,
-    kappa: float,
+    kappa: float | None,
     rng: np.random.Generator,
+    *,
+    likelihood_family: str = DEFAULT_LIKELIHOOD_FAMILY,
 ) -> int:
     probabilities = amplitude_probabilities(
-        amplitude_log_weights(y, indices, direction, amplitudes, mu_values, kappa)
+        amplitude_log_weights(
+            y,
+            indices,
+            direction,
+            amplitudes,
+            mu_values,
+            kappa,
+            likelihood_family=likelihood_family,
+        )
     )
     return int(rng.choice(amplitudes, p=probabilities))

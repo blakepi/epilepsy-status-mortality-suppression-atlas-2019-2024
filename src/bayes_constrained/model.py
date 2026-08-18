@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from dataclasses import dataclass
-from typing import Iterator, Mapping
+from typing import Iterator, Literal, Mapping
 
 import numpy as np
 import pandas as pd
@@ -22,6 +22,9 @@ PRIMARY_TERMS = [
     "z_pct_age65",
     "z_pct_male",
 ]
+
+LikelihoodFamily = Literal["negative_binomial_2", "poisson"]
+DEFAULT_LIKELIHOOD_FAMILY: LikelihoodFamily = "negative_binomial_2"
 
 
 @dataclass(frozen=True)
@@ -166,6 +169,7 @@ class Design:
     year_index: np.ndarray
     states: list[str]
     years: list[str]
+    likelihood_family: LikelihoodFamily = DEFAULT_LIKELIHOOD_FAMILY
 
 
 @dataclass
@@ -206,7 +210,44 @@ def nb2_logpmf(
     )
 
 
-def make_design(frame: pd.DataFrame, *, model: str = "primary") -> Design:
+def normalize_likelihood_family(value: str) -> LikelihoodFamily:
+    family = str(value).strip().lower()
+    if family not in {"negative_binomial_2", "poisson"}:
+        raise ValueError(f"Unknown likelihood family: {value!r}")
+    return family  # type: ignore[return-value]
+
+
+def poisson_logpmf(
+    y: np.ndarray | float,
+    mu: np.ndarray | float,
+) -> np.ndarray:
+    y = np.asarray(y, dtype=float)
+    mu = np.clip(np.asarray(mu, dtype=float), 1e-12, np.inf)
+    return y * np.log(mu) - mu - gammaln(y + 1.0)
+
+
+def count_logpmf(
+    y: np.ndarray | float,
+    mu: np.ndarray | float,
+    *,
+    likelihood_family: str = DEFAULT_LIKELIHOOD_FAMILY,
+    kappa: float | None = None,
+) -> np.ndarray:
+    family = normalize_likelihood_family(likelihood_family)
+    if family == "poisson":
+        return poisson_logpmf(y, mu)
+    if kappa is None or not np.isfinite(kappa) or kappa <= 0:
+        raise ValueError("NB2 requires finite positive kappa")
+    return nb2_logpmf(y, mu, kappa)
+
+
+def make_design(
+    frame: pd.DataFrame,
+    *,
+    model: str = "primary",
+    likelihood_family: str = DEFAULT_LIKELIHOOD_FAMILY,
+) -> Design:
+    family = normalize_likelihood_family(likelihood_family)
     x = pd.DataFrame(index=frame.index)
     x["Intercept"] = 1.0
     if model == "binary_rucc":
@@ -247,6 +288,31 @@ def make_design(frame: pd.DataFrame, *, model: str = "primary") -> Design:
             if column != "primary_rurality_metro_large":
                 x[column] = d[column]
 
+        if model == "pandemic_interaction":
+            numeric_year = pd.to_numeric(frame["year"], errors="raise").to_numpy(
+                dtype=float
+            )
+            allowed_years = np.asarray([2019, 2020, 2021, 2022, 2023, 2024])
+            if np.any(numeric_year != np.floor(numeric_year)) or not np.all(
+                np.isin(numeric_year.astype(int), allowed_years)
+            ):
+                raise ValueError(
+                    "Pandemic interaction years must be integers from 2019 through 2024"
+                )
+            acute = np.isin(numeric_year.astype(int), [2020, 2021]).astype(float)
+            later = np.isin(numeric_year.astype(int), [2022, 2023, 2024]).astype(
+                float
+            )
+            rural_terms = [
+                "primary_rurality_metro_other",
+                "primary_rurality_nonmetro_adjacent",
+                "primary_rurality_nonmetro_nonadjacent",
+            ]
+            for term in rural_terms:
+                x[f"{term}__x__acute_pandemic"] = x[term].to_numpy() * acute
+            for term in rural_terms:
+                x[f"{term}__x__later_period"] = x[term].to_numpy() * later
+
     if model not in {"rurality_only", "binary_rucc_no_svi"}:
         svi = pd.Categorical(frame["svi_quartile"], categories=SVI_ORDER)
         svi_d = pd.get_dummies(svi, prefix="svi_quartile", dtype=float)
@@ -279,6 +345,7 @@ def make_design(frame: pd.DataFrame, *, model: str = "primary") -> Design:
         year_index=frame["year"].astype(str).map(year_map).to_numpy(dtype=int),
         states=states,
         years=years,
+        likelihood_family=family,
     )
 
 
@@ -307,7 +374,16 @@ def mu(theta: Theta, design: Design) -> np.ndarray:
 
 def log_likelihood(y: np.ndarray, theta: Theta, design: Design) -> float:
     return float(
-        nb2_logpmf(y, mu(theta, design), np.exp(theta.log_kappa)).sum()
+        count_logpmf(
+            y,
+            mu(theta, design),
+            likelihood_family=design.likelihood_family,
+            kappa=(
+                None
+                if design.likelihood_family == "poisson"
+                else float(np.exp(theta.log_kappa))
+            ),
+        ).sum()
     )
 
 
@@ -316,8 +392,10 @@ def log_prior(
     *,
     intercept_mean: float,
     prior: PriorSpecification | None = None,
+    likelihood_family: str = DEFAULT_LIKELIHOOD_FAMILY,
 ) -> float:
     specification = prior or active_prior_specification()
+    family = normalize_likelihood_family(likelihood_family)
     beta = theta.beta
     lp = (
         -0.5
@@ -356,15 +434,16 @@ def log_prior(
         - np.log(specification.year_scale_halfnormal_sd)
         + theta.log_sigma_year
     )
-    lp += (
-        -0.5
-        * (
-            (theta.log_kappa - specification.log_kappa_mean)
-            / specification.log_kappa_sd
+    if family == "negative_binomial_2":
+        lp += (
+            -0.5
+            * (
+                (theta.log_kappa - specification.log_kappa_mean)
+                / specification.log_kappa_sd
+            )
+            ** 2
+            - np.log(specification.log_kappa_sd)
         )
-        ** 2
-        - np.log(specification.log_kappa_sd)
-    )
     return float(lp)
 
 
@@ -380,6 +459,7 @@ def log_posterior_theta(
         theta,
         intercept_mean=intercept_mean,
         prior=prior,
+        likelihood_family=design.likelihood_family,
     )
     if not np.isfinite(prior_density):
         return -np.inf
