@@ -24,6 +24,12 @@ The existing Moran implementation is scientifically retained but its dense permu
 
 If `recommended_action` is `run_spatial_random_effect_sensitivity`, the result freeze requires a separately passed structured-plus-unstructured county sensitivity. If the action is the non-trigger branch, the manuscript records that the prespecified threshold was not met and does not imply spatial independence.
 
+### Triggered spatial sensitivity
+
+The observed action is `run_spatial_random_effect_sensitivity`. The required sensitivity is a separate scaled BYM2 epoch, not a conditional seventh heavy-sensitivity profile. It uses the frozen binary 2024 Census graph, component-wise centered/scaled ICAR structure, an independent standard-normal county effect, `HalfNormal(1)` marginal scale, and `Beta(1,1)` mixing fraction. Four chains use 180,000 initial iterations, 45,000 burn-in, thinning by 30, exact independent seeds, and bounded reviewed extensions. Its graph, fingerprints, checkpoint schema, diagnostics, comparison table, independent verifier, and gate are separate from the six-profile heavy epoch.
+
+The frozen strict-FIPS intersection produces 18 components and 14 singleton counties, including eight legacy Connecticut counties because the adjacency and outcome geographies differ. The sensitivity retains and discloses that limitation; it does not silently crosswalk after the trigger was frozen. A spatial PASS is computational evidence and never causal geographic evidence.
+
 ### Model-family sensitivity
 
 The model-family sensitivity is strict Poisson, not an arbitrarily large NB2 dispersion. One canonical `count_logpmf` dispatcher supplies the full target, local count moves, heat-bath weights, and exact finite-state validation. Under Poisson, `Theta.log_kappa` remains only as an inert checkpoint-compatibility field: it is not updated, included in the prior, serialized as a posterior parameter, or reported as a diagnostic.
@@ -53,7 +59,7 @@ The immutable run id is `sr-v2-heavy-sensitivity-20260818-v1`. Each profile uses
 | 17–20 | `pandemic_exclusion` | 72291–72294 | 72251–72254 |
 | 21–24 | `age_structure_age17` | 73291–73294 | 73251–73254 |
 
-Wahab uses `main`, 72 hours, one task, four CPUs, 64 GiB per array task, `--array=1-24%8`, and `--signal=B:USR1@300`. The concurrency matches the already successful eight-chain primary run. A timeout checkpoint exits nonzero so `afterok` cannot finalize partial work. A bounded resume submits only checkpointed/failed indexes, refuses more than three attempts, never reruns completed chains, and attaches a new finalizer.
+Wahab uses `main`, 72 hours, one task, four CPUs, 64 GiB per array task, `--array=1-24%6`, and `--signal=B:USR1@300`. The sibling spatial array uses `1-4%2`, preserving the already successful aggregate ceiling of eight simultaneous 64-GiB tasks. Each array has its own `afterok` finalizer and gate. A timeout checkpoint exits nonzero so `afterok` cannot finalize partial work. A bounded resume submits only checkpointed/failed indexes, refuses more than three attempts, never reruns completed chains, and attaches a new finalizer.
 
 ### Suppression handling
 
@@ -61,7 +67,7 @@ The refreshed comparator includes exactly the six registry scenarios: visible ex
 
 ### Manuscript result freeze
 
-A pure aggregator validates eight evidence families: primary, calibration, spatial, prior, model-family, temporal, age, and suppression. It emits a HOLD before validation and atomically replaces it with PASS only after every required artifact and hash validates. It renders all machine-authorized placeholders, leaves exactly the five human-only placeholders unresolved, produces normalized Supplementary Tables S1–S9, and records `submission_authorized: false`.
+A pure aggregator validates eight evidence families: primary, calibration, spatial, prior, model-family, temporal, age, and suppression. For the observed triggered branch, the spatial family requires both the diagnostic trigger and the separately passed BYM2 gate plus independent verifier; a documented non-run is invalid. The aggregator emits a HOLD before validation and atomically replaces it with PASS only after every required artifact and hash validates. It renders all machine-authorized placeholders, leaves exactly the five human-only placeholders unresolved, produces normalized Supplementary Tables S1–S9, and records `submission_authorized: false`.
 
 The legacy submission layer is changed to read the passed result-freeze contract rather than hardcoded seeds, cluster wording, diagnostic values, or YAML scalars. Submission-mode QC still requires zero placeholders; therefore the final machine state remains HOLD until the human-only fields and immutable archive DOI/version are supplied and separately approved.
 
@@ -69,17 +75,20 @@ The legacy submission layer is changed to read the passed result-freeze contract
 
 ```text
 passed primary evidence
-  ├─ local sparse Moran diagnostic ── spatial action
+  ├─ local sparse Moran diagnostic ── triggered action
+  │    └─ checksum-gated 4-chain BYM2 epoch
+  │         └─ merge -> pre-gate manifest -> independent verifier -> release manifest -> gate
   ├─ refreshed suppression comparators
-  └─ checksum-gated 24-chain Wahab epoch
-       └─ afterok merge and computational gate
-            └─ verified local retrieval
-                 └─ eight-family robustness/result freeze
-                      ├─ frozen nonfinal manuscript and supplement
-                      ├─ S1–S9 tables and figures
-                      └─ submission/package QC
+  └─ checksum-gated 24-chain nonspatial Wahab epoch
+       └─ independent afterok merge and computational gate
+
+both remote gates + verified local retrieval
+  └─ eight-family robustness/result freeze
+       ├─ frozen nonfinal manuscript and supplement
+       ├─ S1–S9 tables and figures
+       └─ submission/package QC
 ```
 
 ## Verification boundary
 
-Passing the heavy sensitivity and manuscript-result gates authorizes scientific result freeze and document generation. It does not authorize GitHub push, DOI minting, repository publication, journal upload, or statements about institutional ethics review. Those remain explicit human/external gates.
+Passing both the heavy-sensitivity and triggered-spatial gates, their independent hash verification, and the manuscript-result gate authorizes scientific result freeze and document generation. It does not authorize GitHub push, DOI minting, repository publication, journal upload, or statements about institutional ethics review. Those remain explicit human/external gates.

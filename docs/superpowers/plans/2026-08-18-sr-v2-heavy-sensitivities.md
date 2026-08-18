@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Implement, launch, verify, and freeze all prespecified prior, strict-Poisson, pandemic-period, and age-structure sensitivity analyses in one checksum-gated 24-chain Wahab epoch.
+**Goal:** Implement, launch, verify, and freeze all prespecified prior, strict-Poisson, pandemic-period, and age-structure sensitivity analyses in one checksum-gated 24-chain nonspatial Wahab epoch, coordinated with but independently gated from the triggered four-chain BYM2 epoch.
 
 **Architecture:** Extend the validated sampler through explicit likelihood, design, and constraint contracts while preserving default NB2 behavior. A single immutable operational configuration maps 24 array indexes to six profiles. Generic preparation, chain, merge, and gate scripts are wrapped by fail-closed Wahab staging, submission, resume, finalization, and result-sync helpers.
 
@@ -20,7 +20,8 @@
 - Pandemic exclusion models exactly 2019 and 2022–2024 and never applies the incompatible 2019–2024 Q001 county-period total.
 - Age sensitivity adds archived SVI `EP_AGE17` while retaining `% age ≥65`, the county universe, and the recorded imputation policy.
 - A profile PASS requires four completed chains, zero constraint failures, all-parameter R-hat at most 1.05 and ESS at least 100, and primary R-hat at most 1.03 and ESS at least 400.
-- Wahab execution is `--array=1-24%8`, four CPUs and 64 GiB per task, with an `afterok` finalizer.
+- Wahab execution is `--array=1-24%6`, four CPUs and 64 GiB per task, with an independent `afterok` finalizer. The sibling spatial array is `1-4%2`; the combined epoch never requests more than eight concurrent 64-GiB tasks.
+- `heavy_sensitivity_gate.json` covers exactly the six nonspatial profiles and cannot authorize manuscript result freeze without the separately passed triggered-spatial gate and independent verifier.
 
 ---
 
@@ -260,6 +261,7 @@ git commit -m "data: refresh SR-v2 suppression comparators"
 - Create: `hpc/wahab/slurm/64_sr_v2_finalize_heavy_sensitivity.sbatch`
 - Create: `hpc/wahab/submit_sr_v2_heavy_sensitivity.sh`
 - Create: `hpc/wahab/resume_sr_v2_heavy_sensitivity.sh`
+- Create: `hpc/wahab/submit_sr_v2_robustness_epoch.sh`
 - Modify: `scripts/104_validate_sr_v2_heavy_sensitivity_infrastructure.py`
 - Modify: `tests/test_sr_v2_heavy_sensitivity.py`
 
@@ -269,7 +271,7 @@ git commit -m "data: refresh SR-v2 suppression comparators"
 
 - [ ] **Step 1: Add RED static tests for the exact DAG**
 
-Require `#SBATCH --array=1-24%8`, `--signal=B:USR1@300`, four CPUs, 64G, 72 hours, `afterok`, SHA-256 checks before Python execution, EXIT-trap sync, no delete/force overwrite, three-attempt resume cap, completed-chain exclusion, and new-finalizer creation.
+Require `#SBATCH --array=1-24%6`, sibling spatial `1-4%2`, the spatial full-frame benchmark and its `afterok` dependency, `--signal=B:USR1@300`, four CPUs, 64G, 72 hours, two independent finalizers, SHA-256 checks before Python execution, EXIT-trap sync, no delete/force overwrite, three-attempt resume caps, completed-chain exclusion, and new-finalizer creation.
 
 - [ ] **Step 2: Implement staging and sync**
 
@@ -283,10 +285,12 @@ The array wrapper maps `SLURM_ARRAY_TASK_ID` through the immutable manifest. USR
 
 Submit performs prepare, dry-run staging, real staging, scratch hash verification, then submits array and `afterok` finalizer. Resume verifies the original target, selects only incomplete indexes, refuses attempt four, cancels the unsatisfiable old finalizer while recording it, and attaches a new finalizer.
 
+The combined launcher requires both reviewed execution contracts, stages/verifies both run roots, submits heavy `%6`, submits the spatial benchmark, submits spatial `%2` with `afterok:<benchmark>`, attaches separate heavy/spatial finalizers, and records all five job ids in append-only ledgers. Neither finalizer depends on the other and neither gate substitutes for the other.
+
 - [ ] **Step 5: Run static/focused/full tests and commit**
 
 ```powershell
-bash -n hpc/wahab/stage_sr_v2_heavy_sensitivity_to_scratch.sh hpc/wahab/sync_sr_v2_heavy_sensitivity_results_home.sh hpc/wahab/submit_sr_v2_heavy_sensitivity.sh hpc/wahab/resume_sr_v2_heavy_sensitivity.sh
+bash -n hpc/wahab/stage_sr_v2_heavy_sensitivity_to_scratch.sh hpc/wahab/sync_sr_v2_heavy_sensitivity_results_home.sh hpc/wahab/submit_sr_v2_heavy_sensitivity.sh hpc/wahab/resume_sr_v2_heavy_sensitivity.sh hpc/wahab/submit_sr_v2_robustness_epoch.sh
 .\.venv\Scripts\python.exe scripts\104_validate_sr_v2_heavy_sensitivity_infrastructure.py --scope full
 .\.venv\Scripts\python.exe -m pytest tests\test_sr_v2_heavy_sensitivity.py -q
 .\.venv\Scripts\python.exe -m pytest -q
@@ -304,7 +308,7 @@ git commit -m "hpc: add SR-v2 heavy sensitivity Slurm epoch"
 
 **Interfaces:**
 - Consumes: Tasks 1–5 commits and the frozen remote production evidence.
-- Produces: passed `heavy_sensitivity_gate.json` and byte-identical local evidence.
+- Produces: passed `heavy_sensitivity_gate.json`, a separately passed `spatial_sensitivity_gate.json` plus independent verifier, and byte-identical timestamped local staging evidence. This task integrates the heavy root; the spatial plan owns spatial-root integration/freeze.
 
 - [ ] **Step 1: Transfer code without pushing a shared branch**
 
@@ -314,22 +318,22 @@ Create a local Git bundle or format-patch for the implementation commits, upload
 
 ```bash
 bash hpc/wahab/stage_sr_v2_heavy_sensitivity_to_scratch.sh --dry-run
-bash hpc/wahab/submit_sr_v2_heavy_sensitivity.sh --run-id sr-v2-heavy-sensitivity-20260818-v1
+bash hpc/wahab/submit_sr_v2_robustness_epoch.sh --heavy-run-id sr-v2-heavy-sensitivity-20260818-v1 --spatial-run-id sr-v2-spatial-sensitivity-20260818-v1
 ```
 
-Record array and finalizer job ids locally and remotely. Do not accept dashboard status as completion evidence.
+Record the heavy array/finalizer, spatial benchmark/array/finalizer job ids locally and remotely. Do not accept dashboard status as completion evidence.
 
 - [ ] **Step 3: Monitor fail-closed**
 
-Require `sacct` COMPLETED/`0:0` for all 24 tasks and finalizer. If a task checkpoints/fails, inspect status/stderr and use the bounded resume helper only after verifying fingerprints. Never rerun completed tasks.
+Require `sacct` COMPLETED/`0:0` for all 24 heavy tasks, the spatial benchmark, all four spatial tasks, and both finalizers. If a task checkpoints/fails, inspect status/stderr and use only its branch-specific bounded resume helper after verifying fingerprints. Never rerun completed tasks.
 
 - [ ] **Step 4: Verify the remote gate**
 
-Require all six profiles passed, exactly four completed chains/profile, expected draws/seeds/years/parameter schemas, zero constraint failures, complete comparisons, and all source/output hashes. Inspect every stderr and finalizer log.
+Require all six nonspatial profiles passed, exactly four completed chains/profile, expected draws/seeds/years/parameter schemas, zero constraint failures, complete comparisons, and all source/output hashes. Separately require the triggered spatial gate and independent verifier to pass. Inspect every stderr and both finalizer logs; neither PASS implies the other.
 
 - [ ] **Step 5: Package, download, and verify**
 
-Create a run-specific tar and sidecar SHA-256 on Wahab. Download both through authenticated Open OnDemand, compare archive SHA-256, reject unsafe archive paths, extract to a new timestamped staging directory, and recompute every internal hash before copying into this clone.
+Create the heavy run-specific tar plus sidecar SHA-256 on Wahab. Download both through authenticated Open OnDemand, compare archive SHA-256, reject unsafe archive paths, extract to a new timestamped staging directory, and recompute every internal hash before selective integration. The dedicated spatial task separately packages, downloads, verifies, and integrates the spatial root exactly once.
 
 - [ ] **Step 6: Preserve bytes, update status, and commit**
 

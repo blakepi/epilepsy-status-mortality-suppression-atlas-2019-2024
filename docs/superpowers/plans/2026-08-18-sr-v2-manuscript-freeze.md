@@ -14,7 +14,7 @@
 
 - Require PASS from primary, calibration, spatial decision, heavy sensitivity, age analysis, and suppression sensitivity before rendering machine results.
 - Calibration wording must retain `precise_nominal_coverage_claim_authorized: false`.
-- If the spatial trigger requires a spatial model, that model’s passed summary is mandatory; otherwise render a deterministic documented non-run.
+- First verify the spatial trigger artifact and hash. For the observed action `run_spatial_random_effect_sensitivity`, require the separate `spatial_sensitivity_gate.json`, `independent_spatial_sensitivity_verification.json`, `primary_vs_spatial.csv`, and their manifests to pass and hash-validate; a documented non-run is invalid. Only a verified non-trigger action may render the deterministic documented non-run.
 - Leave exactly five human-only placeholders unresolved: `AUTHOR_BLOCK`, `ETHICS_DETERMINATION`, `REPOSITORY_DOI_AND_VERSION`, `REPOSITORY_VERSION`, and `REPOSITORY_DOI`.
 - The machine pipeline never sets `submission_authorized: true`.
 - Remove result-facing references to `Final Wahab HPC`, seeds 18291–18298, and old hardcoded diagnostics.
@@ -51,7 +51,7 @@ def test_missing_family_writes_hold_and_no_rendered_manuscript(tmp_path: Path) -
     assert not (tmp_path / "manuscript_results_frozen_nonfinal.md").exists()
 ```
 
-Add RED tests for all eight family predicates, precise-coverage prohibition, spatial trigger branching, age analysis/fallback evidence, suppression-primary agreement, human-key replacement rejection, unresolved-placeholder rules, S1–S9 schemas, output hashes, and end-to-end PASS fixtures.
+Add RED tests for all eight family predicates, precise-coverage prohibition, spatial trigger branching, heavy-PASS/spatial-HOLD and spatial-PASS/heavy-HOLD, missing/tampered independent spatial verification, age analysis/fallback evidence, suppression-primary agreement, human-key replacement rejection, unresolved-placeholder rules, S1–S9 schemas, output hashes, and end-to-end PASS fixtures.
 
 - [ ] **Step 2: Run focused tests and confirm RED**
 
@@ -69,7 +69,7 @@ class FamilyEvidence:
     values: dict[str, object]
 ```
 
-Collectors require exact current artifacts for primary, calibration, spatial, prior, model family, temporal, age, and suppression. They validate upstream gates, required rows/columns, interpretation bounds, and SHA-256. They never load result values from `submission_visuals.yaml`.
+Collectors require exact current artifacts for primary, calibration, spatial, prior, model family, temporal, age, and suppression. They validate upstream gates, required rows/columns, interpretation bounds, and SHA-256. The spatial collector branches only after validating the trigger; on the observed trigger it requires the separate BYM2 gate, independent verifier, exact eight-row comparison, graph certificate, and noncausal interpretation boundary. It never accepts the heavy gate as spatial evidence. Collectors never load result values from `submission_visuals.yaml`.
 
 - [ ] **Step 4: Implement atomic HOLD-to-PASS publication**
 
