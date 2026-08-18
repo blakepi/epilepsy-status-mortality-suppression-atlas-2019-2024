@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import sys
 from datetime import datetime, timezone
@@ -154,11 +155,44 @@ def test_spatial_runner_rejects_changed_production_input(tmp_path: Path) -> None
         runner.verify_input_manifest(tmp_path, manifest)
 
 
+def test_spatial_runner_publishes_no_derived_outputs_after_integrity_failure(
+    tmp_path: Path,
+) -> None:
+    runner = load_spatial_runner()
+    protected_path = Path("protected-input.txt")
+    (tmp_path / protected_path).write_text("original\n", encoding="utf-8")
+    manifest = runner.build_input_manifest(tmp_path, (protected_path,))
+    output_root = tmp_path / "outputs"
+    output_root.mkdir()
+    derived_names = (
+        "global_morans_i.csv",
+        "within_state_morans_i.csv",
+        "county_spatial_residuals.csv",
+    )
+    tables = {
+        name: pd.DataFrame({"value": [index]})
+        for index, name in enumerate(derived_names)
+    }
+
+    (tmp_path / protected_path).write_text("tampered\n", encoding="utf-8")
+    with pytest.raises(RuntimeError, match="SHA-256"):
+        runner.publish_derived_outputs(
+            output_root=output_root,
+            input_root=tmp_path,
+            input_manifest=manifest,
+            tables=tables,
+            text_outputs={},
+        )
+
+    assert all(not (output_root / name).exists() for name in derived_names)
+
+
 def test_adjacency_download_manifest_includes_utc_retrieval_time(
     tmp_path: Path,
 ) -> None:
+    payload = adjacency_bytes()
     source = tmp_path / "source.txt"
-    source.write_bytes(adjacency_bytes())
+    source.write_bytes(payload)
     destination = tmp_path / "downloaded.txt"
     manifest = download_county_adjacency(destination, url=source.as_uri())
     retrieved = datetime.fromisoformat(str(manifest["retrieved_utc"]))
@@ -167,8 +201,8 @@ def test_adjacency_download_manifest_includes_utc_retrieval_time(
         "url": source.as_uri(),
         "retrieved_utc": manifest["retrieved_utc"],
         "path": str(destination),
-        "bytes": len(adjacency_bytes()),
-        "sha256": manifest["sha256"],
+        "bytes": len(payload),
+        "sha256": hashlib.sha256(payload).hexdigest(),
     }
 
 

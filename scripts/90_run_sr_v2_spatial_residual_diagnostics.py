@@ -4,6 +4,7 @@ import json
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
+from tempfile import TemporaryDirectory
 
 import numpy as np
 import pandas as pd
@@ -86,6 +87,30 @@ def verify_input_manifest(
                 "Production input SHA-256 changed during spatial diagnostics: "
                 f"{relative_path}; expected {expected['sha256']}, got {actual_sha256}."
             )
+
+
+def publish_derived_outputs(
+    *,
+    output_root: Path,
+    input_root: Path,
+    input_manifest: dict[str, dict[str, object]],
+    tables: dict[str, pd.DataFrame],
+    text_outputs: dict[str, str],
+) -> None:
+    output_root.mkdir(parents=True, exist_ok=True)
+    with TemporaryDirectory(
+        prefix=".spatial-residual-staging-",
+        dir=output_root,
+    ) as staging_directory:
+        staging_root = Path(staging_directory)
+        for name, table in tables.items():
+            table.to_csv(staging_root / name, index=False)
+        for name, content in text_outputs.items():
+            (staging_root / name).write_text(content, encoding="utf-8")
+
+        verify_input_manifest(input_root, input_manifest)
+        for name in (*tables, *text_outputs):
+            (staging_root / name).replace(output_root / name)
 
 
 def posterior_mean_theta(frame: pd.DataFrame, draws: pd.DataFrame) -> Theta:
@@ -205,7 +230,6 @@ def main() -> None:
         )
         global_rows.append({"residual": column, **result.to_dict()})
     global_table = pd.DataFrame(global_rows)
-    global_table.to_csv(OUTPUT_ROOT / "global_morans_i.csv", index=False)
 
     within_frames: list[pd.DataFrame] = []
     for index, column in enumerate(["raw_residual", "pearson_residual"]):
@@ -225,7 +249,6 @@ def main() -> None:
         if within_frames
         else pd.DataFrame()
     )
-    within_state.to_csv(OUTPUT_ROOT / "within_state_morans_i.csv", index=False)
 
     index_by_county = {county: index for index, county in enumerate(counties)}
     neighbor_mean = []
@@ -237,7 +260,6 @@ def main() -> None:
             neighbor_mean.append(np.nan)
     residuals["mean_neighbor_pearson_residual"] = neighbor_mean
     residuals["adjacent_model_counties"] = [len(neighbors.get(county, ())) for county in counties]
-    residuals.to_csv(OUTPUT_ROOT / "county_spatial_residuals.csv", index=False)
 
     primary = global_table.loc[global_table["residual"].eq("pearson_residual")].iloc[0]
     material_signal = bool(
@@ -257,7 +279,6 @@ def main() -> None:
         if material_signal or repeated_state_signal
         else "report_residual_spatial_diagnostic_and_retain_spatial_model_as_prespecified_secondary_sensitivity"
     )
-    verify_input_manifest(ROOT, input_manifest)
     summary = {
         "generated_utc": datetime.now(timezone.utc).isoformat(),
         "production_gate_commit_context": gate,
@@ -280,10 +301,6 @@ def main() -> None:
             "Residual spatial autocorrelation is a model diagnostic. It does not identify a causal geographic process, and a non-significant statistic does not prove spatial independence."
         ),
     }
-    (OUTPUT_ROOT / "spatial_residual_summary.json").write_text(
-        json.dumps(summary, indent=2, sort_keys=True) + "\n",
-        encoding="utf-8",
-    )
     lines = [
         "# Scientific Reports v2 residual spatial-dependence diagnostic",
         "",
@@ -307,9 +324,21 @@ def main() -> None:
             "The diagnostic uses the posterior-mean conditional expectation and therefore does not propagate the full posterior distribution into the Moran statistic. It is intended as a transparent residual check and trigger for the separately prespecified spatial sensitivity model.",
         ]
     )
-    (OUTPUT_ROOT / "spatial_residual_summary.md").write_text(
-        "\n".join(lines) + "\n",
-        encoding="utf-8",
+    publish_derived_outputs(
+        output_root=OUTPUT_ROOT,
+        input_root=ROOT,
+        input_manifest=input_manifest,
+        tables={
+            "global_morans_i.csv": global_table,
+            "within_state_morans_i.csv": within_state,
+            "county_spatial_residuals.csv": residuals,
+        },
+        text_outputs={
+            "spatial_residual_summary.json": (
+                json.dumps(summary, indent=2, sort_keys=True) + "\n"
+            ),
+            "spatial_residual_summary.md": "\n".join(lines) + "\n",
+        },
     )
     print(json.dumps(summary, sort_keys=True))
 
