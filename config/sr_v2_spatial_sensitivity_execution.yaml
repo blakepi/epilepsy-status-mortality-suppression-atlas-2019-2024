@@ -1,0 +1,202 @@
+schema_id: sr_v2_spatial_sensitivity_execution/v1
+run_id: sr-v2-spatial-sensitivity-20260818-v1
+model_id: sr-v2-primary-nb2-bym2-v1
+status: triggered_frozen_execution_contract
+
+source_authorities:
+  outputs/scientific_reports_v2/production_8chain/production_gate.json: 38be94b401138864cf6e4cb030f2bd53e9b8ad6ea24e080e0353824124784437
+  outputs/scientific_reports_v2/production_8chain/posterior_primary_summary.csv: 2842efa4c95b018aed3626b58b33e42792c0348655225c3a89ec58b4109452e6
+  outputs/scientific_reports_v2/production_8chain/posterior_parameter_draws.parquet: 0f3adc1a90bd411f3065e798867423d5bd2ae1cf0c61d99d7f5f53493b362064
+  outputs/scientific_reports_v2/production_8chain/county_posterior_summary.csv: f9eb36d8748da9a3c8f95c952a95de6d4845ecb963f329a2a61b9adb47ee056e
+  data/processed/bayes_constrained/model_frame.parquet: 2f20555f4b690e1a495e2409dbb2f9bb128a6d3f7b0bb39f4017034aaf2a9e44
+  config/scientific_reports_v2_robustness_registry.yaml: 072e039b78af11a0bb4d6532bb8fb09f70b81d825a38faa3cf89670ca7843814
+  outputs/scientific_reports_v2/spatial_residual_diagnostics/spatial_residual_summary.json: 5d3209d248add49cfd2a5a5379af3e831ec7f6136ed45654ca882cc399a190d1
+  outputs/scientific_reports_v2/spatial_residual_diagnostics/global_morans_i.csv: a44ee5945c308f1455e799c0f22bed356ff118ff6a0de5da1d1f9315c3a836c8
+  outputs/scientific_reports_v2/spatial_residual_diagnostics/within_state_morans_i.csv: 6296899e8a789e219d245d109b55759dead7817f5ba93c75f0694f669231c995
+  outputs/scientific_reports_v2/spatial_residual_diagnostics/county_adjacency2024.txt: 912ca408163016864fe64aaf667b53ad03a19ce4acbc586d3ac508395bdac980
+
+canonical_serialization:
+  county_order_record: "<fips>\\n"
+  edge_list_record: "<min_fips>|<max_fips>\\n"
+  component_table: {encoding: UTF-8, delimiter: comma, line_ending: LF}
+  json: {sort_keys: true, separators: [",", ":"], ensure_ascii: true, allow_nan: false, trailing_newline: false}
+  component_scale_encoding: float.hex
+  file_manifest_hashing: raw_file_bytes_sha256
+
+graph_certificate:
+  graph_type: binary_symmetric_unweighted_icar
+  county_order: sorted_zero_padded_five_digit_model_frame_fips
+  edge_order: deduplicated_lexicographic_min_max_pairs
+  nodes: 3142
+  undirected_edges: 9233
+  components: 18
+  nonisolated_nodes: 3128
+  county_order_sha256: 250417302ddfc261014e7182e065ff0ebaef3a15437c8672fc05b9ab4a9c066b
+  edge_list_sha256: 59412bc9722a119487977065892db16d6bb6931725821a0adb21886ec891df39
+  non_singleton_components:
+    - {minimum_fips: "01001", size: 3099, scale_hex: "0x1.23688b75b9ac1p-1"}
+    - {minimum_fips: "02013", size: 17, scale_hex: "0x1.fdba0c05e631ep-2"}
+    - {minimum_fips: "02100", size: 10, scale_hex: "0x1.00888ae534b68p-1"}
+    - {minimum_fips: "15005", size: 2, scale_hex: "0x1.ffffffffffffep-3"}
+  singletons:
+    - "02261"
+    - "02270"
+    - "09001"
+    - "09003"
+    - "09005"
+    - "09007"
+    - "09009"
+    - "09011"
+    - "09013"
+    - "09015"
+    - "15001"
+    - "15003"
+    - "15007"
+    - "46113"
+  archived_geography_limitation: The model retains eight legacy Connecticut counties while the archived 2024 Census adjacency uses planning regions; no silent crosswalk is applied and the affected legacy counties remain structured-effect singletons.
+  legacy_connecticut_counties: ["09001", "09003", "09005", "09007", "09009", "09011", "09013", "09015"]
+  component_scale_formula: exp(mean(log(diag(pinv(degree_minus_adjacency)))))
+
+model:
+  likelihood: negative_binomial_2
+  formula: deaths ~ offset(log_population) + primary_rurality + svi_quartile + z_pct_age65 + z_pct_male + centered_state_effect + centered_year_effect + county_bym2
+  county_effect: sigma_county * (sqrt(phi_structured) * u_scaled + sqrt(1 - phi_structured) * v)
+  structured_precision: component_scale * (degree - binary_adjacency)
+  structured_constraint: component_wise_sum_to_zero
+  singleton_structured_effect: exactly_zero
+  singleton_contribution: sigma_county * sqrt(1 - phi_structured) * v
+  priors:
+    intercept: {distribution: Normal, mean: 0.0, sd: 5.0}
+    nonintercept_beta: {distribution: Normal, mean: 0.0, sd: 1.5}
+    state_scale: {distribution: HalfNormal, sd: 1.0}
+    year_scale: {distribution: HalfNormal, sd: 1.0}
+    log_kappa: {distribution: Normal, mean: 2.302585092994046, sd: 1.5}
+    sigma_county: {distribution: HalfNormal, sd: 1.0, sampled_as: log_sigma_county, transformed_jacobian: log_sigma_county}
+    phi_structured: {distribution: Beta, alpha: 1.0, beta: 1.0, sampled_as: logit_phi_structured, transformed_jacobian: log_phi_plus_log_one_minus_phi}
+  interpretation_boundary: Ecological model-based sensitivity only; no effect is a person-level or causal estimate.
+
+seeds:
+  chain: [74291, 74292, 74293, 74294]
+  allocation_initialization: [74251, 74252, 74253, 74254]
+  spatial_initialization: [74261, 74262, 74263, 74264]
+
+execution:
+  chains: 4
+  initial_epoch: {extension_epoch: 0, iterations_per_chain: 180000, burn_in: 45000, thin: 30, retained_draws_per_chain: 4500}
+  extension: {iterations_per_chain: 90000, burn_in: 0, thin: 30, added_draws_per_chain: 3000, requires_reviewed_fingerprinted_authorization: true, advances_all_four_completed_chains: true}
+  valid_total_iterations_and_draws:
+    - [180000, 4500]
+    - [270000, 7500]
+    - [360000, 10500]
+    - [450000, 13500]
+  extension_epoch_range: [0, 3]
+  job_attempt_range_per_epoch: [1, 3]
+  checkpoint_exit_code: 75
+  draw_chunk_size: 250
+  extension_forbidden_failure_classes: [source, graph, constraint, fingerprint, nonfinite_value]
+  state_machine:
+    prepared: [running, hold]
+    running: [checkpointed, completed, failed, hold]
+    checkpointed: [running, hold]
+    failed: [running, hold]
+    completed: [extension_authorized, merging, hold]
+    extension_authorized: [running, hold]
+    merging: [independent_verification, hold]
+    independent_verification: [gating, hold]
+    gating: [pass, hold]
+    pass: []
+    hold: []
+  extension_state_machine:
+    epoch_0_completed: [merge_if_converged, reviewed_extension_epoch_1]
+    epoch_1_completed: [merge_if_converged, reviewed_extension_epoch_2]
+    epoch_2_completed: [merge_if_converged, reviewed_extension_epoch_3]
+    epoch_3_completed: [merge_or_hold_no_further_extension]
+    authorization_fields: [from_extension_epoch, to_extension_epoch, reason_convergence_only, reviewer, reviewed_utc, authorization_sha256]
+    continuation_rule: all_four_completed_chains_with_adaptation_frozen
+  job_attempt_state_machine:
+    attempt_1_incomplete: [resume_failed_or_checkpointed_as_attempt_2]
+    attempt_2_incomplete: [resume_failed_or_checkpointed_as_attempt_3]
+    attempt_3_incomplete: [hold_no_attempt_4]
+    completed: [verify_artifact_hashes_then_idempotent_noop]
+  retry_rule: Resume only failed or checkpointed indexes in the same extension epoch; never rerun a hash-verified completed chain.
+
+parameter_updates:
+  spatial_hyperparameters: {kernel: symmetric_random_walk, log_sigma_county_sd: 0.08, logit_phi_structured_sd: 0.15}
+  spatial_fields: {kernel: joint_mala, target: canonical_full_log_posterior, centered_subspace_hastings_correction: exact}
+
+mala:
+  frequency_iterations: 5
+  initial_epsilon_structured: 0.02
+  initial_epsilon_unstructured: 0.04
+  adaptation_epoch: 0
+  adaptation_burn_in_end_iteration: 45000
+  window_attempts: 100
+  target_acceptance: 0.574
+  gain_cap: 0.05
+  gain_power: -0.6
+  multiplier_bounds: [0.1, 5.0]
+  extension_adaptation: false
+  adaptation_formula: log(m_next)=clip(log(m)+min(0.05,j^-0.6)*(window_acceptance-0.574),log(0.1),log(5.0))
+
+fingerprints:
+  target_fields: [schema_id, run_id, model_id, config_sha256, input_manifest_sha256, source_manifest_sha256, graph_contract_sha256, likelihood, prior, design_schema, parameter_schema, extension_epoch, extension_authorization_sha256]
+  chain_fields: [target_fingerprint, chain_id, chain_seed, allocation_initialization_seed, spatial_initialization_seed]
+
+comparison:
+  rows:
+    - primary_rurality_metro_other
+    - primary_rurality_nonmetro_adjacent
+    - primary_rurality_nonmetro_nonadjacent
+    - svi_quartile_Q2
+    - svi_quartile_Q3
+    - svi_quartile_Q4_highest
+    - z_pct_age65
+    - z_pct_male
+  fields: [parameter, scale, primary_mean, primary_lower_95, primary_upper_95, spatial_mean, spatial_lower_95, spatial_upper_95, absolute_change, relative_change, interval_overlap]
+  pass_criteria_exclusions: [effect_direction, attenuation, interval_overlap, phi_structured_value]
+
+thresholds:
+  all_stochastic_and_combined_county: {rhat_max_inclusive: 1.05, bulk_ess_min_inclusive: 100, tail_ess_min_inclusive: 100}
+  primary_plus_spatial_hyperparameters:
+    parameters: [primary_rurality_metro_other, primary_rurality_nonmetro_adjacent, primary_rurality_nonmetro_nonadjacent, svi_quartile_Q2, svi_quartile_Q3, svi_quartile_Q4_highest, z_pct_age65, z_pct_male, sigma_county, phi_structured]
+    rhat_max_inclusive: 1.03
+    bulk_ess_min_inclusive: 400
+    tail_ess_min_inclusive: 400
+  count_constraint_failures_allowed: 0
+  spatial_constraint_failures_allowed: 0
+  deterministic_singleton_structured_zeros_excluded: true
+  diagnostics: {equal_length_chains: true, rhat: rank_normalized_split, ess: [bulk, tail], arviz_version_recorded_in_gate: true}
+
+resources:
+  benchmark: {partition: main, hours: 2, cpus: 4, memory_gib: 64}
+  chain: {partition: main, hours: 72, cpus: 4, memory_gib: 64, array: "1-4%2", usr1_seconds_before_deadline: 300}
+  finalizer: {partition: timed-main, hours: 2, cpus: 8, memory_gib: 64}
+  benchmark_iterations: 2000
+  benchmark_runtime_limit_hours: 65
+  benchmark_peak_rss_limit_gib: 56
+  benchmark_projection_overhead_factor: 1.2
+
+output_schemas:
+  graph_contract: {format: canonical_json, required: [run_id, counties, edges, components, scales_hex, contract_sha256]}
+  prepared_run_manifest: {format: json, required: [schema_id, run_id, model_id, config_sha256, source_manifest, graph_contract_sha256, chain_mapping, fingerprints]}
+  chain_checkpoint_v2: {format: json_plus_sha256_sidecar, required: [schema_version, run_id, model_id, target_fingerprint, chain_fingerprint, extension_epoch, job_attempt, chain_id, seeds, current_state, rng_state, current_target, committed_chunks, pending_buffers, adaptation_state, next_draw_id]}
+  scalar_draw_chunk: {format: parquet_float64, required: [chain_id, draw_id, extension_epoch, scalar_parameters]}
+  spatial_draw_chunk: {format: npz_float64, required: [chain_id, draw_id, structured, unstructured]}
+  chain_status: {format: json, required: [run_id, chain_id, extension_epoch, job_attempt, status, iterations, retained_draws, seeds, artifact_sha256]}
+  merged_scalar_draws: {path: posterior_parameter_draws.parquet, format: parquet_float64, keys: [chain_id, draw_id, parameter]}
+  merged_spatial_draws: {path: draws_spatial.npz, format: npz_float64, arrays: [structured, unstructured]}
+  diagnostics: {format: csv_and_json, required: [parameter, r_hat, ess_bulk, ess_tail, arviz_version, constraint_failures]}
+  county_effect_summary: {format: csv, required: [county_fips, component_id, singleton, structured_mean, unstructured_mean, combined_mean, combined_lower_95, combined_upper_95, r_hat, ess_bulk, ess_tail]}
+  comparison_candidate: {path: primary_vs_spatial.candidate.csv, format: csv_lf, exact_rows: 8}
+  independent_verification: {path: independent_spatial_sensitivity_verification.json, format: json, required: [passed, source_checks, graph_checks, chain_checks, diagnostic_checks, comparison_checks, protected_tree_checks]}
+  release_manifest: {format: json, required: [artifacts, planned_outputs], planned_final: primary_vs_spatial.csv}
+  gate: {path: spatial_sensitivity_gate.json, format: json, required: [passed, action, submission_authorized, interpretation_boundary, final_comparison_sha256]}
+
+release:
+  initial_gate_state: HOLD
+  pass_action: freeze_spatial_sensitivity
+  submission_authorized: false
+  publication_order: [merge_and_candidate, pre_gate_manifest, independent_verification, final_release_manifest, final_comparison, gate_last]
+  protected_trees:
+    - outputs/scientific_reports_v2/production_8chain
+    - outputs/scientific_reports_v2/spatial_residual_diagnostics
