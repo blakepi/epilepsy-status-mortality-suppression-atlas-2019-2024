@@ -1,0 +1,135 @@
+{
+  "action": "freeze_corrected_results",
+  "checks": [
+    {
+      "check": "eight_completed_chains",
+      "detail": "chains=8 statuses=['completed']",
+      "passed": true
+    },
+    {
+      "check": "expected_iterations",
+      "detail": "iterations=[300000]",
+      "passed": true
+    },
+    {
+      "check": "expected_draws_per_chain",
+      "detail": "draws=[4500]",
+      "passed": true
+    },
+    {
+      "check": "unique_prespecified_seeds",
+      "detail": "seeds=[58291, 58292, 58293, 58294, 58295, 58296, 58297, 58298]",
+      "passed": true
+    },
+    {
+      "check": "grand_total_preserved",
+      "detail": "totals=[58380]",
+      "passed": true
+    },
+    {
+      "check": "zero_constraint_failures",
+      "detail": "failures=0 records=489696",
+      "passed": true
+    },
+    {
+      "check": "complete_parameter_set",
+      "detail": "parameters=69 expected=69",
+      "passed": true
+    },
+    {
+      "check": "parameter_diagnostics_finite",
+      "detail": "finite=True",
+      "passed": true
+    },
+    {
+      "check": "all_parameter_rhat",
+      "detail": "maximum=1.005976 threshold=1.01",
+      "passed": true
+    },
+    {
+      "check": "all_parameter_bulk_ess",
+      "detail": "minimum=1577.7 threshold=400",
+      "passed": true
+    },
+    {
+      "check": "all_parameter_tail_ess",
+      "detail": "minimum=2738.2 threshold=400",
+      "passed": true
+    },
+    {
+      "check": "primary_bulk_ess",
+      "detail": "minimum=4070.6 threshold=1000",
+      "passed": true
+    },
+    {
+      "check": "primary_tail_ess",
+      "detail": "minimum=9330.5 threshold=1000",
+      "passed": true
+    },
+    {
+      "check": "latent_summary_diagnostics_finite",
+      "detail": "stochastic=32 deterministic=0 finite=True",
+      "passed": true
+    },
+    {
+      "check": "latent_summary_rhat",
+      "detail": "maximum=1.001524 threshold=1.01",
+      "passed": true
+    },
+    {
+      "check": "latent_summary_bulk_ess",
+      "detail": "minimum=4467.1 threshold=400",
+      "passed": true
+    },
+    {
+      "check": "latent_summary_tail_ess",
+      "detail": "minimum=5805.8 threshold=400",
+      "passed": true
+    },
+    {
+      "check": "exact_kernel_gate",
+      "detail": "True",
+      "passed": true
+    },
+    {
+      "check": "randomized_exact_kernel_gate",
+      "detail": "True",
+      "passed": true
+    },
+    {
+      "check": "constraint_geometry_recorded",
+      "detail": "latent_variables=9695 rank=1256 nullity=8439",
+      "passed": true
+    },
+    {
+      "check": "extended_real_pilot_gate",
+      "detail": "True",
+      "passed": true
+    },
+    {
+      "check": "calibration_design_gate",
+      "detail": "True",
+      "passed": true
+    },
+    {
+      "check": "tuned_calibration_extension_gate",
+      "detail": "True",
+      "passed": true
+    }
+  ],
+  "generated_utc": "2026-08-14T23:14:54.193173+00:00",
+  "interpretation_boundary": "Passing this gate freezes corrected computational results. Scientific Reports submission still requires multi-replicate calibration, prespecified epidemiologic robustness analyses, and final manuscript-package QC.",
+  "passed": true,
+  "worst_parameter": {
+    "ess_bulk": 2071.092918359349,
+    "ess_tail": 4228.64193749443,
+    "parameter": "state_effect[15]",
+    "r_hat": 1.0059755719352546
+  },
+  "worst_stochastic_latent_summary": {
+    "ess_bulk": 5845.12580237215,
+    "ess_tail": 9427.36171257711,
+    "parameter": "latent_county_period[48035]",
+    "r_hat": 1.0015237360444065
+  }
+}

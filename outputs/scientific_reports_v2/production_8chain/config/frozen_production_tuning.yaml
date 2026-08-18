@@ -1,0 +1,24 @@
+proposal_scale_multipliers:
+  beta: 0.6
+  state: 1.3
+  year: 1.5
+  log_sigma_state: 5.0
+  log_sigma_year: 13.5
+  log_kappa: 2.4
+move_weights:
+  state_year_transfer: 0.05
+  county_period_exploration: 0.3
+  interval_path_transfer: 0.25
+  swap_2x2: 0.3
+  cycle_swap: 0.1
+max_cycle_half_length: 6
+fixed_theta_selected_profile: balanced_circuit_heatbath
+source_evidence_sha256:
+  exact_kernel: 329bde77657a58d4c32aed9db2c8e3e4a8dde914d0b8631bedf7e72015f76a47
+  randomized_exact_kernel: edc1a90122951e7cc8245b8554c7335d95e5760be62114cab6dac12bda155819
+  constraint_geometry: 6165aa9fa770e02b88205f4b3599a9a2a9c334562ad8d1d74f8f10c82d26b804
+  extended_real_pilot: 4fcb079842212b86a321d67b87b34be548897dc1e40669394670d407633f3609
+  calibration_design: f9be7de3b7ae60f5e704d44c96f1c2f57995b7ac7a936d2b95c239e46f27e16c
+  calibration_extension: a15264c5e4c2011c93ab11e348ba6bec0b9a3f8b8b88279a533ae79edff7f6dd
+  fixed_theta_tuning: b28f965d833b58759ceb0076700be2d624808ee7faa9bf8849230b465e33394b
+  recommended_production_tuning: 2459cf04d0c88a1ed42c4ef8dcb631c1bdea3233ad510f072222b719eabd7121

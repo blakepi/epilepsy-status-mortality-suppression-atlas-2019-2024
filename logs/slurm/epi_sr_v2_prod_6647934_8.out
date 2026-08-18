@@ -1,0 +1,45 @@
+hostname=d6-w6420b-03
+date=2026-08-12T21:28:05-04:00
+SLURM_JOB_ID=6647934
+SLURM_ARRAY_TASK_ID=8
+SLURM_CPUS_PER_TASK=4
+SLURM_MEM_PER_NODE=65536
+pwd=/scratch/pierpogb/EpilepsyMortalityOptionB-sr-v2
+python=/home/pierpogb/.venvs/epimort_bayes_py312_arviz120/bin/python
+git_commit=11691bd882020f76e1b6eb6224e4789a6534f65c
+{"config_path": "/scratch/pierpogb/EpilepsyMortalityOptionB-sr-v2/outputs/scientific_reports_v2/production_8chain/config/sr_v2_production.yaml", "grand_total": 58380, "iteration": 300000, "mode": "production", "outputs": {"acceptance_rates": "outputs/scientific_reports_v2/production_8chain/chains/chain_08/acceptance_rates.csv", "draws_latent": "outputs/scientific_reports_v2/production_8chain/chains/chain_08/draws_latent.npz", "draws_params": "outputs/scientific_reports_v2/production_8chain/chains/chain_08/draws_params.parquet", "latent_validation": "outputs/scientific_reports_v2/production_8chain/chains/chain_08/latent_validation.csv", "runtime_log": "outputs/scientific_reports_v2/production_8chain/chains/chain_08/runtime_log.csv"}, "resume_source": "outputs/scientific_reports_v2/production_8chain/chains/chain_08/checkpoints/checkpoint_iter_000000000.npz", "saved_draws": 4500, "seed": 58298, "status": "completed", "suppressed_cells_treated_as_zero": false, "target_iteration": 300000}
+
+Number of files: 4,834 (reg: 4,814, dir: 20)
+Number of created files: 3 (reg: 3)
+Number of deleted files: 0
+Number of regular files transferred: 21
+Total file size: 443,606,394 bytes
+Total transferred file size: 137,715,065 bytes
+Literal data: 137,715,065 bytes
+Matched data: 0 bytes
+File list size: 131,071
+File list generation time: 0.007 seconds
+File list transfer time: 0.000 seconds
+Total bytes sent: 137,845,356
+Total bytes received: 492
+
+sent 137,845,356 bytes  received 492 bytes  21,207,053.54 bytes/sec
+total size is 443,606,394  speedup is 3.22
+
+Number of files: 17 (reg: 16, dir: 1)
+Number of created files: 0
+Number of deleted files: 0
+Number of regular files transferred: 2
+Total file size: 14,974 bytes
+Total transferred file size: 4,359 bytes
+Literal data: 4,359 bytes
+Matched data: 0 bytes
+File list size: 0
+File list generation time: 0.006 seconds
+File list transfer time: 0.000 seconds
+Total bytes sent: 4,748
+Total bytes received: 54
+
+sent 4,748 bytes  received 54 bytes  9,604.00 bytes/sec
+total size is 14,974  speedup is 3.12
+synced_sr_v2_results_to=/home/pierpogb/EpilepsyMortalityOptionB-sr-v2/outputs/scientific_reports_v2/production_8chain

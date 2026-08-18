@@ -1,2 +1,5 @@
 # Preserve checksum-gated production evidence byte-for-byte across platforms.
 outputs/bayes_constrained/production_8chain/** -text
+outputs/scientific_reports_v2/production_8chain/** -text
+logs/slurm/epi_sr_v2_prod_6647934_* -text
+logs/slurm/epi_sr_v2_final_6647935.* -text
