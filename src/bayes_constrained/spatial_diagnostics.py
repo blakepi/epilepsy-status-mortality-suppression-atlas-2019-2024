@@ -4,11 +4,13 @@ import hashlib
 import io
 import urllib.request
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterable
 
 import numpy as np
 import pandas as pd
+from scipy.sparse import csr_matrix
 
 
 CENSUS_COUNTY_ADJACENCY_2024_URL = (
@@ -73,6 +75,7 @@ def download_county_adjacency(
     temporary.replace(destination)
     return {
         "url": url,
+        "retrieved_utc": datetime.now(timezone.utc).isoformat(),
         "path": str(destination),
         "bytes": int(destination.stat().st_size),
         "sha256": sha256_file(destination),
@@ -156,23 +159,30 @@ def row_standardized_weights(
     return weights
 
 
-def morans_i(values: np.ndarray, weights: np.ndarray) -> float:
-    """Calculate global Moran's I for a supplied weight matrix."""
-
+def _moran_components(
+    values: np.ndarray,
+    weights: np.ndarray | csr_matrix,
+) -> tuple[np.ndarray, csr_matrix, float, float]:
     x = np.asarray(values, dtype=float)
-    w = np.asarray(weights, dtype=float)
+    w = weights if isinstance(weights, csr_matrix) else csr_matrix(weights)
     if w.shape != (len(x), len(x)):
         raise ValueError(f"Weight matrix shape {w.shape} does not match {len(x)} values.")
-    finite = np.isfinite(x)
-    if not finite.all():
+    if not np.isfinite(x).all():
         raise ValueError("Moran's I values must all be finite after analytic filtering.")
     centered = x - x.mean()
     denominator = float(centered @ centered)
     weight_sum = float(w.sum())
+    return centered, w, denominator, weight_sum
+
+
+def morans_i(values: np.ndarray, weights: np.ndarray) -> float:
+    """Calculate global Moran's I for a supplied weight matrix."""
+
+    centered, w, denominator, weight_sum = _moran_components(values, weights)
     if denominator <= 0 or weight_sum <= 0:
         return float("nan")
-    numerator = float(centered @ w @ centered)
-    return float(len(x) / weight_sum * numerator / denominator)
+    numerator = float(centered @ (w @ centered))
+    return float(len(centered) / weight_sum * numerator / denominator)
 
 
 def permutation_morans_i(
@@ -194,14 +204,31 @@ def permutation_morans_i(
     # Isolated counties contribute no numerator information. Excluding them also
     # prevents their values from changing the mean used for connected counties.
     x = values[nonisolated]
-    w = weights[np.ix_(nonisolated, nonisolated)]
-    observed = morans_i(x, w)
+    centered, sparse_weights, denominator, weight_sum = _moran_components(
+        x,
+        csr_matrix(weights[np.ix_(nonisolated, nonisolated)]),
+    )
+    if denominator <= 0 or weight_sum <= 0:
+        observed = float("nan")
+    else:
+        observed_numerator = float(centered @ (sparse_weights @ centered))
+        observed = float(len(x) / weight_sum * observed_numerator / denominator)
     expected = -1.0 / (len(x) - 1)
     rng = np.random.default_rng(seed)
     if permutations:
         simulated = np.empty(permutations, dtype=float)
-        for index in range(permutations):
-            simulated[index] = morans_i(rng.permutation(x), w)
+        if denominator <= 0 or weight_sum <= 0:
+            simulated.fill(np.nan)
+        else:
+            for index in range(permutations):
+                permuted = rng.permutation(x)
+                permuted_centered = permuted - permuted.mean()
+                numerator = float(
+                    permuted_centered @ (sparse_weights @ permuted_centered)
+                )
+                simulated[index] = float(
+                    len(x) / weight_sum * numerator / denominator
+                )
         observed_distance = abs(observed - expected)
         simulated_distance = np.abs(simulated - expected)
         p_value = float((1 + np.count_nonzero(simulated_distance >= observed_distance)) / (permutations + 1))
@@ -214,7 +241,7 @@ def permutation_morans_i(
         permutations=permutations,
         observations=len(values),
         nonisolated_observations=int(nonisolated.sum()),
-        directed_weight_sum=float(w.sum()),
+        directed_weight_sum=weight_sum,
     )
 
 

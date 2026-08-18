@@ -20,6 +20,7 @@ from bayes_constrained.spatial_diagnostics import (  # noqa: E402
     permutation_morans_i,
     read_county_adjacency,
     row_standardized_weights,
+    sha256_file,
     within_group_morans_i,
 )
 
@@ -30,6 +31,18 @@ GLOBAL_PERMUTATIONS = 9999
 WITHIN_STATE_PERMUTATIONS = 999
 MATERIAL_POSITIVE_I = 0.02
 MATERIAL_P_VALUE = 0.05
+PRODUCTION_INPUTS = (
+    Path("outputs/scientific_reports_v2/production_8chain/production_gate.json"),
+    Path(
+        "outputs/scientific_reports_v2/production_8chain/"
+        "posterior_parameter_draws.parquet"
+    ),
+    Path(
+        "outputs/scientific_reports_v2/production_8chain/"
+        "county_posterior_summary.csv"
+    ),
+    Path("data/processed/bayes_constrained/model_frame.parquet"),
+)
 
 
 def require(path: Path) -> Path:
@@ -39,6 +52,40 @@ def require(path: Path) -> Path:
             "Spatial residual diagnostics must not run on pilot or archived v1.1.1 outputs."
         )
     return path
+
+
+def build_input_manifest(
+    root: Path,
+    relative_paths: tuple[Path, ...],
+) -> dict[str, dict[str, object]]:
+    manifest: dict[str, dict[str, object]] = {}
+    for relative_path in relative_paths:
+        key = relative_path.as_posix()
+        path = require(root / relative_path)
+        manifest[key] = {
+            "path": key,
+            "bytes": int(path.stat().st_size),
+            "sha256": sha256_file(path),
+        }
+    return manifest
+
+
+def production_input_manifest() -> dict[str, dict[str, object]]:
+    return build_input_manifest(ROOT, PRODUCTION_INPUTS)
+
+
+def verify_input_manifest(
+    root: Path,
+    manifest: dict[str, dict[str, object]],
+) -> None:
+    for relative_path, expected in manifest.items():
+        path = require(root / relative_path)
+        actual_sha256 = sha256_file(path)
+        if actual_sha256 != expected["sha256"]:
+            raise RuntimeError(
+                "Production input SHA-256 changed during spatial diagnostics: "
+                f"{relative_path}; expected {expected['sha256']}, got {actual_sha256}."
+            )
 
 
 def posterior_mean_theta(frame: pd.DataFrame, draws: pd.DataFrame) -> Theta:
@@ -72,6 +119,13 @@ def posterior_mean_theta(frame: pd.DataFrame, draws: pd.DataFrame) -> Theta:
 
 
 def main() -> None:
+    OUTPUT_ROOT.mkdir(parents=True, exist_ok=True)
+    input_manifest = production_input_manifest()
+    pd.DataFrame(input_manifest.values()).to_csv(
+        OUTPUT_ROOT / "production_input_sha256.csv",
+        index=False,
+    )
+
     gate = json.loads(
         require(PRODUCTION_ROOT / "production_gate.json").read_text(encoding="utf-8")
     )
@@ -134,7 +188,6 @@ def main() -> None:
     )
     residuals["pearson_residual"] = residuals["raw_residual"] / denominator
 
-    OUTPUT_ROOT.mkdir(parents=True, exist_ok=True)
     adjacency_path = OUTPUT_ROOT / "county_adjacency2024.txt"
     source_manifest = download_county_adjacency(adjacency_path)
     adjacency = read_county_adjacency(adjacency_path)
@@ -204,6 +257,7 @@ def main() -> None:
         if material_signal or repeated_state_signal
         else "report_residual_spatial_diagnostic_and_retain_spatial_model_as_prespecified_secondary_sensitivity"
     )
+    verify_input_manifest(ROOT, input_manifest)
     summary = {
         "generated_utc": datetime.now(timezone.utc).isoformat(),
         "production_gate_commit_context": gate,
