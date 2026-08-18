@@ -141,3 +141,38 @@ Update the active status with the generated action and artifact paths; do not in
 git add .gitattributes docs/scientific_reports_v2/active_execution_status.md outputs/scientific_reports_v2/spatial_residual_diagnostics
 git commit -m "data: freeze SR-v2 spatial residual diagnostic"
 ```
+
+### Task 3: Implement and freeze the triggered identifiable county spatial sensitivity
+
+**Trigger evidence:**
+- `outputs/scientific_reports_v2/spatial_residual_diagnostics/spatial_residual_summary.json`
+- `recommended_action: run_spatial_random_effect_sensitivity`
+
+**Interfaces:**
+- Consumes the frozen corrected-production inputs and the archived 2024 Census adjacency bytes and SHA-256.
+- Adds a county structured-plus-unstructured effect using the scaled BYM2 parameterization: a component-wise sum-to-zero, unit-generalized-variance intrinsic-CAR term plus an independent unit-variance county term, combined through one marginal scale and one mixing fraction. Singleton counties have zero structured contribution and retain the unstructured term.
+- Produces a fail-closed, hash-bound spatial-sensitivity summary and primary-versus-spatial comparison required by manuscript result freeze.
+
+- [ ] **Step 1: Freeze the model and execution contract**
+
+Write the adjacency-component ordering, scaling constants, centering constraints, priors for marginal scale and mixing fraction, exact chain seeds/iterations/burn-in/thinning, convergence thresholds, source hashes, and required comparison rows to an immutable operational configuration. Refuse any adjacency or corrected-production hash mismatch.
+
+- [ ] **Step 2: Write RED identifiability and target tests**
+
+Test component-wise sum-to-zero structure, unit generalized-variance scaling, singleton behavior, separate structured/unstructured contributions, finite log density, default-model non-regression, checkpoint round trips, and permutation-invariant results under a jointly permuted county/adjacency ordering. Include a small proper-posterior synthetic recovery test.
+
+- [ ] **Step 3: Implement the BYM2 county effect through canonical model paths**
+
+Extend design, target, parameter updates, serialization, and summaries without duplicating the NB2 likelihood or latent-count kernel. Report the marginal spatial scale, mixing fraction, county combined effects, and the same prespecified rurality/SVI contrasts as the primary model.
+
+- [ ] **Step 4: Add fail-closed preparation, chain, merge, and gate runners**
+
+Require dispersed feasible starts, the frozen adjacency/component contract, zero constraint failures, all-parameter finite diagnostics, prespecified R-hat and bulk/tail ESS thresholds, exact completed-chain/draw counts, and source/output SHA-256. A partial or hash-mismatched run remains HOLD and publishes no passed comparison.
+
+- [ ] **Step 5: Execute and independently verify the sensitivity**
+
+Run the frozen multi-chain configuration in the authorized project environment. Independently verify chain completion, seeds, draws, constraint preservation, diagnostics, adjacency and production hashes, structured-effect centering/scaling, and primary-versus-spatial contrast equality with the machine-readable source tables.
+
+- [ ] **Step 6: Freeze evidence before manuscript results**
+
+Preserve all sensitivity evidence with `-text`, update the active execution status, and commit the implementation and passed outputs. The manuscript result-freeze gate must require the passed spatial-sensitivity summary because the trigger branch is active; do not interpret attenuation, persistence, or any spatial parameter as causal geographic evidence.

@@ -82,6 +82,18 @@ A reproducible county-adjacency and Moran diagnostic module has been implemented
 
 The diagnostic refuses to run unless the corrected production gate has passed.
 
+The production diagnostic completed on 2026-08-18 UTC from the frozen passed-production inputs. It included 3,142 counties (3,128 with at least one model neighbor). Global Moran's I was 0.2312117978976916 for the raw residual and 0.11730487181632097 for the conditional Pearson residual; both two-sided 9,999-permutation P values were 0.0001. Nineteen within-state Pearson rows also met the prespecified materiality rule, exceeding the repeated-state threshold of three. The exact generated action is `run_spatial_random_effect_sensitivity`.
+
+Accordingly, an identifiable scaled structured-plus-unstructured county spatial sensitivity is required and must pass before manuscript result freeze. The Moran diagnostic is a model check, not causal evidence; neither a trigger nor a non-trigger would establish spatial dependence or independence.
+
+Evidence:
+
+- `outputs/scientific_reports_v2/spatial_residual_diagnostics/spatial_residual_summary.json`
+- `outputs/scientific_reports_v2/spatial_residual_diagnostics/global_morans_i.csv`
+- `outputs/scientific_reports_v2/spatial_residual_diagnostics/within_state_morans_i.csv`
+- `outputs/scientific_reports_v2/spatial_residual_diagnostics/production_input_sha256.csv`
+- `outputs/scientific_reports_v2/spatial_residual_diagnostics/county_adjacency2024.txt`
+
 ### Explicit prior profiles and prior-sensitivity infrastructure
 
 The primary prior is now represented as an explicit immutable `PriorSpecification` with default values identical to the corrected primary target. Broader and regularizing profiles can be activated through an exception-safe process context that reuses the same validated sampler instead of duplicating transition code. Unit tests verify default equivalence, profile parsing, target-density changes, context restoration, and fail-closed invalid-scale handling.
@@ -106,7 +118,7 @@ The submission record is `outputs/scientific_reports_v2/production_8chain/submit
 ## Immediate sequence after corrected production passes
 
 1. Freeze corrected parameter and county summaries.
-2. Run the spatial residual diagnostic and trigger the spatial sensitivity if required.
+2. Implement, execute, and pass the triggered structured-plus-unstructured county spatial sensitivity.
 3. Run broader and regularizing prior profiles using the validated sensitivity runner.
 4. Run model-family and pandemic-period sensitivities.
 5. Populate manuscript placeholders only from frozen machine-readable outputs.
