@@ -679,6 +679,38 @@ def _theta_from_payload(payload: dict[str, object]) -> Theta:
     return _center_random_effects(theta)
 
 
+class LikelihoodFamilyMismatchError(ValueError):
+    """Raised when persisted chain evidence belongs to a different target."""
+
+
+def _validated_evidence_likelihood_family(
+    recorded_family: object | None,
+    *,
+    expected_likelihood_family: str,
+    source: str,
+) -> str:
+    """Validate persisted target identity, with legacy evidence treated as NB2.
+
+    Checkpoints and statuses written before likelihood-family sensitivities did
+    not carry this field and can only belong to the historical default NB2
+    target. This compatibility rule is deliberately one-way: missing metadata
+    can never authorize Poisson evidence reuse.
+    """
+
+    expected = normalize_likelihood_family(expected_likelihood_family)
+    recorded = normalize_likelihood_family(
+        DEFAULT_LIKELIHOOD_FAMILY
+        if recorded_family is None
+        else str(recorded_family)
+    )
+    if recorded != expected:
+        raise LikelihoodFamilyMismatchError(
+            f"{source} likelihood family mismatch: "
+            f"recorded={recorded!r} requested={expected!r}"
+        )
+    return recorded
+
+
 def save_chain_checkpoint(
     path: Path,
     *,
@@ -692,10 +724,12 @@ def save_chain_checkpoint(
     proposed: dict[str, int],
     param_accept: dict[str, int],
     param_prop: dict[str, int],
+    likelihood_family: str = DEFAULT_LIKELIHOOD_FAMILY,
 ) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(path.suffix + ".tmp.npz")
     theta_state = _theta_payload(theta)
+    family = normalize_likelihood_family(likelihood_family)
     np.savez_compressed(
         tmp,
         y=np.asarray(y, dtype=np.int16),
@@ -713,12 +747,27 @@ def save_chain_checkpoint(
         proposed_json=np.asarray(json.dumps(proposed)),
         param_accept_json=np.asarray(json.dumps(param_accept)),
         param_prop_json=np.asarray(json.dumps(param_prop)),
+        likelihood_family=np.asarray(family),
     )
     os.replace(tmp, path)
 
 
-def load_chain_checkpoint(path: Path) -> dict[str, object]:
+def load_chain_checkpoint(
+    path: Path,
+    *,
+    expected_likelihood_family: str = DEFAULT_LIKELIHOOD_FAMILY,
+) -> dict[str, object]:
     data = np.load(path, allow_pickle=True)
+    recorded_family = (
+        str(data["likelihood_family"].item())
+        if "likelihood_family" in data.files
+        else None
+    )
+    family = _validated_evidence_likelihood_family(
+        recorded_family,
+        expected_likelihood_family=expected_likelihood_family,
+        source=str(path),
+    )
     rng = np.random.default_rng()
     rng.bit_generator.state = json.loads(str(data["rng_state"].item()))
     theta = _theta_from_payload(
@@ -742,15 +791,25 @@ def load_chain_checkpoint(path: Path) -> dict[str, object]:
         "proposed": json.loads(str(data["proposed_json"].item())),
         "param_accept": json.loads(str(data["param_accept_json"].item())),
         "param_prop": json.loads(str(data["param_prop_json"].item())),
+        "likelihood_family": family,
     }
 
 
-def latest_valid_checkpoint(checkpoint_dir: Path) -> Path | None:
+def latest_valid_checkpoint(
+    checkpoint_dir: Path,
+    *,
+    expected_likelihood_family: str = DEFAULT_LIKELIHOOD_FAMILY,
+) -> Path | None:
     checkpoints = sorted(checkpoint_dir.glob("checkpoint_iter_*.npz"))
     for path in reversed(checkpoints):
         try:
-            load_chain_checkpoint(path)
+            load_chain_checkpoint(
+                path,
+                expected_likelihood_family=expected_likelihood_family,
+            )
             return path
+        except LikelihoodFamilyMismatchError:
+            raise
         except Exception:
             continue
     return None
@@ -873,9 +932,15 @@ def run_mcmc_chain_hpc(
     if not checkpoint_root.is_absolute():
         checkpoint_root = PROJECT_ROOT / checkpoint_root
     status_path = chain_dir / "chain_status.json"
-    if status_path.exists() and not force:
+    if status_path.exists():
         status = json.loads(status_path.read_text(encoding="utf-8"))
-        if status.get("status") == "completed":
+        status_family = _validated_evidence_likelihood_family(
+            status.get("likelihood_family"),
+            expected_likelihood_family=likelihood_family,
+            source=str(status_path),
+        )
+        status["likelihood_family"] = status_family
+        if status.get("status") == "completed" and not force:
             return status
 
     _write_resolved_config(
@@ -914,15 +979,22 @@ def run_mcmc_chain_hpc(
     max_cycle_half_length = int(settings.get("max_cycle_half_length", 6))
 
     checkpoint_root.mkdir(parents=True, exist_ok=True)
-    parameter_rows: list[dict]
-    latent_draws: list[np.ndarray]
-    validation_rows: list[dict]
-    runtime_rows: list[dict]
-    parameter_rows, latent_draws, validation_rows, runtime_rows = _load_existing_chain_outputs(chain_dir) if resume else ([], [], [], [])
-
-    latest = latest_valid_checkpoint(checkpoint_root) if resume else None
+    latest = (
+        latest_valid_checkpoint(
+            checkpoint_root,
+            expected_likelihood_family=likelihood_family,
+        )
+        if resume
+        else None
+    )
     if latest is not None:
-        checkpoint = load_chain_checkpoint(latest)
+        checkpoint = load_chain_checkpoint(
+            latest,
+            expected_likelihood_family=likelihood_family,
+        )
+        parameter_rows, latent_draws, validation_rows, runtime_rows = (
+            _load_existing_chain_outputs(chain_dir)
+        )
         y = checkpoint["y"]
         theta = checkpoint["theta"]
         rng = checkpoint["rng"]
@@ -935,6 +1007,12 @@ def run_mcmc_chain_hpc(
         param_prop = {key: int(value) for key, value in checkpoint["param_prop"].items()}
         resume_source = rel(latest)
     else:
+        parameter_rows, latent_draws, validation_rows, runtime_rows = (
+            [],
+            [],
+            [],
+            [],
+        )
         rng = np.random.default_rng(int(seed))
         init_path = _initial_allocation_path(chain_id)
         y = pd.read_parquet(init_path)["latent_count"].to_numpy(dtype=int).copy()
@@ -1092,6 +1170,7 @@ def run_mcmc_chain_hpc(
                     proposed=proposed,
                     param_accept=param_accept,
                     param_prop=param_prop,
+                    likelihood_family=likelihood_family,
                 )
                 _write_chain_outputs(
                     chain_dir,
@@ -1135,6 +1214,7 @@ def run_mcmc_chain_hpc(
                 proposed=proposed,
                 param_accept=param_accept,
                 param_prop=param_prop,
+                likelihood_family=likelihood_family,
             )
         runtime_rows.append(
             {
