@@ -9,12 +9,31 @@ source_authorities:
   outputs/scientific_reports_v2/production_8chain/config/sr_v2_production.yaml: b475ddc4547680c085b172244b567a01c59dc2920da95910ac0eecfff172a393
   data/processed/bayes_constrained/model_frame.parquet: 2f20555f4b690e1a495e2409dbb2f9bb128a6d3f7b0bb39f4017034aaf2a9e44
   data/raw/covariates/SVI_2022_US_county.csv: bc47d244153e359d5c09f621a4bf344a1e593159c16fbd3c28a15461b70a6c0f
-reviewed_sources:
-  src/bayes_constrained/model.py: 1ee3e4ee497e71d8a91278c8539cd526a1676230b87712c3b137f6fa2a26253e
-  src/bayes_constrained/data.py: ace36575355b1853e1210f0aff63ea4392ec9a8d8b21a4094211cb21ab68203f
-  src/bayes_constrained/constraints.py: 1ec574c603c7f6dcee74973907b8050d6816d5d46ed49a9911292d5e97f2f75f
-  src/bayes_constrained/sampler.py: 3da2855243520e5f50a05b9c1657ca7dd839934897f054d3f2fb0da01c8b259b
-reviewed_source_hash_mode: canonical_lf_utf8
+final_source_manifest:
+  schema_id: sr_v2_robustness_final_source_manifest/v1
+  required_status: reviewed_final
+  source_hash_mode: raw_bytes
+  required_sources:
+    - src/bayes_constrained/__init__.py
+    - src/bayes_constrained/paths.py
+    - src/bayes_constrained/data.py
+    - src/bayes_constrained/constraints.py
+    - src/bayes_constrained/target_density.py
+    - src/bayes_constrained/model.py
+    - src/bayes_constrained/heatbath.py
+    - src/bayes_constrained/interval_paths.py
+    - src/bayes_constrained/sampler.py
+    - src/bayes_constrained/diagnostics.py
+    - src/bayes_constrained/sensitivity.py
+    - scripts/100_prepare_sr_v2_heavy_sensitivity.py
+    - scripts/101_run_sr_v2_heavy_sensitivity_chain.py
+    - scripts/102_merge_sr_v2_heavy_sensitivity.py
+    - scripts/103_gate_sr_v2_heavy_sensitivity.py
+    - scripts/104_validate_sr_v2_heavy_sensitivity_infrastructure.py
+launch_envelope:
+  schema_id: sr_v2_robustness_launch_envelope/v1
+  required_status: reviewed_final
+  requires_clean_worktree: true
 execution:
   chains_per_profile: 4
   iterations_per_chain: 180000

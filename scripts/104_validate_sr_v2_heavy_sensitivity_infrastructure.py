@@ -10,6 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from bayes_constrained.sensitivity import (  # noqa: E402
+    FINAL_SOURCE_FILES,
     PROFILE_IDS,
     RUN_ID,
     load_execution_spec,
@@ -73,11 +74,15 @@ def validate_python() -> list[dict[str, object]]:
     checks.append({"check": "exact_24_row_map", "passed": actual_rows == expected_rows, "detail": f"rows={len(actual_rows)}"})
     try:
         verify_hash_inventory(ROOT, spec.source_authorities)
-        verify_hash_inventory(ROOT, spec.reviewed_sources, canonical_text=True)
-        hashes_ok, hash_detail = True, f"authorities={len(spec.source_authorities)} sources={len(spec.reviewed_sources)}"
+        hashes_ok, hash_detail = True, f"authorities={len(spec.source_authorities)}"
     except Exception as exc:
         hashes_ok, hash_detail = False, str(exc)
     checks.append({"check": "frozen_hashes", "passed": hashes_ok, "detail": hash_detail})
+    checks.append({
+        "check": "final_source_manifest_contract",
+        "passed": tuple(spec.final_source_files) == FINAL_SOURCE_FILES,
+        "detail": f"required_sources={len(spec.final_source_files)} union_superset_allowed=true external_launch_envelope_required=true preparation_ready=false",
+    })
     all_entrypoints = True
     runner_flags: set[str] = set()
     for path in PYTHON_SCRIPTS:
@@ -95,7 +100,7 @@ def validate_python() -> list[dict[str, object]]:
     module_source = (ROOT / "src" / "bayes_constrained" / "sensitivity.py").read_text(encoding="utf-8")
     prepare_source = PYTHON_SCRIPTS[0].read_text(encoding="utf-8")
     runner_source = PYTHON_SCRIPTS[1].read_text(encoding="utf-8")
-    checks.append({"check": "atomic_exclusive_publish", "passed": "open(\"x\"" in module_source and "os.replace(temporary, run_root)" in prepare_source, "detail": "exclusive temp writes and atomic run-root publish"})
+    checks.append({"check": "atomic_exclusive_publish", "passed": "open(\"x\"" in module_source and "publish_directory_no_clobber(temporary, run_root)" in prepare_source, "detail": "exclusive preparation lock and no-clobber run-root publish"})
     checks.append({"check": "resume_fingerprint_guards", "passed": "profile_fingerprint" in runner_source and "completed_chain_is_reusable" in runner_source and "latest_checkpoint_sha256" in runner_source, "detail": "manifest, fingerprint, checkpoint, artifact guards present"})
     return checks
 

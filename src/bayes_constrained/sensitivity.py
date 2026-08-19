@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from contextlib import contextmanager
 import hashlib
 import json
 import os
 from pathlib import Path
+import re
 from typing import Any, Iterable, Mapping, Sequence
 
 import numpy as np
@@ -16,6 +18,8 @@ from .model import PRIMARY_TERMS, make_design
 
 
 RUN_ID = "sr-v2-heavy-sensitivity-20260818-v1"
+OUTPUT_ROOT = "outputs/scientific_reports_v2/heavy_sensitivity"
+REPOSITORY_BASE_COMMIT = "123904015805758119d8cc9d88c6bb94efbc36e1"
 PROFILE_IDS = (
     "prior_broader",
     "prior_regularizing",
@@ -36,6 +40,82 @@ EXPECTED_INTERACTION_TERMS = tuple(
 )
 EXPECTED_FULL_YEARS = ("2019", "2020", "2021", "2022", "2023", "2024")
 EXPECTED_EXCLUSION_YEARS = ("2019", "2022", "2023", "2024")
+EXPECTED_TARGETS = (
+    ("prior_broader", "negative_binomial_2", "primary", "full", "broader"),
+    ("prior_regularizing", "negative_binomial_2", "primary", "full", "regularizing"),
+    ("model_family_poisson", "poisson", "primary", "full", "default"),
+    ("pandemic_interaction", "negative_binomial_2", "pandemic_interaction", "full", "default"),
+    ("pandemic_exclusion", "negative_binomial_2", "primary", "pandemic_exclusion", "default"),
+    ("age_structure_age17", "negative_binomial_2", "age_structure_age17", "age17_augmented", "default"),
+)
+EXPECTED_CHAIN_MAP = tuple(
+    (index, profile, chain, chain_seed, init_seed)
+    for index, profile, chain, chain_seed, init_seed in (
+        (1, "prior_broader", 1, 68291, 67291), (2, "prior_broader", 2, 68292, 67292), (3, "prior_broader", 3, 68293, 67293), (4, "prior_broader", 4, 68294, 67294),
+        (5, "prior_regularizing", 1, 69291, 67391), (6, "prior_regularizing", 2, 69292, 67392), (7, "prior_regularizing", 3, 69293, 67393), (8, "prior_regularizing", 4, 69294, 67394),
+        (9, "model_family_poisson", 1, 70291, 70251), (10, "model_family_poisson", 2, 70292, 70252), (11, "model_family_poisson", 3, 70293, 70253), (12, "model_family_poisson", 4, 70294, 70254),
+        (13, "pandemic_interaction", 1, 71291, 71251), (14, "pandemic_interaction", 2, 71292, 71252), (15, "pandemic_interaction", 3, 71293, 71253), (16, "pandemic_interaction", 4, 71294, 71254),
+        (17, "pandemic_exclusion", 1, 72291, 72251), (18, "pandemic_exclusion", 2, 72292, 72252), (19, "pandemic_exclusion", 3, 72293, 72253), (20, "pandemic_exclusion", 4, 72294, 72254),
+        (21, "age_structure_age17", 1, 73291, 73251), (22, "age_structure_age17", 2, 73292, 73252), (23, "age_structure_age17", 3, 73293, 73253), (24, "age_structure_age17", 4, 73294, 73254),
+    )
+)
+EXPECTED_THRESHOLDS = {
+    "rhat_max_all": 1.05,
+    "ess_bulk_min_all": 100,
+    "ess_tail_min_all": 100,
+    "rhat_max_primary": 1.03,
+    "ess_bulk_min_primary": 400,
+    "ess_tail_min_primary": 400,
+    "constraint_failures_allowed": 0,
+}
+EXPECTED_COMPARISON = {
+    "primary_parameters": list(PRIMARY_TERMS),
+    "interaction_periods": ["pre_pandemic_2019", "acute_pandemic_2020_2021", "later_period_2022_2024"],
+}
+EXPECTED_PROTECTED_TREES = (
+    "outputs/scientific_reports_v2/production_8chain",
+    "outputs/scientific_reports_v2/spatial_residual_diagnostics",
+)
+EXPECTED_SOURCE_AUTHORITIES = {
+    "config/scientific_reports_v2_robustness_registry.yaml": "072e039b78af11a0bb4d6532bb8fb09f70b81d825a38faa3cf89670ca7843814",
+    "outputs/scientific_reports_v2/production_8chain/production_gate.json": "38be94b401138864cf6e4cb030f2bd53e9b8ad6ea24e080e0353824124784437",
+    "outputs/scientific_reports_v2/production_8chain/posterior_primary_summary.csv": "2842efa4c95b018aed3626b58b33e42792c0348655225c3a89ec58b4109452e6",
+    "outputs/scientific_reports_v2/production_8chain/config/sr_v2_production.yaml": "b475ddc4547680c085b172244b567a01c59dc2920da95910ac0eecfff172a393",
+    "data/processed/bayes_constrained/model_frame.parquet": "2f20555f4b690e1a495e2409dbb2f9bb128a6d3f7b0bb39f4017034aaf2a9e44",
+    "data/raw/covariates/SVI_2022_US_county.csv": "bc47d244153e359d5c09f621a4bf344a1e593159c16fbd3c28a15461b70a6c0f",
+}
+EXPECTED_EXECUTION = {
+    "chains_per_profile": 4,
+    "iterations_per_chain": 180000,
+    "burn_in": 45000,
+    "thin": 30,
+    "retained_draws_per_chain": 4500,
+    "checkpoint_every": 500,
+    "max_runtime_minutes": 4260,
+    "stop_before_time_limit_minutes": 15,
+}
+EXPECTED_INTERPRETATION_BOUNDARY = (
+    "Computational PASS supplements the frozen corrected primary evidence. It does not replace the primary "
+    "estimand or authorize manuscript edits, repository publication, or submission."
+)
+FINAL_SOURCE_FILES = (
+    "src/bayes_constrained/__init__.py",
+    "src/bayes_constrained/paths.py",
+    "src/bayes_constrained/data.py",
+    "src/bayes_constrained/constraints.py",
+    "src/bayes_constrained/target_density.py",
+    "src/bayes_constrained/model.py",
+    "src/bayes_constrained/heatbath.py",
+    "src/bayes_constrained/interval_paths.py",
+    "src/bayes_constrained/sampler.py",
+    "src/bayes_constrained/diagnostics.py",
+    "src/bayes_constrained/sensitivity.py",
+    "scripts/100_prepare_sr_v2_heavy_sensitivity.py",
+    "scripts/101_run_sr_v2_heavy_sensitivity_chain.py",
+    "scripts/102_merge_sr_v2_heavy_sensitivity.py",
+    "scripts/103_gate_sr_v2_heavy_sensitivity.py",
+    "scripts/104_validate_sr_v2_heavy_sensitivity_infrastructure.py",
+)
 
 
 @dataclass(frozen=True)
@@ -92,7 +172,8 @@ class ExecutionSpec:
     profiles: tuple[SensitivityProfile, ...]
     chain_map: tuple[ChainAssignment, ...]
     source_authorities: dict[str, str]
-    reviewed_sources: dict[str, str]
+    final_source_files: tuple[str, ...]
+    launch_envelope_schema: str
     comparison: dict[str, Any]
     interpretation_boundary: str
     raw: dict[str, Any]
@@ -215,7 +296,8 @@ def load_execution_spec(path: str | Path) -> ExecutionSpec:
         profiles=profiles,
         chain_map=chain_map,
         source_authorities=_require_sha256_mapping(raw.get("source_authorities"), "source_authorities"),
-        reviewed_sources=_require_sha256_mapping(raw.get("reviewed_sources"), "reviewed_sources"),
+        final_source_files=tuple(map(str, raw.get("final_source_manifest", {}).get("required_sources", []))),
+        launch_envelope_schema=str(raw.get("launch_envelope", {}).get("schema_id", "")),
         comparison=dict(raw.get("comparison", {})),
         interpretation_boundary=str(raw.get("interpretation_boundary", "")),
         raw=raw,
@@ -225,20 +307,51 @@ def load_execution_spec(path: str | Path) -> ExecutionSpec:
 
 
 def _validate_spec(spec: ExecutionSpec) -> None:
+    expected_top_keys = {
+        "schema_id", "run_id", "repository_base_commit", "output_root", "source_authorities",
+        "final_source_manifest", "launch_envelope", "execution", "thresholds", "profiles", "chain_map", "comparison",
+        "interpretation_boundary", "protected_trees",
+    }
+    if set(spec.raw) != expected_top_keys:
+        raise ValueError("Heavy-sensitivity config top-level keys differ from the frozen contract")
     if spec.schema_id != "sr_v2_heavy_sensitivity_execution/v1" or spec.run_id != RUN_ID:
         raise ValueError("Unexpected heavy-sensitivity schema or immutable run id")
-    if tuple(profile.profile_id for profile in spec.profiles) != PROFILE_IDS:
-        raise ValueError("Sensitivity profiles are not in the frozen six-profile order")
-    if spec.raw.get("reviewed_source_hash_mode") != "canonical_lf_utf8":
-        raise ValueError("Reviewed source hashes must use the cross-platform canonical-LF contract")
-    if len(spec.chain_map) != 24 or [row.array_index for row in spec.chain_map] != list(range(1, 25)):
-        raise ValueError("Chain map must contain ordered array indexes 1 through 24")
-    if len({row.chain_seed for row in spec.chain_map}) != 24 or len({row.initialization_seed for row in spec.chain_map}) != 24:
-        raise ValueError("All chain seeds and initialization seeds must be unique by role")
-    for profile_id in PROFILE_IDS:
-        rows = [row for row in spec.chain_map if row.profile_id == profile_id]
-        if [row.chain_id for row in rows] != [1, 2, 3, 4]:
-            raise ValueError(f"Profile {profile_id} must have chains 1 through 4")
+    actual_targets = tuple((p.profile_id, p.likelihood, p.model, p.frame, p.prior) for p in spec.profiles)
+    if actual_targets != EXPECTED_TARGETS:
+        raise ValueError("Sensitivity target contract differs from the frozen six-profile contract")
+    actual_map = tuple((r.array_index, r.profile_id, r.chain_id, r.chain_seed, r.initialization_seed) for r in spec.chain_map)
+    if actual_map != EXPECTED_CHAIN_MAP:
+        raise ValueError("Heavy-sensitivity chain map or seeds differ from the frozen chain map")
+    if spec.repository_base_commit != REPOSITORY_BASE_COMMIT:
+        raise ValueError("Repository base commit differs from the frozen contract")
+    if spec.output_root != OUTPUT_ROOT:
+        raise ValueError("Heavy-sensitivity output root differs from the frozen output root")
+    if spec.thresholds != EXPECTED_THRESHOLDS:
+        raise ValueError("Heavy-sensitivity threshold contract changed")
+    if spec.comparison != EXPECTED_COMPARISON:
+        raise ValueError("Heavy-sensitivity comparison rows changed")
+    if spec.source_authorities != EXPECTED_SOURCE_AUTHORITIES:
+        raise ValueError("Heavy-sensitivity source-authority contract changed")
+    if spec.raw.get("execution") != EXPECTED_EXECUTION:
+        raise ValueError("Heavy-sensitivity execution controls changed")
+    if spec.interpretation_boundary != EXPECTED_INTERPRETATION_BOUNDARY:
+        raise ValueError("Heavy-sensitivity interpretation boundary changed")
+    if tuple(map(str, spec.raw.get("protected_trees", []))) != EXPECTED_PROTECTED_TREES:
+        raise ValueError("Heavy-sensitivity protected trees changed")
+    final_contract = spec.raw.get("final_source_manifest", {})
+    if (
+        final_contract.get("schema_id") != "sr_v2_robustness_final_source_manifest/v1"
+        or final_contract.get("required_status") != "reviewed_final"
+        or final_contract.get("source_hash_mode") != "raw_bytes"
+        or spec.final_source_files != FINAL_SOURCE_FILES
+    ):
+        raise ValueError("Final source manifest contract changed")
+    if spec.raw.get("launch_envelope") != {
+        "schema_id": "sr_v2_robustness_launch_envelope/v1",
+        "required_status": "reviewed_final",
+        "requires_clean_worktree": True,
+    }:
+        raise ValueError("Reviewed launch-envelope contract changed")
     if (spec.iterations_per_chain, spec.burn_in, spec.thin, spec.retained_draws_per_chain) != (180000, 45000, 30, 4500):
         raise ValueError("Heavy-sensitivity iteration contract changed")
     if (spec.iterations_per_chain - spec.burn_in) // spec.thin != spec.retained_draws_per_chain:
@@ -262,6 +375,140 @@ def verify_hash_inventory(
             raise ValueError(f"SHA-256 mismatch for {relative}: expected {expected}, found {actual}")
         verified[str(relative)] = actual
     return verified
+
+
+def safe_relative_path(root: str | Path, relative: str | Path, *, must_exist: bool = False) -> Path:
+    base = Path(root).resolve()
+    candidate = Path(relative)
+    if candidate.is_absolute() or ".." in candidate.parts or candidate == Path("."):
+        raise ValueError(f"Manifest path must be a nonempty relative path: {relative}")
+    resolved = (base / candidate).resolve(strict=False)
+    if not resolved.is_relative_to(base):
+        raise ValueError(f"Manifest path escapes declared root: {relative}")
+    if must_exist and not resolved.exists():
+        raise ValueError(f"Manifest path does not exist: {relative}")
+    return resolved
+
+
+def load_final_source_manifest(
+    root: str | Path,
+    spec: ExecutionSpec,
+    envelope_path: str | Path,
+) -> dict[str, Any]:
+    base = Path(root).resolve()
+    path = Path(envelope_path).resolve()
+    if not path.is_file():
+        raise FileNotFoundError(f"Reviewed external launch envelope is required before preparation: {path}")
+    envelope_hash = verify_manifest_sidecar(path)
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    envelope_required = {
+        "schema_id": "sr_v2_robustness_launch_envelope/v1",
+        "status": "reviewed_final",
+        "clean_worktree": True,
+    }
+    envelope_changed = {key: (value, payload.get(key)) for key, value in envelope_required.items() if payload.get(key) != value}
+    if envelope_changed:
+        raise ValueError(f"Reviewed launch envelope contract mismatch: {envelope_changed}")
+    source_manifest = payload.get("source_manifest")
+    if not isinstance(source_manifest, dict):
+        raise ValueError("Launch envelope does not contain the reviewed final source manifest")
+    required = {
+        "schema_id": "sr_v2_robustness_final_source_manifest/v1",
+        "status": "reviewed_final",
+        "joint_regression_passed": True,
+        "source_hash_mode": "raw_bytes",
+    }
+    changed = {key: (value, source_manifest.get(key)) for key, value in required.items() if source_manifest.get(key) != value}
+    if changed:
+        raise ValueError(f"Final source manifest contract mismatch: {changed}")
+    manifest_hash = canonical_sha256(source_manifest)
+    if payload.get("source_manifest_sha256") != manifest_hash:
+        raise ValueError("Launch envelope final-source-manifest SHA-256 mismatch")
+    launch_commit = str(payload.get("launch_commit", ""))
+    bundle_hash = str(payload.get("bundle_sha256", ""))
+    if len(launch_commit) != 40 or any(c not in "0123456789abcdef" for c in launch_commit.lower()):
+        raise ValueError("Final source manifest launch commit is invalid")
+    if len(bundle_hash) != 64 or any(c not in "0123456789abcdef" for c in bundle_hash.lower()):
+        raise ValueError("Final source manifest bundle SHA-256 is invalid")
+    sources = _require_sha256_mapping(source_manifest.get("sources"), "final source manifest sources")
+    if not set(spec.final_source_files).issubset(sources):
+        raise ValueError("Final source manifest omits executable sources required by the heavy workflow")
+    for relative, expected in sources.items():
+        source_path = safe_relative_path(base, relative, must_exist=True)
+        actual = sha256_file(source_path)
+        if actual != expected:
+            raise ValueError(f"Final source SHA-256 mismatch for {relative}: expected {expected}, found {actual}")
+    evidence_relative = str(source_manifest.get("joint_regression_evidence", ""))
+    evidence_path = safe_relative_path(base, evidence_relative, must_exist=True)
+    evidence_hash = str(source_manifest.get("joint_regression_evidence_sha256", ""))
+    if sha256_file(evidence_path) != evidence_hash:
+        raise ValueError("Final source manifest joint-regression evidence SHA-256 mismatch")
+    return {
+        **source_manifest,
+        "manifest_sha256": manifest_hash,
+        "envelope_path": str(path),
+        "envelope_sha256": envelope_hash,
+        "launch_commit": launch_commit,
+        "bundle_sha256": bundle_hash,
+    }
+
+
+@contextmanager
+def acquire_prepare_lock(path: str | Path):
+    lock_path = Path(path)
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        handle = lock_path.open("x", encoding="utf-8")
+    except FileExistsError as exc:
+        raise FileExistsError(f"Exclusive preparation lock already exists: {lock_path}") from exc
+    try:
+        handle.write(f"pid={os.getpid()}\n")
+        handle.flush()
+        os.fsync(handle.fileno())
+        yield lock_path
+    finally:
+        handle.close()
+        lock_path.unlink(missing_ok=True)
+
+
+def publish_directory_no_clobber(staging: str | Path, destination: str | Path) -> None:
+    source = Path(staging)
+    target = Path(destination)
+    if target.exists():
+        raise FileExistsError(f"Destination exists; refusing to replace conflicting run: {target}")
+    # The exclusive sibling prepare lock serializes all cooperating publishers.
+    # os.rename is used instead of os.replace so Windows also refuses a raced target.
+    os.rename(source, target)
+
+
+def load_declared_checkpoint(
+    checkpoint_dir: str | Path,
+    declared_name: str,
+    *,
+    expected_target_identity: Mapping[str, object],
+) -> dict[str, object]:
+    from .sampler import load_chain_checkpoint
+
+    root = Path(checkpoint_dir).resolve()
+    declared = safe_relative_path(root, declared_name, must_exist=True)
+    files = [path for path in root.iterdir() if path.is_file()]
+    checkpoints: list[tuple[int, Path]] = []
+    for path in files:
+        match = re.fullmatch(r"checkpoint_iter_(\d+)\.npz", path.name)
+        if match:
+            checkpoints.append((int(match.group(1)), path))
+            if not path.with_name(f"{path.name}.sha256").is_file():
+                raise ValueError(f"Checkpoint SHA-256 sidecar is missing: {path.name}")
+        elif path.name.endswith(".npz.sha256"):
+            checkpoint = path.with_name(path.name.removesuffix(".sha256"))
+            if not checkpoint.is_file():
+                raise ValueError(f"Orphan checkpoint SHA-256 sidecar: {path.name}")
+        else:
+            raise ValueError(f"Unexpected checkpoint artifact: {path.name}")
+    checkpoints.sort(key=lambda row: row[0])
+    if not checkpoints or checkpoints[-1][1] != declared:
+        raise ValueError("A newer or different checkpoint exists than the status-declared checkpoint")
+    return load_chain_checkpoint(declared, expected_target_identity=expected_target_identity)
 
 
 def build_sensitivity_frame(
@@ -294,6 +541,122 @@ def expected_parameter_schema(frame: pd.DataFrame, profile: SensitivityProfile) 
     return schema
 
 
+def checkpoint_target_identity(
+    *,
+    spec: ExecutionSpec,
+    profile: SensitivityProfile,
+    assignment: ChainAssignment,
+    profile_fingerprint_value: str,
+    operational_config_sha256: str,
+    profile_config_sha256: str,
+    frame_sha256: str,
+    final_source_manifest_sha256: str,
+    parameter_schema: Sequence[str],
+) -> dict[str, object]:
+    return {
+        "schema_id": "sr_v2_heavy_checkpoint_target/v1",
+        "run_id": spec.run_id,
+        "profile": profile.profile_id,
+        "profile_fingerprint": profile_fingerprint_value,
+        "model": profile.model,
+        "likelihood": profile.likelihood,
+        "frame": profile.frame,
+        "prior": profile.prior,
+        "operational_config_sha256": operational_config_sha256,
+        "profile_config_sha256": profile_config_sha256,
+        "frame_sha256": frame_sha256,
+        "final_source_manifest_sha256": final_source_manifest_sha256,
+        "parameter_schema_sha256": canonical_sha256(list(parameter_schema)),
+        "array_index": assignment.array_index,
+        "chain_id": assignment.chain_id,
+        "chain_seed": assignment.chain_seed,
+        "initialization_seed": assignment.initialization_seed,
+    }
+
+
+def validate_chain_draws(
+    draws: pd.DataFrame,
+    *,
+    chain_id: int,
+    parameter_schema: Sequence[str],
+    retained_draws: int,
+    burn_in: int,
+    thin: int,
+) -> None:
+    expected_columns = ["chain", "draw", "iteration", "parameter", "value"]
+    if list(draws.columns) != expected_columns:
+        raise ValueError(f"Unexpected parameter-draw columns: {list(draws.columns)}")
+    expected_rows = len(parameter_schema) * retained_draws
+    if len(draws) != expected_rows:
+        raise ValueError(f"Parameter draw row count mismatch: expected {expected_rows}, found {len(draws)}")
+    if draws.duplicated(["chain", "draw", "parameter"]).any():
+        raise ValueError("Duplicate (chain, draw, parameter) rows")
+    if set(pd.to_numeric(draws["chain"], errors="raise").astype(int)) != {int(chain_id)}:
+        raise ValueError("Parameter draw chain label does not match declared chain")
+    if not np.isfinite(pd.to_numeric(draws["value"], errors="coerce").to_numpy(dtype=float)).all():
+        raise ValueError("Parameter draws contain nonfinite values")
+    expected_draw_ids = list(range(1, retained_draws + 1))
+    expected_iterations = {draw: burn_in + draw * thin for draw in expected_draw_ids}
+    for parameter in parameter_schema:
+        rows = draws.loc[draws["parameter"].astype(str).eq(parameter)].sort_values("draw")
+        if rows["draw"].astype(int).tolist() != expected_draw_ids:
+            raise ValueError(f"Parameter {parameter} does not have the exact draw-id grid")
+        actual_iterations = rows["iteration"].astype(int).tolist()
+        wanted_iterations = [expected_iterations[draw] for draw in expected_draw_ids]
+        if actual_iterations != wanted_iterations:
+            raise ValueError(f"Parameter {parameter} violates the retained iteration schedule")
+    if draws["parameter"].drop_duplicates().astype(str).tolist() != list(parameter_schema):
+        raise ValueError("Parameter draw schema/order mismatch")
+
+
+def validate_diagnostics_table(
+    diagnostics: pd.DataFrame,
+    *,
+    parameter_schema: Sequence[str],
+    chains: int = 4,
+    draws_per_chain: int = 4500,
+) -> None:
+    required = {"parameter", "r_hat", "ess_bulk", "ess_tail", "chains", "draws_per_chain", "draws"}
+    if not required <= set(diagnostics.columns) or len(diagnostics) != len(parameter_schema):
+        raise ValueError("Diagnostic row count/columns do not match the exact parameter schema")
+    if diagnostics["parameter"].astype(str).duplicated().any() or sorted(diagnostics["parameter"].astype(str)) != sorted(parameter_schema):
+        raise ValueError("Diagnostic parameter cardinality differs from the exact schema")
+    metadata_ok = (
+        diagnostics["chains"].eq(chains).all()
+        and diagnostics["draws_per_chain"].eq(draws_per_chain).all()
+        and diagnostics["draws"].eq(chains * draws_per_chain).all()
+    )
+    if not metadata_ok:
+        raise ValueError("Diagnostic chains/draws metadata is not the exact 4x4500 grid")
+    numeric = diagnostics[["r_hat", "ess_bulk", "ess_tail"]].to_numpy(dtype=float)
+    if not np.isfinite(numeric).all():
+        raise ValueError("Diagnostics contain nonfinite values")
+
+
+def expected_comparison_keys(profile_id: str) -> set[tuple[str, str]]:
+    if profile_id == "pandemic_interaction":
+        keys = {(term, period) for term in RURALITY_TERMS for period in EXPECTED_COMPARISON["interaction_periods"]}
+        keys.update((term, "modeled_period") for term in PRIMARY_TERMS if term not in RURALITY_TERMS)
+        return keys
+    return {(term, "modeled_period") for term in PRIMARY_TERMS}
+
+
+def validate_comparison_table(comparisons: pd.DataFrame, *, profile_id: str) -> None:
+    required = {"profile", "parameter", "period", "sensitivity_median", "sensitivity_lower_95", "sensitivity_upper_95", "primary_median", "primary_lower_95", "primary_upper_95"}
+    if not required <= set(comparisons.columns):
+        raise ValueError("Comparison key/value columns are incomplete")
+    if set(comparisons["profile"].astype(str)) != {profile_id}:
+        raise ValueError("Comparison profile label mismatch")
+    if comparisons.duplicated(["parameter", "period"]).any():
+        raise ValueError("Comparison key rows are duplicated")
+    actual = set(zip(comparisons["parameter"].astype(str), comparisons["period"].astype(str), strict=True))
+    if actual != expected_comparison_keys(profile_id):
+        raise ValueError(f"Comparison key schema mismatch for {profile_id}")
+    numeric_columns = [column for column in required if column not in {"profile", "parameter", "period"}]
+    if not np.isfinite(comparisons[numeric_columns].to_numpy(dtype=float)).all():
+        raise ValueError("Comparison table contains nonfinite values")
+
+
 def profile_fingerprint(
     profile: SensitivityProfile,
     assignment: ChainAssignment,
@@ -305,6 +668,7 @@ def profile_fingerprint(
     input_hashes: Mapping[str, str],
     source_hashes: Mapping[str, str],
     parameter_schema: Sequence[str],
+    launch_provenance: Mapping[str, str] | None = None,
 ) -> str:
     payload = {
         "schema_id": "sr_v2_heavy_sensitivity_target_fingerprint/v1",
@@ -316,12 +680,18 @@ def profile_fingerprint(
         "operational_config_sha256": config_sha256,
         "input_hashes": dict(sorted(input_hashes.items())),
         "source_hashes": dict(sorted(source_hashes.items())),
+        "launch_provenance": dict(sorted((launch_provenance or {}).items())),
         "parameter_schema": list(map(str, parameter_schema)),
     }
     return canonical_sha256(payload)
 
 
-def preparation_identity(spec: ExecutionSpec, *, config_sha256: str) -> str:
+def preparation_identity(
+    spec: ExecutionSpec,
+    *,
+    config_sha256: str,
+    final_source_manifest: Mapping[str, object],
+) -> str:
     return canonical_sha256(
         {
             "schema_id": "sr_v2_heavy_sensitivity_preparation_identity/v1",
@@ -329,7 +699,11 @@ def preparation_identity(spec: ExecutionSpec, *, config_sha256: str) -> str:
             "repository_base_commit": spec.repository_base_commit,
             "operational_config_sha256": config_sha256,
             "source_authorities": spec.source_authorities,
-            "reviewed_sources": spec.reviewed_sources,
+            "final_source_manifest_sha256": final_source_manifest["manifest_sha256"],
+            "launch_envelope_sha256": final_source_manifest["envelope_sha256"],
+            "launch_commit": final_source_manifest["launch_commit"],
+            "bundle_sha256": final_source_manifest["bundle_sha256"],
+            "joint_regression_evidence_sha256": final_source_manifest["joint_regression_evidence_sha256"],
             "profiles": [profile.to_dict() for profile in spec.profiles],
             "chain_map": [row.to_dict() for row in spec.chain_map],
         }
@@ -337,7 +711,10 @@ def preparation_identity(spec: ExecutionSpec, *, config_sha256: str) -> str:
 
 
 def assert_manifest_matches(expected: Mapping[str, object], actual: Mapping[str, object]) -> None:
-    identity_fields = ("run_id", "preparation_identity", "operational_config_sha256")
+    identity_fields = (
+        "schema_id", "run_id", "preparation_identity", "operational_config_sha256",
+        "final_source_manifest_sha256", "launch_envelope_sha256", "launch_commit", "bundle_sha256",
+    )
     differences = [field for field in identity_fields if expected.get(field) != actual.get(field)]
     if differences:
         raise ValueError(
@@ -365,6 +742,8 @@ def completed_chain_is_reusable(
     required_artifacts: Sequence[str] | None = None,
     expected_parameter_schema: Sequence[str] | None = None,
     expected_years: Sequence[str] | None = None,
+    expected_terminal_iteration: int | None = None,
+    target_identity: Mapping[str, object] | None = None,
 ) -> bool:
     if status.get("status") != "completed":
         return False
@@ -387,12 +766,42 @@ def completed_chain_is_reusable(
     if required_artifacts is not None and set(map(str, inventory)) != set(map(str, required_artifacts)):
         raise ValueError("Completed chain artifact inventory is incomplete or contains unexpected paths")
     root = Path(chain_dir)
+    actual_files = {
+        path.relative_to(root).as_posix()
+        for path in root.rglob("*")
+        if path.is_file() and path.name != "chain_status.json"
+    }
+    if actual_files != set(map(str, inventory)):
+        raise ValueError(
+            f"Completed chain contains orphan/missing files: actual={sorted(actual_files)} declared={sorted(inventory)}"
+        )
     for relative, expected_hash in inventory.items():
         actual = sha256_file(_safe_artifact_path(root, str(relative)))
         if actual != expected_hash:
             raise ValueError(
                 f"Artifact SHA-256 mismatch for {relative}: expected {expected_hash}, found {actual}"
             )
+    declared_checkpoint = str(status.get("latest_checkpoint", ""))
+    if target_identity is not None:
+        declared_path = Path(declared_checkpoint)
+        if (
+            declared_path.is_absolute()
+            or len(declared_path.parts) != 2
+            or declared_path.parts[0] != "checkpoints"
+            or declared_checkpoint not in inventory
+            or status.get("latest_checkpoint_sha256") != inventory.get(declared_checkpoint)
+        ):
+            raise ValueError("Completed chain latest checkpoint declaration is not exact")
+        checkpoint = load_declared_checkpoint(
+            root / "checkpoints",
+            declared_path.name,
+            expected_target_identity=target_identity,
+        )
+        if expected_terminal_iteration is not None and (
+            int(checkpoint["iteration"]) != int(expected_terminal_iteration)
+            or int(checkpoint["saved_draws"]) != int(expected_draws)
+        ):
+            raise ValueError("Completed chain terminal checkpoint iteration/draw state is not exact")
     return True
 
 
@@ -460,12 +869,13 @@ def evaluate_profile_gate(
     years_ok = len(chain_records) == 4 and all(list(map(str, row.get("included_years", []))) == list(map(str, expected_years)) for row in chain_records)
     checks.append(_check("included_years", years_ok, f"expected={list(expected_years)}"))
 
-    diag_parameters = diagnostics["parameter"].astype(str).tolist() if "parameter" in diagnostics else []
-    diag_complete = sorted(diag_parameters) == sorted(map(str, expected_schema))
-    numeric_columns = ["r_hat", "ess_bulk", "ess_tail"]
-    finite = all(column in diagnostics for column in numeric_columns) and np.isfinite(diagnostics[numeric_columns].to_numpy(dtype=float)).all()
-    checks.append(_check("diagnostics_complete_and_finite", diag_complete and finite, f"parameters={len(diag_parameters)}"))
-    if diag_complete and finite:
+    try:
+        validate_diagnostics_table(diagnostics, parameter_schema=expected_schema)
+        diagnostics_valid, diagnostics_detail = True, f"parameters={len(diagnostics)} chains=4 draws_per_chain=4500"
+    except Exception as exc:
+        diagnostics_valid, diagnostics_detail = False, str(exc)
+    checks.append(_check("diagnostics_complete_and_finite", diagnostics_valid, diagnostics_detail))
+    if diagnostics_valid:
         all_ok = bool(
             (diagnostics["r_hat"] <= float(thresholds["rhat_max_all"])).all()
             and (diagnostics["ess_bulk"] >= float(thresholds["ess_bulk_min_all"])).all()
@@ -482,8 +892,12 @@ def evaluate_profile_gate(
         all_ok = primary_ok = False
     checks.append(_check("all_parameter_convergence", all_ok, "inclusive R-hat and ESS thresholds"))
     checks.append(_check("primary_parameter_convergence", primary_ok, "inclusive primary R-hat and ESS thresholds"))
-    actual_comparisons = sorted(comparisons["parameter"].astype(str).unique()) if "parameter" in comparisons else []
-    checks.append(_check("complete_primary_comparisons", actual_comparisons == sorted(map(str, expected_comparison_parameters)), f"parameters={actual_comparisons}"))
+    try:
+        validate_comparison_table(comparisons, profile_id=profile.profile_id)
+        comparison_valid, comparison_detail = True, f"keys={len(comparisons)}"
+    except Exception as exc:
+        comparison_valid, comparison_detail = False, str(exc)
+    checks.append(_check("complete_primary_comparisons", comparison_valid, comparison_detail))
     passed = all(bool(row["passed"]) for row in checks)
     return {
         "profile": profile.profile_id,

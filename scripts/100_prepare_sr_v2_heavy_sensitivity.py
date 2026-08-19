@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import argparse
 import json
 import os
 from pathlib import Path
@@ -26,14 +27,20 @@ from bayes_constrained.model import (  # noqa: E402
 )
 from bayes_constrained.sampler import save_chain_checkpoint  # noqa: E402
 from bayes_constrained.sensitivity import (  # noqa: E402
+    OUTPUT_ROOT,
     RUN_ID,
+    acquire_prepare_lock,
     assert_manifest_matches,
     atomic_json,
     build_sensitivity_frame,
+    checkpoint_target_identity,
     expected_parameter_schema,
     load_execution_spec,
+    load_final_source_manifest,
     preparation_identity,
     profile_fingerprint,
+    publish_directory_no_clobber,
+    safe_relative_path,
     sha256_file,
     verify_hash_inventory,
     verify_manifest_sidecar,
@@ -51,8 +58,9 @@ def _write_yaml(path: Path, payload: dict) -> None:
     path.write_text(yaml.safe_dump(payload, sort_keys=False), encoding="utf-8", newline="\n")
 
 
-def _profile_config(spec, profile, prior_mapping: dict) -> dict:
-    primary = yaml.safe_load(PRIMARY_CONFIG_PATH.read_text(encoding="utf-8"))
+def _profile_config(spec, profile, prior_mapping: dict, *, root: Path) -> dict:
+    primary_path = root / "outputs" / "scientific_reports_v2" / "production_8chain" / "config" / "sr_v2_production.yaml"
+    primary = yaml.safe_load(primary_path.read_text(encoding="utf-8"))
     run = dict(primary["run"])
     run.update(
         {
@@ -107,6 +115,7 @@ def _initial_checkpoint(
     prior_mapping: dict,
     assignment,
     path: Path,
+    target_identity: dict[str, object],
 ) -> None:
     design = make_design(
         frame,
@@ -148,6 +157,7 @@ def _initial_checkpoint(
         param_accept={key: 0 for key in blocks},
         param_prop={key: 0 for key in blocks},
         likelihood_family=profile.likelihood,
+        target_identity=target_identity,
     )
 
 
@@ -163,167 +173,196 @@ def _verify_existing(run_root: Path, expected_identity: dict) -> dict:
     return manifest
 
 
-def prepare() -> dict:
-    spec = load_execution_spec(CONFIG_PATH)
-    if spec.run_id != RUN_ID:
-        raise ValueError("Refusing to prepare a noncanonical run id")
-    verify_hash_inventory(ROOT, spec.source_authorities)
-    verify_hash_inventory(ROOT, spec.reviewed_sources, canonical_text=True)
-    primary_gate = json.loads(
-        (ROOT / "outputs" / "scientific_reports_v2" / "production_8chain" / "production_gate.json").read_text(encoding="utf-8")
-    )
-    if primary_gate.get("passed") is not True:
+def prepare(
+    *,
+    root: Path = ROOT,
+    config_path: Path = CONFIG_PATH,
+    launch_envelope_path: Path | None = None,
+    frame_loader=load_model_frame,
+    allocation_solver=solve_feasible_allocation,
+) -> dict:
+    root = Path(root).resolve()
+    spec = load_execution_spec(config_path)
+    verify_hash_inventory(root, spec.source_authorities)
+    if launch_envelope_path is None:
+        raise FileNotFoundError("Reviewed external launch envelope is required before preparation")
+    final_source = load_final_source_manifest(root, spec, launch_envelope_path)
+    primary_gate_path = root / "outputs/scientific_reports_v2/production_8chain/production_gate.json"
+    if json.loads(primary_gate_path.read_text(encoding="utf-8")).get("passed") is not True:
         raise ValueError("Frozen corrected primary gate is not passed")
-
-    config_hash = sha256_file(CONFIG_PATH)
+    config_hash = sha256_file(config_path)
     identity = {
+        "schema_id": "sr_v2_heavy_sensitivity_prepared_run/v1",
         "run_id": spec.run_id,
-        "preparation_identity": preparation_identity(spec, config_sha256=config_hash),
+        "preparation_identity": preparation_identity(
+            spec, config_sha256=config_hash, final_source_manifest=final_source
+        ),
         "operational_config_sha256": config_hash,
+        "final_source_manifest_sha256": final_source["manifest_sha256"],
+        "launch_envelope_sha256": final_source["envelope_sha256"],
+        "launch_commit": final_source["launch_commit"],
+        "bundle_sha256": final_source["bundle_sha256"],
     }
-    output_base = ROOT / spec.output_root
-    run_root = output_base / spec.run_id
+    output_base = safe_relative_path(root, OUTPUT_ROOT)
+    run_root = output_base / RUN_ID
     output_base.mkdir(parents=True, exist_ok=True)
-    if run_root.exists():
-        manifest = _verify_existing(run_root, identity)
-        print(json.dumps({"status": "identical_manifest_already_prepared", "run_id": spec.run_id}, sort_keys=True))
-        return manifest
-
-    registry = yaml.safe_load(REGISTRY_PATH.read_text(encoding="utf-8"))
-    prior_profiles = registry["prior_profiles"]
-    source_frame = load_model_frame()
-    temporary = Path(tempfile.mkdtemp(prefix=f".{spec.run_id}.prepare-", dir=output_base))
-    try:
-        artifact_hashes: dict[str, str] = {}
-        profile_records: list[dict] = []
-        frame_cache: dict[str, pd.DataFrame] = {}
-        for profile in spec.profiles:
-            profile_root = temporary / "profiles" / profile.profile_id
-            frame = build_sensitivity_frame(source_frame, profile, svi_path=SVI_PATH)
-            frame_cache[profile.profile_id] = frame
-            frame_path = profile_root / "inputs" / "model_frame.parquet"
-            frame_path.parent.mkdir(parents=True, exist_ok=True)
-            frame.to_parquet(frame_path, index=False)
-            frame_hash = sha256_file(frame_path)
-            frame_relative = frame_path.relative_to(temporary).as_posix()
-            artifact_hashes[frame_relative] = frame_hash
-            profile_config = _profile_config(spec, profile, prior_profiles[profile.prior])
-            config_path = profile_root / "config" / "resolved_profile.yaml"
-            _write_yaml(config_path, profile_config)
-            config_relative = config_path.relative_to(temporary).as_posix()
-            artifact_hashes[config_relative] = sha256_file(config_path)
-            schema = expected_parameter_schema(frame, profile)
-            years = sorted(frame["year"].astype(str).unique())
-            chains: list[dict] = []
-            for assignment in [row for row in spec.chain_map if row.profile_id == profile.profile_id]:
-                initial = solve_feasible_allocation(
-                    frame,
-                    seed=assignment.initialization_seed,
-                    objective="random",
-                    time_limit_seconds=900,
-                )
-                assert_constraints(initial, frame, label=f"{profile.profile_id}_chain{assignment.chain_id}_fresh_start")
-                initialization_path = profile_root / "initializations" / f"initial_allocation_chain_{assignment.chain_id:02d}.parquet"
-                initialization_path.parent.mkdir(parents=True, exist_ok=True)
-                initial_frame = frame[["county_fips", "year", "q002_count_status"]].copy()
-                initial_frame["latent_count"] = initial
-                initial_frame.to_parquet(initialization_path, index=False)
-                init_relative = initialization_path.relative_to(temporary).as_posix()
-                init_hash = sha256_file(initialization_path)
-                artifact_hashes[init_relative] = init_hash
-                fingerprint = profile_fingerprint(
-                    profile,
-                    assignment,
-                    run_id=spec.run_id,
-                    included_years=years,
-                    execution={
-                        "iterations_per_chain": spec.iterations_per_chain,
-                        "burn_in": spec.burn_in,
-                        "thin": spec.thin,
-                        "retained_draws_per_chain": spec.retained_draws_per_chain,
-                    },
-                    config_sha256=config_hash,
-                    input_hashes={**spec.source_authorities, "profile_frame": frame_hash, "initialization": init_hash},
-                    source_hashes=spec.reviewed_sources,
-                    parameter_schema=schema,
-                )
-                checkpoint_path = profile_root / "chains" / f"chain_{assignment.chain_id:02d}" / "checkpoints" / "checkpoint_iter_000000000.npz"
-                checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
-                _initial_checkpoint(
-                    frame,
-                    initial,
-                    profile,
-                    prior_profiles[profile.prior],
-                    assignment,
-                    checkpoint_path,
-                )
-                checkpoint_relative = checkpoint_path.relative_to(temporary).as_posix()
-                checkpoint_hash = sha256_file(checkpoint_path)
-                artifact_hashes[checkpoint_relative] = checkpoint_hash
-                chains.append(
+    with acquire_prepare_lock(output_base / f".{RUN_ID}.prepare.lock"):
+        if run_root.exists():
+            return _verify_existing(run_root, identity)
+        registry = yaml.safe_load(
+            (root / "config/scientific_reports_v2_robustness_registry.yaml").read_text(encoding="utf-8")
+        )
+        prior_profiles = registry["prior_profiles"]
+        source_frame = frame_loader()
+        svi_path = root / "data/raw/covariates/SVI_2022_US_county.csv"
+        temporary = Path(tempfile.mkdtemp(prefix=f".{RUN_ID}.prepare-", dir=output_base))
+        try:
+            artifact_hashes: dict[str, str] = {}
+            envelope_copy = temporary / "launch_envelope.json"
+            shutil.copyfile(Path(launch_envelope_path), envelope_copy)
+            shutil.copyfile(Path(launch_envelope_path).with_name(Path(launch_envelope_path).name + ".sha256"), envelope_copy.with_name(envelope_copy.name + ".sha256"))
+            artifact_hashes["launch_envelope.json"] = sha256_file(envelope_copy)
+            artifact_hashes["launch_envelope.json.sha256"] = sha256_file(envelope_copy.with_name(envelope_copy.name + ".sha256"))
+            profile_records: list[dict] = []
+            for profile in spec.profiles:
+                profile_root = temporary / "profiles" / profile.profile_id
+                frame = build_sensitivity_frame(source_frame, profile, svi_path=svi_path)
+                frame_path = profile_root / "inputs/model_frame.parquet"
+                frame_path.parent.mkdir(parents=True, exist_ok=True)
+                frame.to_parquet(frame_path, index=False)
+                frame_hash = sha256_file(frame_path)
+                frame_relative = frame_path.relative_to(temporary).as_posix()
+                artifact_hashes[frame_relative] = frame_hash
+                resolved = _profile_config(spec, profile, prior_profiles[profile.prior], root=root)
+                resolved_path = profile_root / "config/resolved_profile.yaml"
+                _write_yaml(resolved_path, resolved)
+                resolved_hash = sha256_file(resolved_path)
+                resolved_relative = resolved_path.relative_to(temporary).as_posix()
+                artifact_hashes[resolved_relative] = resolved_hash
+                schema = expected_parameter_schema(frame, profile)
+                years = sorted(frame["year"].astype(str).unique())
+                chains: list[dict] = []
+                for assignment in (row for row in spec.chain_map if row.profile_id == profile.profile_id):
+                    initial = allocation_solver(
+                        frame, seed=assignment.initialization_seed, objective="random", time_limit_seconds=900
+                    )
+                    assert_constraints(initial, frame, label=f"{profile.profile_id}_chain{assignment.chain_id}_fresh_start")
+                    initialization_path = profile_root / "initializations" / f"initial_allocation_chain_{assignment.chain_id:02d}.parquet"
+                    initialization_path.parent.mkdir(parents=True, exist_ok=True)
+                    initial_frame = frame[["county_fips", "year", "q002_count_status"]].copy()
+                    initial_frame["latent_count"] = initial
+                    initial_frame.to_parquet(initialization_path, index=False)
+                    init_relative = initialization_path.relative_to(temporary).as_posix()
+                    init_hash = sha256_file(initialization_path)
+                    artifact_hashes[init_relative] = init_hash
+                    fingerprint = profile_fingerprint(
+                        profile,
+                        assignment,
+                        run_id=RUN_ID,
+                        included_years=years,
+                        execution={
+                            "iterations_per_chain": spec.iterations_per_chain,
+                            "burn_in": spec.burn_in,
+                            "thin": spec.thin,
+                            "retained_draws_per_chain": spec.retained_draws_per_chain,
+                        },
+                        config_sha256=config_hash,
+                        input_hashes={**spec.source_authorities, "profile_frame": frame_hash, "initialization": init_hash},
+                        source_hashes=final_source["sources"],
+                        parameter_schema=schema,
+                        launch_provenance={
+                            "final_source_manifest_sha256": final_source["manifest_sha256"],
+                            "launch_envelope_sha256": final_source["envelope_sha256"],
+                            "launch_commit": final_source["launch_commit"],
+                            "bundle_sha256": final_source["bundle_sha256"],
+                        },
+                    )
+                    target_identity = checkpoint_target_identity(
+                        spec=spec,
+                        profile=profile,
+                        assignment=assignment,
+                        profile_fingerprint_value=fingerprint,
+                        operational_config_sha256=config_hash,
+                        profile_config_sha256=resolved_hash,
+                        frame_sha256=frame_hash,
+                        final_source_manifest_sha256=final_source["manifest_sha256"],
+                        parameter_schema=schema,
+                    )
+                    checkpoint_path = profile_root / "chains" / f"chain_{assignment.chain_id:02d}" / "checkpoints/checkpoint_iter_000000000.npz"
+                    checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
+                    _initial_checkpoint(
+                        frame, initial, profile, prior_profiles[profile.prior], assignment, checkpoint_path, target_identity
+                    )
+                    checkpoint_relative = checkpoint_path.relative_to(temporary).as_posix()
+                    checkpoint_sidecar = checkpoint_path.with_name(checkpoint_path.name + ".sha256")
+                    sidecar_relative = checkpoint_sidecar.relative_to(temporary).as_posix()
+                    artifact_hashes[checkpoint_relative] = sha256_file(checkpoint_path)
+                    artifact_hashes[sidecar_relative] = sha256_file(checkpoint_sidecar)
+                    chains.append(
+                        {
+                            **assignment.to_dict(),
+                            "profile_fingerprint": fingerprint,
+                            "checkpoint_target_identity": target_identity,
+                            "initialization": init_relative,
+                            "initialization_sha256": init_hash,
+                            "initial_checkpoint": checkpoint_relative,
+                            "initial_checkpoint_sha256": sha256_file(checkpoint_path),
+                        }
+                    )
+                profile_records.append(
                     {
-                        **assignment.to_dict(),
-                        "profile_fingerprint": fingerprint,
-                        "initialization": init_relative,
-                        "initialization_sha256": init_hash,
-                        "initial_checkpoint": checkpoint_relative,
-                        "initial_checkpoint_sha256": checkpoint_hash,
+                        "profile": profile.to_dict(),
+                        "included_years": years,
+                        "required_columns": sorted(frame.columns.astype(str).tolist()),
+                        "parameter_schema": schema,
+                        "frame": frame_relative,
+                        "frame_sha256": frame_hash,
+                        "config": resolved_relative,
+                        "config_sha256": resolved_hash,
+                        "chains": chains,
                     }
                 )
-            profile_records.append(
-                {
-                    "profile": profile.to_dict(),
-                    "included_years": years,
-                    "required_columns": sorted(frame.columns.astype(str).tolist()),
-                    "parameter_schema": schema,
-                    "frame": frame_relative,
-                    "frame_sha256": frame_hash,
-                    "config": config_relative,
-                    "config_sha256": sha256_file(config_path),
-                    "chains": chains,
-                }
-            )
-        manifest = {
-            "schema_id": "sr_v2_heavy_sensitivity_prepared_run/v1",
-            **identity,
-            "generated_utc": datetime.now(timezone.utc).isoformat(),
-            "status": "prepared_not_run",
-            "source_authorities": spec.source_authorities,
-            "reviewed_sources": spec.reviewed_sources,
-            "profiles": profile_records,
-            "prepared_artifact_sha256": dict(sorted(artifact_hashes.items())),
-            "interpretation_boundary": spec.interpretation_boundary,
-        }
-        atomic_json(temporary / "prepared_run_manifest.json", manifest)
-        manifest_path = temporary / "prepared_run_manifest.json"
-        manifest_path.with_name(f"{manifest_path.name}.sha256").write_text(
-            sha256_file(manifest_path) + "\n",
-            encoding="ascii",
-            newline="\n",
-        )
-        atomic_json(
-            temporary / "heavy_sensitivity_gate.json",
-            {
-                "schema_id": "sr_v2_heavy_sensitivity_gate/v1",
-                "run_id": spec.run_id,
-                "status": "HOLD",
-                "passed": False,
-                "reason": "prepared_not_run",
-                "submission_authorized": False,
+            manifest = {
+                **identity,
+                "generated_utc": datetime.now(timezone.utc).isoformat(),
+                "status": "prepared_not_run",
+                "source_authorities": spec.source_authorities,
+                "joint_regression_evidence_sha256": final_source["joint_regression_evidence_sha256"],
+                "profiles": profile_records,
+                "prepared_artifact_sha256": dict(sorted(artifact_hashes.items())),
                 "interpretation_boundary": spec.interpretation_boundary,
-            },
-        )
-        os.replace(temporary, run_root)
-    except BaseException:
-        if temporary.exists():
-            shutil.rmtree(temporary)
-        raise
-    print(json.dumps({"status": "prepared_not_run", "run_id": spec.run_id}, sort_keys=True))
+            }
+            manifest_path = temporary / "prepared_run_manifest.json"
+            atomic_json(manifest_path, manifest)
+            manifest_path.with_name(manifest_path.name + ".sha256").write_text(
+                sha256_file(manifest_path) + "\n", encoding="ascii", newline="\n"
+            )
+            atomic_json(
+                temporary / "heavy_sensitivity_gate.json",
+                {
+                    "schema_id": "sr_v2_heavy_sensitivity_gate/v1",
+                    "run_id": RUN_ID,
+                    "status": "HOLD",
+                    "passed": False,
+                    "reason": "prepared_not_run",
+                    "submission_authorized": False,
+                    "interpretation_boundary": spec.interpretation_boundary,
+                },
+            )
+            publish_directory_no_clobber(temporary, run_root)
+        except BaseException:
+            if temporary.exists():
+                shutil.rmtree(temporary)
+            raise
+    print(json.dumps({"status": "prepared_not_run", "run_id": RUN_ID}, sort_keys=True))
     return manifest
 
 
 def main() -> None:
-    prepare()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--launch-envelope", required=True)
+    args = parser.parse_args()
+    prepare(launch_envelope_path=Path(args.launch_envelope))
 
 
 if __name__ == "__main__":

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -18,6 +19,7 @@ from .interval_paths import IntervalPathSupport, build_interval_path_support, in
 from .model import (
     DEFAULT_LIKELIHOOD_FAMILY,
     Design,
+    PriorSpecification,
     Theta,
     count_logpmf,
     crude_intercept_prior,
@@ -26,6 +28,7 @@ from .model import (
     make_design,
     mu,
     normalize_likelihood_family,
+    prior_specification_from_mapping,
 )
 from .paths import BAYES_DATA, OUTPUT_DIR, PROJECT_ROOT, rel
 
@@ -521,6 +524,7 @@ def _update_theta_block(
     block: str,
     scale: float,
     current_lp: float,
+    prior: PriorSpecification | None = None,
 ) -> tuple[Theta, float, bool]:
     proposal = theta.copy()
     if block == "beta":
@@ -538,7 +542,7 @@ def _update_theta_block(
     else:
         raise ValueError(block)
     proposal = _center_random_effects(proposal)
-    proposed_lp = log_posterior_theta(y, proposal, design, intercept_mean=intercept_mean)
+    proposed_lp = log_posterior_theta(y, proposal, design, intercept_mean=intercept_mean, prior=prior)
     if np.isfinite(proposed_lp) and np.log(rng.uniform()) < proposed_lp - current_lp:
         return proposal, proposed_lp, True
     return theta, current_lp, False
@@ -724,6 +728,7 @@ def save_chain_checkpoint(
     param_accept: dict[str, int],
     param_prop: dict[str, int],
     likelihood_family: str = DEFAULT_LIKELIHOOD_FAMILY,
+    target_identity: dict[str, object] | None = None,
 ) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(path.suffix + ".tmp.npz")
@@ -747,15 +752,36 @@ def save_chain_checkpoint(
         param_accept_json=np.asarray(json.dumps(param_accept)),
         param_prop_json=np.asarray(json.dumps(param_prop)),
         likelihood_family=np.asarray(family),
+        target_identity_json=np.asarray(
+            json.dumps(target_identity, sort_keys=True, separators=(",", ":"), ensure_ascii=True, allow_nan=False)
+            if target_identity is not None
+            else ""
+        ),
     )
     os.replace(tmp, path)
+    digest = hashlib.sha256(path.read_bytes()).hexdigest()
+    sidecar = path.with_name(path.name + ".sha256")
+    sidecar_tmp = sidecar.with_name(sidecar.name + ".tmp")
+    sidecar_tmp.write_text(digest + "\n", encoding="ascii", newline="\n")
+    os.replace(sidecar_tmp, sidecar)
 
 
 def load_chain_checkpoint(
     path: Path,
     *,
     expected_likelihood_family: str = DEFAULT_LIKELIHOOD_FAMILY,
+    expected_target_identity: dict[str, object] | None = None,
 ) -> dict[str, object]:
+    sidecar = path.with_name(path.name + ".sha256")
+    if expected_target_identity is not None and not sidecar.is_file():
+        raise ValueError(f"Heavy checkpoint SHA-256 sidecar is missing: {sidecar}")
+    if expected_target_identity is not None:
+        expected_hash = sidecar.read_text(encoding="ascii").strip().lower()
+        actual_hash = hashlib.sha256(path.read_bytes()).hexdigest()
+        if expected_hash != actual_hash:
+            raise ValueError(
+                f"Checkpoint sidecar SHA-256 mismatch: expected {expected_hash}, found {actual_hash}"
+            )
     data = np.load(path, allow_pickle=True)
     recorded_family = (
         str(data["likelihood_family"].item())
@@ -767,6 +793,16 @@ def load_chain_checkpoint(
         expected_likelihood_family=expected_likelihood_family,
         source=str(path),
     )
+    recorded_identity = (
+        json.loads(str(data["target_identity_json"].item()))
+        if "target_identity_json" in data.files and str(data["target_identity_json"].item())
+        else None
+    )
+    if expected_target_identity is not None:
+        expected_canonical = json.dumps(expected_target_identity, sort_keys=True, separators=(",", ":"), ensure_ascii=True, allow_nan=False)
+        recorded_canonical = json.dumps(recorded_identity, sort_keys=True, separators=(",", ":"), ensure_ascii=True, allow_nan=False)
+        if recorded_canonical != expected_canonical:
+            raise ValueError("Heavy checkpoint target identity mismatch")
     rng = np.random.default_rng()
     rng.bit_generator.state = json.loads(str(data["rng_state"].item()))
     theta = _theta_from_payload(
@@ -791,6 +827,7 @@ def load_chain_checkpoint(
         "param_accept": json.loads(str(data["param_accept_json"].item())),
         "param_prop": json.loads(str(data["param_prop_json"].item())),
         "likelihood_family": family,
+        "target_identity": recorded_identity,
     }
 
 
@@ -911,6 +948,8 @@ def run_mcmc_chain_hpc(
     stop_before_time_limit_minutes: int = 10,
     force: bool = False,
     model_name: str = "primary",
+    target_identity: dict[str, object] | None = None,
+    resume_checkpoint_path: str | Path | None = None,
 ) -> dict:
     config = _load_config_path(config_path)
     settings = _hpc_settings(config, mode, array_task_id)
@@ -961,6 +1000,7 @@ def run_mcmc_chain_hpc(
     design = make_design(
         frame, model=model_name, likelihood_family=likelihood_family
     )
+    prior = prior_specification_from_mapping(config.get("model", {}))
     intercept_mean = crude_intercept_prior(frame)
     n_iter = int(settings["n_iter"])
     burn_in = int(settings.get("burn_in", 0))
@@ -978,18 +1018,26 @@ def run_mcmc_chain_hpc(
     max_cycle_half_length = int(settings.get("max_cycle_half_length", 6))
 
     checkpoint_root.mkdir(parents=True, exist_ok=True)
-    latest = (
-        latest_valid_checkpoint(
-            checkpoint_root,
-            expected_likelihood_family=likelihood_family,
+    if target_identity is not None and resume:
+        if resume_checkpoint_path is None:
+            raise ValueError("Heavy resume requires an exact status/manifest-declared checkpoint path")
+        latest = Path(resume_checkpoint_path).resolve()
+        if latest.parent != checkpoint_root.resolve() or not latest.is_file():
+            raise ValueError("Heavy resume checkpoint must be an existing file in the declared checkpoint root")
+    else:
+        latest = (
+            latest_valid_checkpoint(
+                checkpoint_root,
+                expected_likelihood_family=likelihood_family,
+            )
+            if resume
+            else None
         )
-        if resume
-        else None
-    )
     if latest is not None:
         checkpoint = load_chain_checkpoint(
             latest,
             expected_likelihood_family=likelihood_family,
+            expected_target_identity=target_identity,
         )
         parameter_rows, latent_draws, validation_rows, runtime_rows = (
             _load_existing_chain_outputs(chain_dir)
@@ -999,7 +1047,16 @@ def run_mcmc_chain_hpc(
         rng = checkpoint["rng"]
         start_iteration = int(checkpoint["iteration"])
         saved = int(checkpoint["saved_draws"])
-        current_lp = float(checkpoint["current_lp"])
+        assert_constraints(y, frame, label=f"chain{chain_id}_resume")
+        recomputed_lp = log_posterior_theta(y, theta, design, intercept_mean=intercept_mean, prior=prior)
+        if not np.isfinite(recomputed_lp) or not np.isclose(
+            recomputed_lp,
+            float(checkpoint["current_lp"]),
+            rtol=1e-12,
+            atol=1e-8,
+        ):
+            raise ValueError("Resume checkpoint current log posterior does not match the requested target")
+        current_lp = float(recomputed_lp)
         accepted = {key: int(value) for key, value in checkpoint["accepted"].items()}
         proposed = {key: int(value) for key, value in checkpoint["proposed"].items()}
         param_accept = {key: int(value) for key, value in checkpoint["param_accept"].items()}
@@ -1017,7 +1074,7 @@ def run_mcmc_chain_hpc(
         y = pd.read_parquet(init_path)["latent_count"].to_numpy(dtype=int).copy()
         assert_constraints(y, frame, label=f"chain{chain_id}_start")
         theta = initialize_theta(frame, y, design)
-        current_lp = log_posterior_theta(y, theta, design, intercept_mean=intercept_mean)
+        current_lp = log_posterior_theta(y, theta, design, intercept_mean=intercept_mean, prior=prior)
         scales0 = _proposal_scales(
             theta,
             settings.get("proposal_scale_multipliers"),
@@ -1131,7 +1188,7 @@ def run_mcmc_chain_hpc(
                     attempts=blocked_attempts,
                     likelihood_family=likelihood_family,
                 )
-            current_lp = log_posterior_theta(y, theta, design, intercept_mean=intercept_mean)
+            current_lp = log_posterior_theta(y, theta, design, intercept_mean=intercept_mean, prior=prior)
             scales = _proposal_scales(
                 theta,
                 settings.get("proposal_scale_multipliers"),
@@ -1139,7 +1196,7 @@ def run_mcmc_chain_hpc(
             )
             for block, scale in scales.items():
                 param_prop[block] += 1
-                theta, current_lp, ok = _update_theta_block(y, theta, design, intercept_mean, rng, block, scale, current_lp)
+                theta, current_lp, ok = _update_theta_block(y, theta, design, intercept_mean, rng, block, scale, current_lp, prior)
                 param_accept[block] += int(ok)
             if iteration > burn_in and (iteration - burn_in) % thin == 0:
                 saved += 1
@@ -1170,6 +1227,7 @@ def run_mcmc_chain_hpc(
                     param_accept=param_accept,
                     param_prop=param_prop,
                     likelihood_family=likelihood_family,
+                    target_identity=target_identity,
                 )
                 _write_chain_outputs(
                     chain_dir,
@@ -1214,6 +1272,7 @@ def run_mcmc_chain_hpc(
                 param_accept=param_accept,
                 param_prop=param_prop,
                 likelihood_family=likelihood_family,
+                target_identity=target_identity,
             )
         runtime_rows.append(
             {
