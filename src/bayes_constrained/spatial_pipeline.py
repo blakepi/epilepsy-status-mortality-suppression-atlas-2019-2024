@@ -9,6 +9,7 @@ import json
 import math
 import os
 from pathlib import Path
+import re
 import sys
 from typing import Any, Mapping, Sequence
 
@@ -134,6 +135,51 @@ INPUT_MANIFEST_EXACT_FIELDS = {
     "source_model_frame_sha256", "prepared_model_frame_sha256",
     "model_frame_semantic_sha256", "graph_contract_sha256",
     "graph_artifact_sha256",
+}
+CHAIN_STATUS_EXACT_FIELDS = {
+    "schema_id", "run_id", "model_id", "preparation_identity",
+    "launch_envelope_sha256", "final_source_manifest_sha256", "chain_id",
+    "array_index", "extension_epoch", "job_attempt", "status", "iterations",
+    "retained_draws", "chunks", "seeds", "identity", "target_fingerprint",
+    "chain_fingerprint", "latest_checkpoint", "latest_checkpoint_sha256",
+    "artifact_sha256", "executor_builder", "retained_assertion_evidence",
+    "failure_class", "failure_category", "retryable", "resume_from",
+    "updated_utc", "submission_authorized",
+}
+ATTEMPT_EVIDENCE_EXACT_FIELDS = {
+    "schema_id", "run_id", "chain_id", "extension_epoch", "job_attempt",
+    "start_saved_draws", "end_saved_draws", "record_count", "ledger_path",
+    "ledger_sha256", "evidence_builder", "production_executor", "capture_order",
+    "count_constraint_failures", "spatial_constraint_failures",
+    "historical_latent_y_stored",
+    "independent_historical_y_reconstruction_possible", "verification_boundary",
+    "resume_from",
+}
+RESUME_FROM_EXACT_FIELDS = {
+    "schema_id", "mode", "source_immutable_status_path",
+    "source_immutable_status_sha256", "source_checkpoint_path",
+    "source_checkpoint_sha256", "source_extension_epoch", "source_job_attempt",
+    "source_iteration", "source_saved_draws", "rebound_checkpoint_path",
+    "rebound_checkpoint_sha256",
+}
+VERIFICATION_EXACT_FIELDS = {
+    "schema_id", "run_id", "model_id", "extension_epoch",
+    "preparation_identity", "launch_envelope_sha256",
+    "final_source_manifest_sha256", "benchmark_report_sha256",
+    "pre_gate_manifest_sha256", "passed", "source_checks", "graph_checks",
+    "chain_checks", "diagnostic_checks", "comparison_checks",
+    "benchmark_checks", "protected_tree_checks", "artifact_snapshot",
+    "artifact_snapshot_sha256", "submission_authorized",
+}
+RELEASE_EXACT_FIELDS = {
+    "schema_id", "run_id", "model_id", "extension_epoch",
+    "preparation_identity", "launch_envelope_sha256",
+    "final_source_manifest_sha256", "benchmark_report_sha256",
+    "pre_gate_manifest_sha256", "independent_verification_sha256",
+    "verification_convergence_passed", "verification_artifact_snapshot",
+    "verification_artifact_snapshot_sha256", "artifacts",
+    "artifact_inventory_sha256", "planned_outputs", "excludes",
+    "submission_authorized",
 }
 
 
@@ -1016,6 +1062,909 @@ def select_retry_indexes(
     }
 
 
+_RETAINED_EVIDENCE_EXACT_FIELDS = {
+    "records", "ledger_sha256", "manifest_sha256",
+    "historical_latent_y_stored",
+    "independent_historical_y_reconstruction_possible",
+}
+_CHUNK_RECORD_EXACT_FIELDS = {
+    "schema_id", "chain_id", "extension_epoch", "chunk_id", "draw_start",
+    "draw_end", "draw_count", "scalar_path", "scalar_sha256",
+    "spatial_path", "spatial_sha256", "graph_contract_sha256",
+    "county_order_sha256", "county_count", "parameter_schema",
+}
+_SEED_EXACT_FIELDS = {
+    "chain_seed", "allocation_initialization_seed",
+    "spatial_initialization_seed",
+}
+
+
+def _extension_exact_integer(
+    value: object, *, label: str, minimum: int | None = None,
+    maximum: int | None = None,
+) -> int:
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise ValueError(f"{label} must be an exact non-Boolean integer")
+    if minimum is not None and value < minimum:
+        raise ValueError(f"{label} is below the frozen minimum")
+    if maximum is not None and value > maximum:
+        raise ValueError(f"{label} exceeds the frozen maximum")
+    return value
+
+
+def _read_extension_json_sidecar(
+    path: Path, *, label: str
+) -> tuple[dict[str, Any], str]:
+    if not path.is_file() or path.is_symlink():
+        raise ValueError(f"{label} is missing or unsafe")
+    digest = sha256_file(path)
+    sidecar = path.with_name(path.name + ".sha256")
+    if (
+        not sidecar.is_file()
+        or sidecar.is_symlink()
+        or sidecar.read_bytes() != (digest + "\n").encode("ascii")
+    ):
+        raise ValueError(f"{label} has a missing or noncanonical SHA-256 sidecar")
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        raise ValueError(f"{label} is not valid JSON") from error
+    if not isinstance(payload, dict):
+        raise ValueError(f"{label} must be a JSON object")
+    return payload, digest
+
+
+def _extension_status_history(
+    chain_root: Path, *, chain_id: int
+) -> list[tuple[int, int, Path, dict[str, Any], str]]:
+    attempts_root = chain_root / "attempts"
+    if not attempts_root.is_dir() or attempts_root.is_symlink():
+        raise ValueError("Chain extension authority has no safe immutable attempt tree")
+    result: list[tuple[int, int, Path, dict[str, Any], str]] = []
+    epochs: dict[int, set[int]] = {}
+    for epoch_dir in sorted(attempts_root.iterdir()):
+        match = re.fullmatch(r"epoch_([0-3])", epoch_dir.name)
+        if match is None or not epoch_dir.is_dir() or epoch_dir.is_symlink():
+            raise ValueError("Immutable extension epoch path is malformed")
+        epoch = int(match.group(1))
+        attempts: set[int] = set()
+        for attempt_dir in sorted(epoch_dir.iterdir()):
+            attempt_match = re.fullmatch(r"attempt_([1-3])", attempt_dir.name)
+            if (
+                attempt_match is None
+                or not attempt_dir.is_dir()
+                or attempt_dir.is_symlink()
+            ):
+                raise ValueError("Immutable extension attempt path is malformed")
+            attempt = int(attempt_match.group(1))
+            if attempt in attempts:
+                raise ValueError("Immutable extension attempt position is duplicate")
+            attempts.add(attempt)
+            if {path.name for path in attempt_dir.iterdir()} != {
+                "status.json", "status.json.sha256"
+            }:
+                raise ValueError("Immutable extension attempt inventory is not exact")
+            status_path = attempt_dir / "status.json"
+            status, digest = _read_extension_json_sidecar(
+                status_path, label="Immutable extension status"
+            )
+            embedded_epoch = _extension_exact_integer(
+                status.get("extension_epoch"), label="status extension_epoch",
+                minimum=0, maximum=3,
+            )
+            embedded_attempt = _extension_exact_integer(
+                status.get("job_attempt"), label="status job_attempt",
+                minimum=1, maximum=3,
+            )
+            embedded_chain = _extension_exact_integer(
+                status.get("chain_id"), label="status chain_id",
+                minimum=1, maximum=4,
+            )
+            if (embedded_epoch, embedded_attempt, embedded_chain) != (
+                epoch, attempt, chain_id
+            ):
+                raise ValueError("Immutable extension status/path identity mismatch")
+            result.append((epoch, attempt, status_path, status, digest))
+        if attempts != set(range(1, max(attempts, default=0) + 1)):
+            raise ValueError("Immutable extension attempt history contains a gap")
+        epochs[epoch] = attempts
+    if not result:
+        raise ValueError("Chain extension authority has no immutable status")
+    present_epochs = set(epochs)
+    if present_epochs != set(range(0, max(present_epochs) + 1)):
+        raise ValueError("Immutable extension epoch history contains a gap")
+    return sorted(result, key=lambda row: row[:2])
+
+
+def _validate_extension_status_schema(
+    status: Mapping[str, Any], *, chain_id: int, epoch: int, attempt: int,
+    expected_authorization_sha256: str | None,
+) -> dict[str, Any]:
+    if set(status) != CHAIN_STATUS_EXACT_FIELDS:
+        raise ValueError("Immutable extension status exact schema mismatch")
+    if (
+        status.get("schema_id") != "sr_v2_spatial_chain_status/v1"
+        or status.get("run_id") != RUN_ID
+        or status.get("model_id") != MODEL_ID
+        or status.get("executor_builder") != "exact_public_chain_loop"
+        or status.get("submission_authorized") is not False
+        or not isinstance(status.get("updated_utc"), str)
+        or not str(status.get("updated_utc")).strip()
+    ):
+        raise ValueError("Immutable extension status identity/builder mismatch")
+    for field in (
+        "preparation_identity", "launch_envelope_sha256",
+        "final_source_manifest_sha256", "target_fingerprint",
+        "chain_fingerprint", "latest_checkpoint_sha256",
+    ):
+        _require_sha256(status.get(field), label=f"status {field}")
+    identifiers = {
+        "chain_id": _extension_exact_integer(
+            status.get("chain_id"), label="status chain_id", minimum=1, maximum=4
+        ),
+        "array_index": _extension_exact_integer(
+            status.get("array_index"), label="status array_index", minimum=1,
+            maximum=4,
+        ),
+        "extension_epoch": _extension_exact_integer(
+            status.get("extension_epoch"), label="status extension_epoch",
+            minimum=0, maximum=3,
+        ),
+        "job_attempt": _extension_exact_integer(
+            status.get("job_attempt"), label="status job_attempt", minimum=1,
+            maximum=3,
+        ),
+        "iterations": _extension_exact_integer(
+            status.get("iterations"), label="status iterations", minimum=0
+        ),
+        "retained_draws": _extension_exact_integer(
+            status.get("retained_draws"), label="status retained_draws", minimum=0
+        ),
+        "chunks": _extension_exact_integer(
+            status.get("chunks"), label="status chunks", minimum=0
+        ),
+    }
+    expected_contract = EPOCH_CONTRACT[epoch]
+    if (
+        identifiers["chain_id"] != chain_id
+        or identifiers["array_index"] != chain_id
+        or identifiers["extension_epoch"] != epoch
+        or identifiers["job_attempt"] != attempt
+        or identifiers["iterations"] != expected_contract["iterations"]
+        or identifiers["retained_draws"] != expected_contract["draws"]
+        or identifiers["chunks"] != expected_contract["chunks"]
+        or status.get("status") != "completed"
+        or status.get("failure_class") is not None
+        or status.get("failure_category") is not None
+        or status.get("retryable") is not False
+    ):
+        raise ValueError("Immutable extension authority is not an exact completed epoch")
+    seeds = status.get("seeds")
+    if not isinstance(seeds, Mapping) or set(seeds) != _SEED_EXACT_FIELDS:
+        raise ValueError("Immutable extension status seed schema mismatch")
+    checked_seeds = {
+        key: _extension_exact_integer(seeds.get(key), label=f"status seed {key}", minimum=1)
+        for key in _SEED_EXACT_FIELDS
+    }
+    expected_seeds = {
+        "chain_seed": 74_290 + chain_id,
+        "allocation_initialization_seed": 74_250 + chain_id,
+        "spatial_initialization_seed": 74_260 + chain_id,
+    }
+    if checked_seeds != expected_seeds:
+        raise ValueError("Immutable extension status seed identity mismatch")
+    identity = status.get("identity")
+    if not isinstance(identity, Mapping) or set(identity) != {
+        "schema_version", "target", "target_fingerprint", "chain",
+        "chain_fingerprint",
+    }:
+        raise ValueError("Immutable extension status identity schema mismatch")
+    if _extension_exact_integer(
+        identity.get("schema_version"), label="identity schema_version"
+    ) != 2:
+        raise ValueError("Immutable extension status identity version mismatch")
+    target = identity.get("target")
+    chain = identity.get("chain")
+    if not isinstance(target, Mapping) or not isinstance(chain, Mapping):
+        raise ValueError("Immutable extension target/chain identity is malformed")
+    target_epoch = _extension_exact_integer(
+        target.get("extension_epoch"), label="target extension_epoch",
+        minimum=0, maximum=3,
+    )
+    target_authorization = _require_sha256(
+        target.get("extension_authorization_sha256"),
+        label="target extension_authorization_sha256",
+    )
+    if target_epoch != epoch or (
+        expected_authorization_sha256 is not None
+        and target_authorization != expected_authorization_sha256
+    ):
+        raise ValueError("Immutable extension target authorization mismatch")
+    if epoch == 0 and target_authorization != "0" * 64:
+        raise ValueError("Epoch-zero target cannot claim extension authority")
+    if set(chain) != {"target_fingerprint", "chain_id"} | _SEED_EXACT_FIELDS:
+        raise ValueError("Immutable extension chain identity schema mismatch")
+    checked_chain = {
+        "target_fingerprint": chain.get("target_fingerprint"),
+        "chain_id": _extension_exact_integer(
+            chain.get("chain_id"), label="identity chain_id", minimum=1, maximum=4
+        ),
+        **{
+            key: _extension_exact_integer(
+                chain.get(key), label=f"identity {key}", minimum=1
+            )
+            for key in _SEED_EXACT_FIELDS
+        },
+    }
+    target_fingerprint = canonical_sha256(dict(target))
+    chain_fingerprint = canonical_sha256(checked_chain)
+    if (
+        target_fingerprint != identity.get("target_fingerprint")
+        or target_fingerprint != status.get("target_fingerprint")
+        or checked_chain["target_fingerprint"] != target_fingerprint
+        or checked_chain["chain_id"] != chain_id
+        or {key: checked_chain[key] for key in _SEED_EXACT_FIELDS}
+        != expected_seeds
+        or chain_fingerprint != identity.get("chain_fingerprint")
+        or chain_fingerprint != status.get("chain_fingerprint")
+    ):
+        raise ValueError("Immutable extension target/chain fingerprint mismatch")
+    resume = status.get("resume_from")
+    if not isinstance(resume, Mapping) or set(resume) != RESUME_FROM_EXACT_FIELDS:
+        raise ValueError("Immutable extension resume certificate schema mismatch")
+    for field in (
+        "source_extension_epoch", "source_job_attempt", "source_iteration",
+        "source_saved_draws",
+    ):
+        _extension_exact_integer(
+            resume.get(field), label=f"resume {field}", minimum=0 if field != "source_job_attempt" else 1
+        )
+    if resume.get("schema_id") != "sr_v2_spatial_resume_from/v1" or resume.get(
+        "mode"
+    ) not in {"prepared_initial", "retry", "extension"}:
+        raise ValueError("Immutable extension resume certificate identity mismatch")
+    retained = status.get("retained_assertion_evidence")
+    if not isinstance(retained, Mapping) or set(retained) != _RETAINED_EVIDENCE_EXACT_FIELDS:
+        raise ValueError("Immutable extension retained-evidence schema mismatch")
+    if (
+        _extension_exact_integer(
+            retained.get("records"), label="retained evidence records", minimum=0
+        )
+        != expected_contract["draws"]
+        or retained.get("historical_latent_y_stored") is not False
+        or retained.get("independent_historical_y_reconstruction_possible") is not False
+    ):
+        raise ValueError("Immutable extension retained-evidence boundary mismatch")
+    _require_sha256(retained.get("ledger_sha256"), label="retained evidence ledger")
+    _sha256_mapping(retained.get("manifest_sha256"), label="retained evidence manifests")
+    return dict(status)
+
+
+def _validate_extension_status_artifacts(
+    chain_root: Path, *, status_path: Path, status: Mapping[str, Any],
+    chain_id: int, epoch: int, attempt: int, latest_in_chain: bool,
+) -> dict[str, Any]:
+    inventory = _sha256_mapping(
+        status.get("artifact_sha256"), label="extension status artifact inventory"
+    )
+    manifest_relative = "chunks/spatial_chunk_manifest.json"
+    for relative, expected_hash in inventory.items():
+        if relative == manifest_relative:
+            continue
+        artifact = safe_relative_path(chain_root, relative, must_exist=True)
+        if sha256_file(artifact) != expected_hash:
+            raise ValueError(f"Extension authority artifact hash mismatch: {relative}")
+    checkpoint_relative = status.get("latest_checkpoint")
+    expected_checkpoint = (
+        f"checkpoints/checkpoint_epoch_{epoch}_attempt_{attempt}_"
+        f"iter_{EPOCH_CONTRACT[epoch]['iterations']:09d}.json"
+    )
+    if checkpoint_relative != expected_checkpoint:
+        raise ValueError("Extension authority checkpoint path is not generator-exact")
+    checkpoint_path = safe_relative_path(
+        chain_root, expected_checkpoint, must_exist=True
+    )
+    checkpoint, checkpoint_hash = _read_extension_json_sidecar(
+        checkpoint_path, label="Extension authority checkpoint"
+    )
+    checkpoint_sidecar_relative = expected_checkpoint + ".sha256"
+    if (
+        checkpoint_hash != status.get("latest_checkpoint_sha256")
+        or inventory.get(expected_checkpoint) != checkpoint_hash
+        or inventory.get(checkpoint_sidecar_relative)
+        != sha256_file(checkpoint_path.with_name(checkpoint_path.name + ".sha256"))
+    ):
+        raise ValueError("Extension authority checkpoint/status inventory mismatch")
+    checkpoint_positions = {
+        "schema_version": _extension_exact_integer(
+            checkpoint.get("schema_version"), label="checkpoint schema_version"
+        ),
+        "chain_id": _extension_exact_integer(
+            checkpoint.get("chain_id"), label="checkpoint chain_id", minimum=1,
+            maximum=4,
+        ),
+        "extension_epoch": _extension_exact_integer(
+            checkpoint.get("extension_epoch"), label="checkpoint extension_epoch",
+            minimum=0, maximum=3,
+        ),
+        "job_attempt": _extension_exact_integer(
+            checkpoint.get("job_attempt"), label="checkpoint job_attempt", minimum=1,
+            maximum=3,
+        ),
+        "iteration": _extension_exact_integer(
+            checkpoint.get("iteration"), label="checkpoint iteration", minimum=0
+        ),
+        "saved_draws": _extension_exact_integer(
+            checkpoint.get("saved_draws"), label="checkpoint saved_draws", minimum=0
+        ),
+    }
+    if (
+        checkpoint.get("run_id") != RUN_ID
+        or checkpoint.get("model_id") != MODEL_ID
+        or checkpoint_positions
+        != {
+            "schema_version": 2, "chain_id": chain_id,
+            "extension_epoch": epoch, "job_attempt": attempt,
+            "iteration": EPOCH_CONTRACT[epoch]["iterations"],
+            "saved_draws": EPOCH_CONTRACT[epoch]["draws"],
+        }
+        or checkpoint.get("target_fingerprint") != status.get("target_fingerprint")
+        or checkpoint.get("chain_fingerprint") != status.get("chain_fingerprint")
+    ):
+        raise ValueError("Extension authority checkpoint identity/progress mismatch")
+    records = checkpoint.get("committed_chunks")
+    if not isinstance(records, list) or len(records) != EPOCH_CONTRACT[epoch]["chunks"]:
+        raise ValueError("Extension authority checkpoint chunk count mismatch")
+    for offset, record in enumerate(records, start=1):
+        if not isinstance(record, Mapping) or set(record) != _CHUNK_RECORD_EXACT_FIELDS:
+            raise ValueError("Extension authority committed chunk schema mismatch")
+        chunk_id = _extension_exact_integer(
+            record.get("chunk_id"), label="chunk_id", minimum=1
+        )
+        draw_start = _extension_exact_integer(
+            record.get("draw_start"), label="draw_start", minimum=1
+        )
+        draw_end = _extension_exact_integer(
+            record.get("draw_end"), label="draw_end", minimum=1
+        )
+        draw_count = _extension_exact_integer(
+            record.get("draw_count"), label="draw_count", minimum=1
+        )
+        record_chain = _extension_exact_integer(
+            record.get("chain_id"), label="chunk chain_id", minimum=1, maximum=4
+        )
+        record_epoch = _extension_exact_integer(
+            record.get("extension_epoch"), label="chunk extension_epoch",
+            minimum=0, maximum=3,
+        )
+        county_count = _extension_exact_integer(
+            record.get("county_count"), label="chunk county_count", minimum=1
+        )
+        expected_record_epoch = next(
+            frozen_epoch
+            for frozen_epoch in range(4)
+            if draw_end <= EPOCH_CONTRACT[frozen_epoch]["draws"]
+        )
+        if (
+            record.get("schema_id") != "sr_v2_spatial_draw_chunk/v1"
+            or chunk_id != offset
+            or record_chain != chain_id
+            or record_epoch != expected_record_epoch
+            or draw_start != 250 * (offset - 1) + 1
+            or draw_end != 250 * offset
+            or draw_count != 250
+            or county_count <= 0
+            or record.get("scalar_path") != f"scalar_chunk_{offset:06d}.parquet"
+            or record.get("spatial_path") != f"spatial_chunk_{offset:06d}.npz"
+            or not isinstance(record.get("parameter_schema"), list)
+            or not record.get("parameter_schema")
+            or not all(
+                isinstance(value, str) and value
+                for value in record.get("parameter_schema", [])
+            )
+        ):
+            raise ValueError("Extension authority committed chunk identity/grid mismatch")
+        for hash_field in (
+            "scalar_sha256", "spatial_sha256", "graph_contract_sha256",
+            "county_order_sha256",
+        ):
+            _require_sha256(record.get(hash_field), label=f"chunk {hash_field}")
+        for path_field, hash_field in (
+            ("scalar_path", "scalar_sha256"),
+            ("spatial_path", "spatial_sha256"),
+        ):
+            relative = f"chunks/{record[path_field]}"
+            artifact = safe_relative_path(chain_root, relative, must_exist=True)
+            if (
+                sha256_file(artifact) != record[hash_field]
+                or inventory.get(relative) != record[hash_field]
+            ):
+                raise ValueError("Extension authority raw chunk hash mismatch")
+    expected_manifest_bytes = canonical_json_bytes(
+        {"schema_id": "sr_v2_spatial_chunk_manifest/v1", "records": records}
+    )
+    expected_manifest_hash = hashlib.sha256(expected_manifest_bytes).hexdigest()
+    if inventory.get(manifest_relative) != expected_manifest_hash:
+        raise ValueError("Extension authority historical chunk manifest mismatch")
+    if latest_in_chain:
+        manifest_path = safe_relative_path(
+            chain_root, manifest_relative, must_exist=True
+        )
+        if manifest_path.read_bytes() != expected_manifest_bytes:
+            raise ValueError("Extension authority latest chunk manifest bytes mismatch")
+    evidence_relative = (
+        f"evidence/epoch_{epoch}/attempt_{attempt}/attempt_evidence.json"
+    )
+    evidence_path = safe_relative_path(
+        chain_root, evidence_relative, must_exist=True
+    )
+    evidence, evidence_hash = _read_extension_json_sidecar(
+        evidence_path, label="Extension authority attempt evidence"
+    )
+    if set(evidence) != ATTEMPT_EVIDENCE_EXACT_FIELDS:
+        raise ValueError("Extension authority attempt evidence exact schema mismatch")
+    evidence_values = {
+        field: _extension_exact_integer(
+            evidence.get(field), label=f"attempt evidence {field}", minimum=0
+        )
+        for field in (
+            "chain_id", "extension_epoch", "job_attempt", "start_saved_draws",
+            "end_saved_draws", "record_count", "count_constraint_failures",
+            "spatial_constraint_failures",
+        )
+    }
+    resume = status["resume_from"]
+    if (
+        evidence.get("schema_id") != "sr_v2_spatial_attempt_evidence/v1"
+        or evidence.get("run_id") != RUN_ID
+        or evidence_values["chain_id"] != chain_id
+        or evidence_values["extension_epoch"] != epoch
+        or evidence_values["job_attempt"] != attempt
+        or evidence_values["start_saved_draws"] != resume["source_saved_draws"]
+        or evidence_values["end_saved_draws"] != status["retained_draws"]
+        or evidence_values["record_count"]
+        != evidence_values["end_saved_draws"] - evidence_values["start_saved_draws"]
+        or evidence_values["count_constraint_failures"] != 0
+        or evidence_values["spatial_constraint_failures"] != 0
+        or evidence.get("evidence_builder") != "actual_public_chain_loop"
+        or evidence.get("production_executor") is not True
+        or evidence.get("capture_order")
+        != "after_latent_target_base6_hyper_and_scheduled_mala"
+        or evidence.get("historical_latent_y_stored") is not False
+        or evidence.get("independent_historical_y_reconstruction_possible") is not False
+        or canonical_json_bytes(evidence.get("resume_from"))
+        != canonical_json_bytes(resume)
+        or evidence.get("ledger_path") != "retained_assertions.jsonl"
+    ):
+        raise ValueError("Extension authority attempt evidence identity mismatch")
+    ledger_relative = (
+        f"evidence/epoch_{epoch}/attempt_{attempt}/retained_assertions.jsonl"
+    )
+    ledger_path = safe_relative_path(chain_root, ledger_relative, must_exist=True)
+    ledger_hash = sha256_file(ledger_path)
+    if (
+        evidence.get("ledger_sha256") != ledger_hash
+        or len(ledger_path.read_bytes().splitlines()) != evidence_values["record_count"]
+        or inventory.get(evidence_relative) != evidence_hash
+        or inventory.get(evidence_relative + ".sha256")
+        != sha256_file(evidence_path.with_name(evidence_path.name + ".sha256"))
+        or inventory.get(ledger_relative) != ledger_hash
+    ):
+        raise ValueError("Extension authority attempt evidence hash/count mismatch")
+    retained = status["retained_assertion_evidence"]
+    evidence_manifest = _sha256_mapping(
+        retained.get("manifest_sha256"), label="retained evidence manifests"
+    )
+    cumulative_ledgers = bytearray()
+    for relative, expected_hash in sorted(evidence_manifest.items()):
+        manifest_path = safe_relative_path(chain_root, relative, must_exist=True)
+        manifest, manifest_hash = _read_extension_json_sidecar(
+            manifest_path, label="Cumulative extension attempt evidence"
+        )
+        if (
+            manifest_hash != expected_hash
+            or inventory.get(relative) != expected_hash
+            or inventory.get(relative + ".sha256")
+            != sha256_file(manifest_path.with_name(manifest_path.name + ".sha256"))
+            or manifest.get("ledger_path") != "retained_assertions.jsonl"
+        ):
+            raise ValueError("Extension authority cumulative evidence mismatch")
+        cumulative_ledger = manifest_path.parent / "retained_assertions.jsonl"
+        if (
+            not cumulative_ledger.is_file()
+            or cumulative_ledger.is_symlink()
+            or sha256_file(cumulative_ledger) != manifest.get("ledger_sha256")
+        ):
+            raise ValueError("Extension authority cumulative ledger mismatch")
+        cumulative_ledgers.extend(cumulative_ledger.read_bytes())
+    if hashlib.sha256(cumulative_ledgers).hexdigest() != retained.get("ledger_sha256"):
+        raise ValueError("Extension authority cumulative ledger digest mismatch")
+    resume_paths = (
+        (resume.get("source_immutable_status_path"), resume.get("source_immutable_status_sha256")),
+        (resume.get("source_checkpoint_path"), resume.get("source_checkpoint_sha256")),
+        (resume.get("rebound_checkpoint_path"), resume.get("rebound_checkpoint_sha256")),
+    )
+    for relative, expected_hash in resume_paths:
+        if relative is None:
+            if expected_hash is not None:
+                raise ValueError("Extension authority resume null/hash mismatch")
+            continue
+        _require_sha256(expected_hash, label="resume artifact hash")
+        resume_path = safe_relative_path(chain_root, relative, must_exist=True)
+        if (
+            sha256_file(resume_path) != expected_hash
+            or inventory.get(str(relative)) != expected_hash
+            or inventory.get(str(relative) + ".sha256")
+            != sha256_file(resume_path.with_name(resume_path.name + ".sha256"))
+        ):
+            raise ValueError("Extension authority resume artifact inventory mismatch")
+    source_checkpoint, source_hash = _read_extension_json_sidecar(
+        safe_relative_path(chain_root, resume["source_checkpoint_path"], must_exist=True),
+        label="Extension resume source checkpoint",
+    )
+    source_position = {
+        "extension_epoch": _extension_exact_integer(
+            source_checkpoint.get("extension_epoch"), label="source checkpoint epoch"
+        ),
+        "job_attempt": _extension_exact_integer(
+            source_checkpoint.get("job_attempt"), label="source checkpoint attempt"
+        ),
+        "iteration": _extension_exact_integer(
+            source_checkpoint.get("iteration"), label="source checkpoint iteration"
+        ),
+        "saved_draws": _extension_exact_integer(
+            source_checkpoint.get("saved_draws"), label="source checkpoint saved_draws"
+        ),
+    }
+    if source_hash != resume["source_checkpoint_sha256"] or source_position != {
+        "extension_epoch": resume["source_extension_epoch"],
+        "job_attempt": resume["source_job_attempt"],
+        "iteration": resume["source_iteration"],
+        "saved_draws": resume["source_saved_draws"],
+    }:
+        raise ValueError("Extension resume source checkpoint position mismatch")
+    if resume["source_immutable_status_path"] is not None:
+        source_status, source_status_hash = _read_extension_json_sidecar(
+            safe_relative_path(
+                chain_root, resume["source_immutable_status_path"], must_exist=True
+            ),
+            label="Extension resume source immutable status",
+        )
+        if (
+            source_status_hash != resume["source_immutable_status_sha256"]
+            or source_status.get("latest_checkpoint") != resume["source_checkpoint_path"]
+            or source_status.get("latest_checkpoint_sha256")
+            != resume["source_checkpoint_sha256"]
+            or source_status.get("iterations") != resume["source_iteration"]
+            or source_status.get("retained_draws") != resume["source_saved_draws"]
+        ):
+            raise ValueError("Extension resume source status/checkpoint mismatch")
+    return checkpoint
+
+
+def _load_chain_extension_authorization_document(
+    root: Path, *, epoch: int
+) -> tuple[Path, dict[str, Any], str]:
+    path = root / f"extension_authorization_epoch_{epoch}.json"
+    payload, file_hash = _read_extension_json_sidecar(
+        path, label="Reviewed chain extension authorization"
+    )
+    required_fields = {
+        "schema_id", "run_id", "from_extension_epoch", "to_extension_epoch",
+        "reason_convergence_only", "reviewer", "reviewed_utc",
+        "prior_preparation_identity", "prior_pre_gate_manifest_sha256",
+        "prior_independent_verification_sha256", "prior_release_manifest_sha256",
+        "prior_gate_decision_sha256", "authorization_sha256",
+    }
+    if set(payload) != required_fields:
+        raise ValueError("Extension authorization schema mismatch")
+    from_epoch = _extension_exact_integer(
+        payload.get("from_extension_epoch"), label="authorization from epoch",
+        minimum=0, maximum=2,
+    )
+    to_epoch = _extension_exact_integer(
+        payload.get("to_extension_epoch"), label="authorization to epoch",
+        minimum=1, maximum=3,
+    )
+    unsigned = {key: payload[key] for key in payload if key != "authorization_sha256"}
+    if (
+        payload.get("schema_id") != "sr_v2_spatial_extension_authorization/v1"
+        or payload.get("run_id") != RUN_ID
+        or from_epoch != epoch - 1
+        or to_epoch != epoch
+        or payload.get("reason_convergence_only") is not True
+        or not isinstance(payload.get("reviewer"), str)
+        or not str(payload.get("reviewer")).strip()
+        or not isinstance(payload.get("reviewed_utc"), str)
+        or not str(payload.get("reviewed_utc")).strip()
+        or payload.get("authorization_sha256") != canonical_sha256(unsigned)
+    ):
+        raise ValueError("Extension authorization is not reviewed convergence-only authority")
+    for field in required_fields - {
+        "schema_id", "run_id", "from_extension_epoch", "to_extension_epoch",
+        "reason_convergence_only", "reviewer", "reviewed_utc",
+    }:
+        _require_sha256(payload.get(field), label=f"authorization {field}")
+    return path, payload, file_hash
+
+
+def _validate_chain_extension_prior_gate(
+    root: Path, *, epoch: int, payload: Mapping[str, Any],
+    preparation_identity: str, chain_ids: Sequence[int],
+) -> None:
+    prior_epoch = epoch - 1
+    evidence_paths = {
+        "prior_pre_gate_manifest_sha256": root
+        / f"epochs/epoch_{prior_epoch}/merge/pre_gate_manifest.json",
+        "prior_independent_verification_sha256": root
+        / f"epochs/epoch_{prior_epoch}/verification/independent_spatial_sensitivity_verification.json",
+        "prior_release_manifest_sha256": root
+        / f"epochs/epoch_{prior_epoch}/release/spatial_sensitivity_release_manifest.json",
+        "prior_gate_decision_sha256": root
+        / f"epochs/epoch_{prior_epoch}/gate/gate_decision.json",
+    }
+    loaded: dict[str, dict[str, Any]] = {}
+    for field, evidence_path in evidence_paths.items():
+        evidence, evidence_hash = _read_extension_json_sidecar(
+            evidence_path, label=f"Extension prior evidence {field}"
+        )
+        if evidence_hash != payload.get(field):
+            raise ValueError(f"Extension authorization prior evidence mismatch: {field}")
+        loaded[field] = evidence
+    gate_decision = loaded["prior_gate_decision_sha256"]
+    if (
+        payload.get("prior_preparation_identity") != preparation_identity
+        or gate_decision.get("status") != "HOLD"
+        or gate_decision.get("passed") is not False
+        or gate_decision.get("reason") != "convergence_only"
+        or gate_decision.get("extension_eligible") is not True
+        or gate_decision.get("extension_epoch") != prior_epoch
+        or gate_decision.get("preparation_identity") != preparation_identity
+        or gate_decision.get("pre_gate_manifest_sha256")
+        != payload.get("prior_pre_gate_manifest_sha256")
+        or gate_decision.get("independent_verification_sha256")
+        != payload.get("prior_independent_verification_sha256")
+        or gate_decision.get("release_manifest_sha256")
+        != payload.get("prior_release_manifest_sha256")
+    ):
+        raise ValueError("Extension authorization is not bound to convergence-only HOLD")
+    _validate_prior_frozen_chain_subtrees(
+        root,
+        epoch=epoch,
+        payload=payload,
+        preparation_identity=preparation_identity,
+        chain_ids=chain_ids,
+    )
+
+
+def _validated_frozen_hash_mapping(
+    value: object, *, label: str
+) -> dict[str, str]:
+    if not isinstance(value, Mapping) or not value:
+        raise ValueError(f"{label} must be a nonempty frozen path/hash mapping")
+    normalized: dict[str, str] = {}
+    for relative, digest in value.items():
+        if (
+            not isinstance(relative, str)
+            or not relative
+            or Path(relative).is_absolute()
+            or ".." in Path(relative).parts
+            or relative != Path(relative).as_posix()
+        ):
+            raise ValueError(f"{label} contains a malformed relative path")
+        normalized[relative] = _require_sha256(
+            digest, label=f"{label} {relative}"
+        )
+    if dict(value) != dict(sorted(normalized.items())):
+        raise ValueError(f"{label} is not canonically ordered")
+    return normalized
+
+
+def _validate_prior_frozen_chain_subtrees(
+    root: Path,
+    *,
+    epoch: int,
+    payload: Mapping[str, Any],
+    preparation_identity: str,
+    chain_ids: Sequence[int],
+) -> None:
+    """Bind prelaunch chain bytes to the reviewed prior verifier/release maps."""
+
+    prior_epoch = epoch - 1
+    verification_path = root / (
+        f"epochs/epoch_{prior_epoch}/verification/"
+        "independent_spatial_sensitivity_verification.json"
+    )
+    release_path = root / (
+        f"epochs/epoch_{prior_epoch}/release/"
+        "spatial_sensitivity_release_manifest.json"
+    )
+    verification, verification_hash = _read_extension_json_sidecar(
+        verification_path, label="Prior independent spatial verification"
+    )
+    release, release_hash = _read_extension_json_sidecar(
+        release_path, label="Prior spatial release manifest"
+    )
+    if set(verification) != VERIFICATION_EXACT_FIELDS:
+        raise ValueError("Prior independent verification exact schema mismatch")
+    snapshot = _validated_frozen_hash_mapping(
+        verification.get("artifact_snapshot"),
+        label="prior verification artifact snapshot",
+    )
+    snapshot_hash = canonical_sha256(snapshot)
+    if (
+        verification_hash != payload.get("prior_independent_verification_sha256")
+        or verification.get("schema_id")
+        != "sr_v2_independent_spatial_sensitivity_verification/v1"
+        or verification.get("run_id") != RUN_ID
+        or verification.get("model_id") != MODEL_ID
+        or _extension_exact_integer(
+            verification.get("extension_epoch"),
+            label="prior verification extension_epoch",
+            minimum=0,
+            maximum=3,
+        )
+        != prior_epoch
+        or verification.get("preparation_identity") != preparation_identity
+        or verification.get("pre_gate_manifest_sha256")
+        != payload.get("prior_pre_gate_manifest_sha256")
+        or verification.get("artifact_snapshot_sha256") != snapshot_hash
+        or verification.get("passed") is not True
+        or verification.get("submission_authorized") is not False
+    ):
+        raise ValueError("Prior independent verification identity/snapshot mismatch")
+    if set(release) != RELEASE_EXACT_FIELDS:
+        raise ValueError("Prior spatial release exact schema mismatch")
+    release_snapshot = _validated_frozen_hash_mapping(
+        release.get("verification_artifact_snapshot"),
+        label="prior release verification snapshot",
+    )
+    release_artifacts = _validated_frozen_hash_mapping(
+        release.get("artifacts"), label="prior release artifact inventory"
+    )
+    if (
+        release_hash != payload.get("prior_release_manifest_sha256")
+        or release.get("schema_id")
+        != "sr_v2_spatial_sensitivity_release_manifest/v1"
+        or release.get("run_id") != RUN_ID
+        or release.get("model_id") != MODEL_ID
+        or _extension_exact_integer(
+            release.get("extension_epoch"),
+            label="prior release extension_epoch",
+            minimum=0,
+            maximum=3,
+        )
+        != prior_epoch
+        or release.get("preparation_identity") != preparation_identity
+        or release.get("pre_gate_manifest_sha256")
+        != payload.get("prior_pre_gate_manifest_sha256")
+        or release.get("independent_verification_sha256") != verification_hash
+        or release_snapshot != snapshot
+        or release.get("verification_artifact_snapshot_sha256") != snapshot_hash
+        or release.get("artifact_inventory_sha256")
+        != canonical_sha256(release_artifacts)
+        or release.get("submission_authorized") is not False
+    ):
+        raise ValueError("Prior release/verifier snapshot identity mismatch")
+    for raw_chain_id in chain_ids:
+        chain_id = _extension_exact_integer(
+            raw_chain_id, label="frozen subtree chain_id", minimum=1, maximum=4
+        )
+        prefix = f"chains/chain_{chain_id:02d}/"
+        frozen_subtree = {
+            relative: digest
+            for relative, digest in snapshot.items()
+            if relative.startswith(prefix)
+        }
+        release_subtree = {
+            relative: digest
+            for relative, digest in release_artifacts.items()
+            if relative.startswith(prefix)
+        }
+        chain_root = root / f"chains/chain_{chain_id:02d}"
+        if not chain_root.is_dir() or chain_root.is_symlink():
+            raise ValueError("Reviewed prior chain subtree is missing or unsafe")
+        current_subtree: dict[str, str] = {}
+        for path in sorted(chain_root.rglob("*")):
+            if path.is_symlink():
+                raise ValueError("Reviewed prior chain subtree contains a symlink")
+            if path.is_file():
+                relative = path.relative_to(root).as_posix()
+                current_subtree[relative] = sha256_file(path)
+        if (
+            not current_subtree
+            or current_subtree != frozen_subtree
+            or release_subtree != frozen_subtree
+        ):
+            raise ValueError(
+                "Reviewed prior chain subtree differs from frozen verifier/release snapshot"
+            )
+
+
+def validate_chain_extension_authorization(
+    run_root: str | Path, *, chain_id: int, to_extension_epoch: int
+) -> dict[str, Any]:
+    """Authenticate one runner's exact prior epoch during a throttled array.
+
+    The global pre-submit selector remains latest-based.  This chain-scoped
+    authority deliberately selects the unique completed immutable status at
+    ``to_extension_epoch - 1`` for only the requested chain, so peers that have
+    already completed the new epoch cannot invalidate later Slurm array waves.
+    """
+
+    checked_chain = _extension_exact_integer(
+        chain_id, label="chain_id", minimum=1, maximum=4
+    )
+    epoch = _extension_exact_integer(
+        to_extension_epoch, label="to_extension_epoch", minimum=1, maximum=3
+    )
+    root = Path(run_root).resolve()
+    authorization_path, authorization, authorization_file_hash = (
+        _load_chain_extension_authorization_document(root, epoch=epoch)
+    )
+    authorization_hash = str(authorization["authorization_sha256"])
+    chain_root = root / f"chains/chain_{checked_chain:02d}"
+    history = _extension_status_history(chain_root, chain_id=checked_chain)
+    if any(status_epoch > epoch for status_epoch, *_rest in history):
+        raise ValueError("Chain extension authority contains a future epoch")
+    prior_rows = [row for row in history if row[0] == epoch - 1]
+    completed_prior = [row for row in prior_rows if row[3].get("status") == "completed"]
+    if len(completed_prior) != 1:
+        raise ValueError("Chain requires one unique completed prior-epoch immutable status")
+    selected = completed_prior[0]
+    if selected[1] != max(row[1] for row in prior_rows):
+        raise ValueError("A completed prior-epoch status cannot have a later attempt")
+    selected_epoch, selected_attempt, selected_path, selected_status, selected_hash = selected
+    _validate_extension_status_schema(
+        selected_status, chain_id=checked_chain, epoch=selected_epoch,
+        attempt=selected_attempt,
+        expected_authorization_sha256=("0" * 64 if selected_epoch == 0 else None),
+    )
+    latest_row = max(history, key=lambda row: row[:2])
+    latest_epoch, _latest_attempt, latest_path, latest_status, _latest_hash = latest_row
+    if latest_epoch != epoch - 1 or latest_path != selected_path:
+        raise ValueError(
+            "Requested chain latest immutable status is outside the prior-epoch transition"
+        )
+    verified_latest = load_verified_chain_status(root, checked_chain)
+    if canonical_json_bytes(verified_latest) != canonical_json_bytes(latest_status):
+        raise ValueError("Chain latest immutable status verification mismatch")
+    pointer, _pointer_hash = _read_extension_json_sidecar(
+        chain_root / "chain_status.json", label="Chain latest status pointer"
+    )
+    if canonical_json_bytes(pointer) != canonical_json_bytes(latest_status):
+        raise ValueError("Chain latest status pointer does not match latest immutable status")
+    _validate_extension_status_artifacts(
+        chain_root, status_path=selected_path, status=selected_status,
+        chain_id=checked_chain, epoch=selected_epoch, attempt=selected_attempt,
+        latest_in_chain=latest_path == selected_path,
+    )
+    preparation_identity = _require_sha256(
+        selected_status.get("preparation_identity"), label="preparation_identity"
+    )
+    _validate_chain_extension_prior_gate(
+        root, epoch=epoch, payload=authorization,
+        preparation_identity=preparation_identity,
+        chain_ids=(checked_chain,),
+    )
+    return {
+        "schema_id": "sr_v2_spatial_chain_extension_authority/v1",
+        "run_id": RUN_ID,
+        "chain_id": checked_chain,
+        "from_extension_epoch": epoch - 1,
+        "to_extension_epoch": epoch,
+        "job_attempt": 1,
+        "authorization_path": authorization_path.name,
+        "authorization_file_sha256": authorization_file_hash,
+        "authorization_sha256": authorization_hash,
+        "source_immutable_status_path": selected_path.relative_to(chain_root).as_posix(),
+        "source_immutable_status_sha256": selected_hash,
+        "source_checkpoint_path": selected_status["latest_checkpoint"],
+        "source_checkpoint_sha256": selected_status["latest_checkpoint_sha256"],
+        "preparation_identity": preparation_identity,
+    }
+
+
 def validate_extension_authorization(
     run_root: str | Path, *, to_extension_epoch: int
 ) -> dict[str, Any]:
@@ -1131,6 +2080,13 @@ def validate_extension_authorization(
         != payload.get("prior_release_manifest_sha256")
     ):
         raise ValueError("Extension authorization is not bound to convergence-only HOLD")
+    _validate_chain_extension_prior_gate(
+        root,
+        epoch=epoch,
+        payload=payload,
+        preparation_identity=preparation_identity,
+        chain_ids=(1, 2, 3, 4),
+    )
     return {
         "schema_id": "sr_v2_spatial_extension_selection/v1",
         "run_id": RUN_ID,
@@ -1416,6 +2372,7 @@ __all__ = [
     "spatial_run_root",
     "select_retry_indexes",
     "snapshot_protected_trees",
+    "validate_chain_extension_authorization",
     "validate_extension_authorization",
     "validate_benchmark_evidence",
     "validate_prepared_source_envelope",

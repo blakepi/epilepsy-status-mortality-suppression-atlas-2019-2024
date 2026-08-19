@@ -45,7 +45,7 @@ from bayes_constrained.spatial_pipeline import (
     set_canonical_hold,
     sha256_file,
     spatial_run_root,
-    validate_extension_authorization,
+    validate_chain_extension_authorization,
     validate_prepared_source_envelope,
     verify_hash_inventory,
     verify_sha256_sidecar,
@@ -764,8 +764,10 @@ def run_chain(
             or status.get("retryable") is not False
         ):
             raise ValueError("Extension requires an exact completed source status")
-        extension = validate_extension_authorization(
-            run_root, to_extension_epoch=extension_epoch
+        extension = validate_chain_extension_authorization(
+            run_root,
+            chain_id=assignment.chain_id,
+            to_extension_epoch=extension_epoch,
         )
         job_attempt = 1
         prior_identity = status["identity"]

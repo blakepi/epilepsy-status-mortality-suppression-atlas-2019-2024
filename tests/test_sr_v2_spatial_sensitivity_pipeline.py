@@ -836,6 +836,509 @@ def test_isolated_resume_from_custody_rejects_resigned_retry_extension_and_rng_s
     assert gate["status"] == "HOLD" and gate["passed"] is False
 
 
+def test_extension_authorization_uses_exact_prior_epoch_across_two_wave_array(
+    tmp_path: Path,
+) -> None:
+    import shutil
+
+    from bayes_constrained.spatial_pipeline import (
+        canonical_sha256,
+        select_retry_indexes,
+        validate_chain_extension_authorization,
+        validate_extension_authorization,
+    )
+
+    base = tmp_path / "base"
+    for chain_id in range(1, 5):
+        _publish_extension_test_status(base, chain_id=chain_id, epoch=0)
+    _publish_extension_test_authorization(base, to_epoch=1)
+    initial = validate_extension_authorization(base, to_extension_epoch=1)
+    assert initial["from_extension_epoch"] == 0
+    assert initial["selected_array_indexes"] == [1, 2, 3, 4]
+    prewave = tmp_path / "prewave-reviewed"
+    shutil.copytree(base, prewave)
+
+    # The global pre-submit selector remains latest-based and must reject a
+    # mixed array state.  The chain-scoped runner authority is deliberately
+    # different: Slurm 1-4%2 may advance chains 1/2 before chains 3/4 start,
+    # and those later tasks must still authenticate their own exact epoch-0
+    # immutable authority without re-selecting all four latest pointers.
+    for chain_id in (1, 2):
+        _publish_extension_test_status(base, chain_id=chain_id, epoch=1)
+    with pytest.raises(ValueError, match="prior-epoch"):
+        validate_extension_authorization(base, to_extension_epoch=1)
+    for chain_id in (3, 4):
+        second_wave = validate_chain_extension_authorization(
+            base, chain_id=chain_id, to_extension_epoch=1
+        )
+        assert second_wave["from_extension_epoch"] == 0
+        assert second_wave["chain_id"] == chain_id
+        assert second_wave["authorization_sha256"] == initial["authorization_sha256"]
+
+    def copied(name: str) -> Path:
+        destination = tmp_path / name
+        shutil.copytree(base, destination)
+        return destination
+
+    def resign_prior_evidence(case: Path) -> None:
+        verification_path = case / (
+            "epochs/epoch_0/verification/"
+            "independent_spatial_sensitivity_verification.json"
+        )
+        release_path = case / (
+            "epochs/epoch_0/release/spatial_sensitivity_release_manifest.json"
+        )
+        gate_path = case / "epochs/epoch_0/gate/gate_decision.json"
+        authorization_path = case / "extension_authorization_epoch_1.json"
+        verification_hash = hashlib.sha256(
+            verification_path.read_bytes()
+        ).hexdigest()
+        release = json.loads(release_path.read_text(encoding="utf-8"))
+        release["independent_verification_sha256"] = verification_hash
+        _write_json_sidecar(release_path, release)
+        release_hash = hashlib.sha256(release_path.read_bytes()).hexdigest()
+        gate = json.loads(gate_path.read_text(encoding="utf-8"))
+        gate["independent_verification_sha256"] = verification_hash
+        gate["release_manifest_sha256"] = release_hash
+        _write_json_sidecar(gate_path, gate)
+        authorization = json.loads(
+            authorization_path.read_text(encoding="utf-8")
+        )
+        authorization["prior_independent_verification_sha256"] = verification_hash
+        authorization["prior_release_manifest_sha256"] = release_hash
+        authorization["prior_gate_decision_sha256"] = hashlib.sha256(
+            gate_path.read_bytes()
+        ).hexdigest()
+        unsigned = {
+            key: value
+            for key, value in authorization.items()
+            if key != "authorization_sha256"
+        }
+        authorization["authorization_sha256"] = canonical_sha256(unsigned)
+        _write_json_sidecar(authorization_path, authorization)
+
+    # A reviewed gate freezes the prior terminal RNG bytes.  Coherently
+    # rewriting the checkpoint, sidecar, status inventory, immutable status,
+    # and pointer after that gate must not create a new extension authority.
+    snapshot_splice = tmp_path / "post-gate-rng-splice"
+    shutil.copytree(prewave, snapshot_splice)
+    splice_root = snapshot_splice / "chains/chain_03"
+    splice_checkpoint = (
+        splice_root
+        / "checkpoints/checkpoint_epoch_0_attempt_1_iter_000180000.json"
+    )
+    splice_checkpoint_payload = json.loads(
+        splice_checkpoint.read_text(encoding="utf-8")
+    )
+    splice_checkpoint_payload["rng_state"] = {
+        "bit_generator": "PCG64",
+        "state": {"state": 1, "inc": 3},
+        "has_uint32": 0,
+        "uinteger": 0,
+    }
+    _write_json_sidecar(splice_checkpoint, splice_checkpoint_payload)
+    splice_status_path = (
+        splice_root / "attempts/epoch_0/attempt_1/status.json"
+    )
+    splice_status = json.loads(splice_status_path.read_text(encoding="utf-8"))
+    splice_checkpoint_relative = splice_checkpoint.relative_to(
+        splice_root
+    ).as_posix()
+    splice_status["latest_checkpoint_sha256"] = hashlib.sha256(
+        splice_checkpoint.read_bytes()
+    ).hexdigest()
+    splice_status["artifact_sha256"][splice_checkpoint_relative] = splice_status[
+        "latest_checkpoint_sha256"
+    ]
+    splice_status["artifact_sha256"][
+        splice_checkpoint_relative + ".sha256"
+    ] = hashlib.sha256(
+        splice_checkpoint.with_name(splice_checkpoint.name + ".sha256").read_bytes()
+    ).hexdigest()
+    _write_json_sidecar(splice_status_path, splice_status)
+    _write_json_sidecar(splice_root / "chain_status.json", splice_status)
+    with pytest.raises(
+        ValueError, match="snapshot|release|reviewed|frozen|inventory"
+    ):
+        validate_extension_authorization(
+            snapshot_splice, to_extension_epoch=1
+        )
+    with pytest.raises(ValueError, match="snapshot|release|reviewed|frozen"):
+        validate_chain_extension_authorization(
+            snapshot_splice, chain_id=3, to_extension_epoch=1
+        )
+
+    chunk_splice = tmp_path / "post-gate-chunk-splice"
+    shutil.copytree(prewave, chunk_splice)
+    chunk_root = chunk_splice / "chains/chain_03"
+    scalar_path = chunk_root / "chunks/scalar_chunk_000001.parquet"
+    scalar_path.write_bytes(scalar_path.read_bytes() + b"coherent-splice")
+    scalar_hash = hashlib.sha256(scalar_path.read_bytes()).hexdigest()
+    chunk_checkpoint = (
+        chunk_root
+        / "checkpoints/checkpoint_epoch_0_attempt_1_iter_000180000.json"
+    )
+    chunk_checkpoint_payload = json.loads(
+        chunk_checkpoint.read_text(encoding="utf-8")
+    )
+    chunk_checkpoint_payload["committed_chunks"][0]["scalar_sha256"] = scalar_hash
+    _write_json_sidecar(chunk_checkpoint, chunk_checkpoint_payload)
+    chunk_manifest = chunk_root / "chunks/spatial_chunk_manifest.json"
+    chunk_manifest.write_bytes(
+        json.dumps(
+            {
+                "schema_id": "sr_v2_spatial_chunk_manifest/v1",
+                "records": chunk_checkpoint_payload["committed_chunks"],
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=True,
+            allow_nan=False,
+        ).encode("utf-8")
+    )
+    chunk_status_path = chunk_root / "attempts/epoch_0/attempt_1/status.json"
+    chunk_status = json.loads(chunk_status_path.read_text(encoding="utf-8"))
+    chunk_checkpoint_relative = chunk_checkpoint.relative_to(chunk_root).as_posix()
+    chunk_status["latest_checkpoint_sha256"] = hashlib.sha256(
+        chunk_checkpoint.read_bytes()
+    ).hexdigest()
+    chunk_status["artifact_sha256"][chunk_checkpoint_relative] = chunk_status[
+        "latest_checkpoint_sha256"
+    ]
+    chunk_status["artifact_sha256"][chunk_checkpoint_relative + ".sha256"] = (
+        hashlib.sha256(
+            chunk_checkpoint.with_name(chunk_checkpoint.name + ".sha256").read_bytes()
+        ).hexdigest()
+    )
+    chunk_status["artifact_sha256"][
+        scalar_path.relative_to(chunk_root).as_posix()
+    ] = scalar_hash
+    chunk_status["artifact_sha256"][
+        chunk_manifest.relative_to(chunk_root).as_posix()
+    ] = hashlib.sha256(chunk_manifest.read_bytes()).hexdigest()
+    _write_json_sidecar(chunk_status_path, chunk_status)
+    _write_json_sidecar(chunk_root / "chain_status.json", chunk_status)
+    with pytest.raises(ValueError, match="snapshot|release|reviewed|frozen"):
+        validate_chain_extension_authorization(
+            chunk_splice, chain_id=3, to_extension_epoch=1
+        )
+
+    evidence_splice = tmp_path / "post-gate-evidence-splice"
+    shutil.copytree(prewave, evidence_splice)
+    evidence_root = evidence_splice / "chains/chain_03"
+    frozen_evidence_path = (
+        evidence_root / "evidence/epoch_0/attempt_1/attempt_evidence.json"
+    )
+    frozen_evidence = json.loads(
+        frozen_evidence_path.read_text(encoding="utf-8")
+    )
+    frozen_evidence["verification_boundary"] += " changed-after-review"
+    _write_json_sidecar(frozen_evidence_path, frozen_evidence)
+    frozen_status_path = evidence_root / "attempts/epoch_0/attempt_1/status.json"
+    frozen_status = json.loads(frozen_status_path.read_text(encoding="utf-8"))
+    frozen_evidence_relative = frozen_evidence_path.relative_to(
+        evidence_root
+    ).as_posix()
+    frozen_evidence_hash = hashlib.sha256(
+        frozen_evidence_path.read_bytes()
+    ).hexdigest()
+    frozen_status["artifact_sha256"][frozen_evidence_relative] = (
+        frozen_evidence_hash
+    )
+    frozen_status["artifact_sha256"][frozen_evidence_relative + ".sha256"] = (
+        hashlib.sha256(
+            frozen_evidence_path.with_name(
+                frozen_evidence_path.name + ".sha256"
+            ).read_bytes()
+        ).hexdigest()
+    )
+    frozen_status["retained_assertion_evidence"]["manifest_sha256"][
+        frozen_evidence_relative
+    ] = frozen_evidence_hash
+    _write_json_sidecar(frozen_status_path, frozen_status)
+    _write_json_sidecar(evidence_root / "chain_status.json", frozen_status)
+    with pytest.raises(ValueError, match="snapshot|release|reviewed|frozen"):
+        validate_chain_extension_authorization(
+            evidence_splice, chain_id=3, to_extension_epoch=1
+        )
+
+    added_file = tmp_path / "post-gate-added-file"
+    shutil.copytree(prewave, added_file)
+    (added_file / "chains/chain_03/orphan.bin").write_bytes(b"orphan")
+    with pytest.raises(
+        ValueError, match="snapshot|release|reviewed|frozen|inventory"
+    ):
+        validate_chain_extension_authorization(
+            added_file, chain_id=3, to_extension_epoch=1
+        )
+
+    missing_file = tmp_path / "post-gate-missing-file"
+    shutil.copytree(prewave, missing_file)
+    (missing_file / "chains/chain_03/chunks/scalar_chunk_000001.parquet").unlink()
+    with pytest.raises(ValueError, match="missing|snapshot|release|frozen"):
+        validate_chain_extension_authorization(
+            missing_file, chain_id=3, to_extension_epoch=1
+        )
+
+    verifier_map_mismatch = tmp_path / "verifier-release-map-mismatch"
+    shutil.copytree(prewave, verifier_map_mismatch)
+    verifier_path = verifier_map_mismatch / (
+        "epochs/epoch_0/verification/"
+        "independent_spatial_sensitivity_verification.json"
+    )
+    verifier = json.loads(verifier_path.read_text(encoding="utf-8"))
+    removed_path = next(
+        path
+        for path in verifier["artifact_snapshot"]
+        if path.startswith("chains/chain_03/checkpoints/")
+    )
+    verifier["artifact_snapshot"].pop(removed_path)
+    verifier["artifact_snapshot_sha256"] = canonical_sha256(
+        verifier["artifact_snapshot"]
+    )
+    _write_json_sidecar(verifier_path, verifier)
+    resign_prior_evidence(verifier_map_mismatch)
+    with pytest.raises(ValueError, match="snapshot|release|frozen"):
+        validate_chain_extension_authorization(
+            verifier_map_mismatch, chain_id=3, to_extension_epoch=1
+        )
+
+    release_map_mismatch = tmp_path / "release-map-mismatch"
+    shutil.copytree(prewave, release_map_mismatch)
+    release_path = release_map_mismatch / (
+        "epochs/epoch_0/release/spatial_sensitivity_release_manifest.json"
+    )
+    release = json.loads(release_path.read_text(encoding="utf-8"))
+    removed_release_path = next(
+        path
+        for path in release["artifacts"]
+        if path.startswith("chains/chain_03/evidence/")
+    )
+    release["artifacts"].pop(removed_release_path)
+    release["artifact_inventory_sha256"] = canonical_sha256(release["artifacts"])
+    _write_json_sidecar(release_path, release)
+    resign_prior_evidence(release_map_mismatch)
+    with pytest.raises(ValueError, match="snapshot|release|frozen"):
+        validate_chain_extension_authorization(
+            release_map_mismatch, chain_id=3, to_extension_epoch=1
+        )
+
+    pointer_alias = tmp_path / "pointer-bool-alias"
+    shutil.copytree(prewave, pointer_alias)
+    alias_pointer_path = pointer_alias / "chains/chain_03/chain_status.json"
+    alias_pointer = json.loads(alias_pointer_path.read_text(encoding="utf-8"))
+    alias_pointer["job_attempt"] = True
+    _write_json_sidecar(alias_pointer_path, alias_pointer)
+    with pytest.raises(ValueError, match="pointer|canonical|exact"):
+        validate_chain_extension_authorization(
+            pointer_alias, chain_id=3, to_extension_epoch=1
+        )
+
+    evidence_alias = tmp_path / "evidence-bool-alias"
+    for chain_id in range(1, 5):
+        _publish_extension_test_status(evidence_alias, chain_id=chain_id, epoch=0)
+    alias_chain_root = evidence_alias / "chains/chain_03"
+    alias_evidence_path = (
+        alias_chain_root / "evidence/epoch_0/attempt_1/attempt_evidence.json"
+    )
+    alias_evidence = json.loads(alias_evidence_path.read_text(encoding="utf-8"))
+    alias_evidence["resume_from"]["source_job_attempt"] = True
+    _write_json_sidecar(alias_evidence_path, alias_evidence)
+    alias_status_path = (
+        alias_chain_root / "attempts/epoch_0/attempt_1/status.json"
+    )
+    alias_status = json.loads(alias_status_path.read_text(encoding="utf-8"))
+    alias_evidence_relative = alias_evidence_path.relative_to(
+        alias_chain_root
+    ).as_posix()
+    alias_evidence_hash = hashlib.sha256(alias_evidence_path.read_bytes()).hexdigest()
+    alias_status["artifact_sha256"][alias_evidence_relative] = alias_evidence_hash
+    alias_status["artifact_sha256"][
+        alias_evidence_relative + ".sha256"
+    ] = hashlib.sha256(
+        alias_evidence_path.with_name(alias_evidence_path.name + ".sha256").read_bytes()
+    ).hexdigest()
+    alias_status["retained_assertion_evidence"]["manifest_sha256"][
+        alias_evidence_relative
+    ] = alias_evidence_hash
+    _write_json_sidecar(alias_status_path, alias_status)
+    _write_json_sidecar(alias_chain_root / "chain_status.json", alias_status)
+    _publish_extension_test_authorization(evidence_alias, to_epoch=1)
+    with pytest.raises(
+        ValueError, match="resume|Boolean|integer|canonical|identity"
+    ):
+        validate_chain_extension_authorization(
+            evidence_alias, chain_id=3, to_extension_epoch=1
+        )
+
+    pointer_case = copied("pointer-rewrite")
+    chain_root = pointer_case / "chains/chain_03"
+    prior_status = json.loads(
+        (chain_root / "attempts/epoch_0/attempt_1/status.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    prior_status["retained_draws"] = 4_499
+    _write_json_sidecar(chain_root / "chain_status.json", prior_status)
+    with pytest.raises(ValueError, match="pointer|latest"):
+        validate_chain_extension_authorization(
+            pointer_case, chain_id=3, to_extension_epoch=1
+        )
+
+    tampered_case = copied("resigned-prior")
+    prior_path = (
+        tampered_case
+        / "chains/chain_03/attempts/epoch_0/attempt_1/status.json"
+    )
+    tampered = json.loads(prior_path.read_text(encoding="utf-8"))
+    tampered["preparation_identity"] = "9" * 64
+    _write_json_sidecar(prior_path, tampered)
+    _write_json_sidecar(tampered_case / "chains/chain_03/chain_status.json", tampered)
+    with pytest.raises(
+        ValueError, match="preparation|authority|source|snapshot|release|frozen|HOLD"
+    ):
+        validate_chain_extension_authorization(
+            tampered_case, chain_id=3, to_extension_epoch=1
+        )
+
+    missing_case = copied("missing-prior")
+    missing = (
+        missing_case
+        / "chains/chain_03/attempts/epoch_0/attempt_1/status.json"
+    )
+    missing.unlink()
+    missing.with_name(missing.name + ".sha256").unlink()
+    with pytest.raises(ValueError, match="missing|inventory|prior-epoch"):
+        validate_chain_extension_authorization(
+            missing_case, chain_id=3, to_extension_epoch=1
+        )
+
+    duplicate_case = copied("duplicate-prior")
+    _publish_extension_test_status(
+        duplicate_case,
+        chain_id=3,
+        epoch=0,
+        attempt=2,
+        publish_pointer=False,
+    )
+    _refresh_extension_test_latest_status(duplicate_case, chain_id=3, epoch=0)
+    with pytest.raises(ValueError, match="unique|duplicate|completed"):
+        validate_chain_extension_authorization(
+            duplicate_case, chain_id=3, to_extension_epoch=1
+        )
+
+    checkpoint_case = copied("resigned-checkpoint")
+    checkpoint = (
+        checkpoint_case
+        / "chains/chain_03/checkpoints/"
+        "checkpoint_epoch_0_attempt_1_iter_000180000.json"
+    )
+    checkpoint_payload = json.loads(checkpoint.read_text(encoding="utf-8"))
+    checkpoint_payload["chain_id"] = 4
+    _write_json_sidecar(checkpoint, checkpoint_payload)
+    prior_path = (
+        checkpoint_case
+        / "chains/chain_03/attempts/epoch_0/attempt_1/status.json"
+    )
+    prior_payload = json.loads(prior_path.read_text(encoding="utf-8"))
+    prior_payload["latest_checkpoint_sha256"] = hashlib.sha256(
+        checkpoint.read_bytes()
+    ).hexdigest()
+    for relative in tuple(prior_payload["artifact_sha256"]):
+        if relative.endswith("checkpoint_epoch_0_attempt_1_iter_000180000.json"):
+            prior_payload["artifact_sha256"][relative] = hashlib.sha256(
+                checkpoint.read_bytes()
+            ).hexdigest()
+        elif relative.endswith(
+            "checkpoint_epoch_0_attempt_1_iter_000180000.json.sha256"
+        ):
+            prior_payload["artifact_sha256"][relative] = hashlib.sha256(
+                checkpoint.with_name(checkpoint.name + ".sha256").read_bytes()
+            ).hexdigest()
+    _write_json_sidecar(prior_path, prior_payload)
+    _write_json_sidecar(
+        checkpoint_case / "chains/chain_03/chain_status.json", prior_payload
+    )
+    with pytest.raises(ValueError, match="checkpoint|chain"):
+        validate_chain_extension_authorization(
+            checkpoint_case, chain_id=3, to_extension_epoch=1
+        )
+
+    evidence_case = copied("resigned-evidence")
+    evidence_path = (
+        evidence_case
+        / "chains/chain_03/evidence/epoch_0/attempt_1/attempt_evidence.json"
+    )
+    evidence = json.loads(evidence_path.read_text(encoding="utf-8"))
+    evidence["chain_id"] = 4
+    _write_json_sidecar(evidence_path, evidence)
+    prior_path = (
+        evidence_case
+        / "chains/chain_03/attempts/epoch_0/attempt_1/status.json"
+    )
+    prior_payload = json.loads(prior_path.read_text(encoding="utf-8"))
+    evidence_relative = evidence_path.relative_to(
+        evidence_case / "chains/chain_03"
+    ).as_posix()
+    evidence_hash = hashlib.sha256(evidence_path.read_bytes()).hexdigest()
+    prior_payload["artifact_sha256"][evidence_relative] = evidence_hash
+    prior_payload["artifact_sha256"][evidence_relative + ".sha256"] = hashlib.sha256(
+        evidence_path.with_name(evidence_path.name + ".sha256").read_bytes()
+    ).hexdigest()
+    prior_payload["retained_assertion_evidence"]["manifest_sha256"][
+        evidence_relative
+    ] = evidence_hash
+    _write_json_sidecar(prior_path, prior_payload)
+    _write_json_sidecar(
+        evidence_case / "chains/chain_03/chain_status.json", prior_payload
+    )
+    with pytest.raises(ValueError, match="evidence|chain"):
+        validate_chain_extension_authorization(
+            evidence_case, chain_id=3, to_extension_epoch=1
+        )
+
+    authorization_case = copied("wrong-authorization")
+    authorization_path = authorization_case / "extension_authorization_epoch_1.json"
+    authorization = json.loads(authorization_path.read_text(encoding="utf-8"))
+    authorization["authorization_sha256"] = "f" * 64
+    _write_json_sidecar(authorization_path, authorization)
+    with pytest.raises(ValueError, match="authorization"):
+        validate_chain_extension_authorization(
+            authorization_case, chain_id=3, to_extension_epoch=1
+        )
+
+    future_case = copied("future-epoch")
+    _publish_extension_test_status(future_case, chain_id=3, epoch=1)
+    _publish_extension_test_authorization(future_case, to_epoch=2)
+    _publish_extension_test_status(future_case, chain_id=3, epoch=2)
+    with pytest.raises(ValueError, match="future|epoch"):
+        validate_chain_extension_authorization(
+            future_case, chain_id=3, to_extension_epoch=1
+        )
+
+    runner_source = (ROOT / "scripts/107_run_sr_v2_spatial_sensitivity_chain.py").read_text(
+        encoding="utf-8"
+    )
+    assert "validate_chain_extension_authorization(" in runner_source
+
+    # Retry selection remains latest-immutable based and ignores the mutable
+    # convenience pointer. This recovery contract is not broadened by the
+    # extension-specific pointer binding.
+    retry_case = copied("retry-latest")
+    for chain_id in (3, 4):
+        _publish_extension_test_status(retry_case, chain_id=chain_id, epoch=1)
+    retry_chain = retry_case / "chains/chain_01"
+    retry_prior = json.loads(
+        (retry_chain / "attempts/epoch_0/attempt_1/status.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    _write_json_sidecar(retry_chain / "chain_status.json", retry_prior)
+    retry = select_retry_indexes(retry_case, extension_epoch=1)
+    assert retry["verified_completed_indexes"] == [1, 2, 3, 4]
+    assert retry["selected_array_indexes"] == []
+
+
 def test_resume_certificate_preserves_immediate_failure_checkpoint_authority(
     tmp_path: Path,
 ) -> None:
@@ -1967,6 +2470,498 @@ def _commit_tiny_spatial_chunk_history(
     return chunk_root, records, graph, parameters
 
 
+_EXTENSION_TEST_CONTRACT = {
+    0: {"iterations": 180_000, "draws": 4_500, "chunks": 18},
+    1: {"iterations": 270_000, "draws": 7_500, "chunks": 30},
+    2: {"iterations": 360_000, "draws": 10_500, "chunks": 42},
+}
+
+
+def _extension_test_inventory(
+    chain_root: Path, *, excluded_status: Path
+) -> dict[str, str]:
+    excluded = {
+        excluded_status.resolve(),
+        excluded_status.with_name(excluded_status.name + ".sha256").resolve(),
+    }
+    inventory: dict[str, str] = {}
+    for subdir in ("checkpoints", "chunks", "evidence", "attempts"):
+        base = chain_root / subdir
+        if not base.exists():
+            continue
+        for path in sorted(base.rglob("*")):
+            if path.is_file() and path.resolve() not in excluded:
+                inventory[path.relative_to(chain_root).as_posix()] = hashlib.sha256(
+                    path.read_bytes()
+                ).hexdigest()
+    return inventory
+
+
+def _publish_extension_test_status(
+    run_root: Path,
+    *,
+    chain_id: int,
+    epoch: int,
+    attempt: int = 1,
+    publish_pointer: bool = True,
+) -> dict[str, object]:
+    from bayes_constrained.spatial_pipeline import canonical_sha256
+
+    contract = _EXTENSION_TEST_CONTRACT[epoch]
+    chain_root = run_root / f"chains/chain_{chain_id:02d}"
+    status_path = (
+        chain_root
+        / f"attempts/epoch_{epoch}/attempt_{attempt}/status.json"
+    )
+    seeds = {
+        "chain_seed": 74_290 + chain_id,
+        "allocation_initialization_seed": 74_250 + chain_id,
+        "spatial_initialization_seed": 74_260 + chain_id,
+    }
+    if epoch == 0:
+        authorization_hash = "0" * 64
+        source_status_path = None
+        source_status = None
+        source_contract = {"iterations": 0, "draws": 0, "chunks": 0}
+    else:
+        authorization = json.loads(
+            (run_root / f"extension_authorization_epoch_{epoch}.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        authorization_hash = str(authorization["authorization_sha256"])
+        candidates = sorted(
+            (chain_root / f"attempts/epoch_{epoch - 1}").glob(
+                "attempt_*/status.json"
+            )
+        )
+        assert candidates
+        source_status_path = candidates[-1]
+        source_status = json.loads(source_status_path.read_text(encoding="utf-8"))
+        source_contract = _EXTENSION_TEST_CONTRACT[epoch - 1]
+    target = {
+        "schema_id": "extension-test-target/v1",
+        "extension_epoch": epoch,
+        "extension_authorization_sha256": authorization_hash,
+    }
+    target_fingerprint = canonical_sha256(target)
+    chain_identity = {
+        "target_fingerprint": target_fingerprint,
+        "chain_id": chain_id,
+        **seeds,
+    }
+    chain_fingerprint = canonical_sha256(chain_identity)
+    identity = {
+        "schema_version": 2,
+        "target": target,
+        "target_fingerprint": target_fingerprint,
+        "chain": chain_identity,
+        "chain_fingerprint": chain_fingerprint,
+    }
+    chunk_root = chain_root / "chunks"
+    chunk_root.mkdir(parents=True, exist_ok=True)
+    committed_chunks: list[dict[str, object]] = []
+    for chunk_id in range(1, contract["chunks"] + 1):
+        draw_start = 250 * (chunk_id - 1) + 1
+        draw_end = 250 * chunk_id
+        chunk_epoch = 0 if draw_end <= 4_500 else (1 if draw_end <= 7_500 else 2)
+        scalar_name = f"scalar_chunk_{chunk_id:06d}.parquet"
+        spatial_name = f"spatial_chunk_{chunk_id:06d}.npz"
+        scalar_path = chunk_root / scalar_name
+        spatial_path = chunk_root / spatial_name
+        if not scalar_path.exists():
+            scalar_path.write_bytes(f"fixture scalar {chain_id} {chunk_id}\n".encode())
+            spatial_path.write_bytes(f"fixture spatial {chain_id} {chunk_id}\n".encode())
+        committed_chunks.append(
+            {
+                "schema_id": "sr_v2_spatial_draw_chunk/v1",
+                "chain_id": chain_id,
+                "extension_epoch": chunk_epoch,
+                "chunk_id": chunk_id,
+                "draw_start": draw_start,
+                "draw_end": draw_end,
+                "draw_count": 250,
+                "scalar_path": scalar_name,
+                "scalar_sha256": hashlib.sha256(scalar_path.read_bytes()).hexdigest(),
+                "spatial_path": spatial_name,
+                "spatial_sha256": hashlib.sha256(spatial_path.read_bytes()).hexdigest(),
+                "graph_contract_sha256": "e" * 64,
+                "county_order_sha256": "f" * 64,
+                "county_count": 3_142,
+                "parameter_schema": ["fixture_parameter"],
+            }
+        )
+    (chunk_root / "spatial_chunk_manifest.json").write_bytes(
+        json.dumps(
+            {
+                "schema_id": "sr_v2_spatial_chunk_manifest/v1",
+                "records": committed_chunks,
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=True,
+            allow_nan=False,
+        ).encode("utf-8")
+    )
+    checkpoint = (
+        chain_root
+        / "checkpoints"
+        / (
+            f"checkpoint_epoch_{epoch}_attempt_{attempt}_"
+            f"iter_{contract['iterations']:09d}.json"
+        )
+    )
+    checkpoint_payload = {
+        "schema_version": 2,
+        "run_id": "sr-v2-spatial-sensitivity-20260818-v1",
+        "model_id": "sr-v2-primary-nb2-bym2-v1",
+        "chain_id": chain_id,
+        "extension_epoch": epoch,
+        "job_attempt": attempt,
+        "target_fingerprint": target_fingerprint,
+        "chain_fingerprint": chain_fingerprint,
+        "iteration": contract["iterations"],
+        "saved_draws": contract["draws"],
+        "committed_chunks": committed_chunks,
+    }
+    _write_json_sidecar(checkpoint, checkpoint_payload)
+    if source_status is None:
+        source_checkpoint_path = (
+            chain_root
+            / "checkpoints/checkpoint_epoch_0_attempt_1_iter_000000000.json"
+        )
+        _write_json_sidecar(
+            source_checkpoint_path,
+            {
+                **checkpoint_payload,
+                "iteration": 0,
+                "saved_draws": 0,
+                "committed_chunks": [],
+            },
+        )
+        source_checkpoint_hash = hashlib.sha256(
+            source_checkpoint_path.read_bytes()
+        ).hexdigest()
+        resume_mode = "prepared_initial"
+        source_epoch = 0
+        source_attempt = attempt
+        source_iteration = 0
+        source_draws = 0
+        rebound_path = None
+        rebound_hash = None
+    else:
+        source_checkpoint_path = chain_root / str(source_status["latest_checkpoint"])
+        source_checkpoint_hash = str(source_status["latest_checkpoint_sha256"])
+        resume_mode = "extension"
+        source_epoch = epoch - 1
+        source_attempt = int(source_status["job_attempt"])
+        source_iteration = int(source_status["iterations"])
+        source_draws = int(source_status["retained_draws"])
+        rebound_checkpoint = (
+            chain_root
+            / "checkpoints"
+            / (
+                f"checkpoint_epoch_{epoch}_attempt_1_"
+                f"iter_{source_contract['iterations']:09d}.json"
+            )
+        )
+        _write_json_sidecar(
+            rebound_checkpoint,
+            {
+                **checkpoint_payload,
+                "job_attempt": 1,
+                "iteration": source_contract["iterations"],
+                "saved_draws": source_contract["draws"],
+                "committed_chunks": committed_chunks[
+                    : source_contract["chunks"]
+                ],
+            },
+        )
+        rebound_path = rebound_checkpoint.relative_to(chain_root).as_posix()
+        rebound_hash = hashlib.sha256(rebound_checkpoint.read_bytes()).hexdigest()
+    resume_from = {
+        "schema_id": "sr_v2_spatial_resume_from/v1",
+        "mode": resume_mode,
+        "source_immutable_status_path": (
+            None
+            if source_status_path is None
+            else source_status_path.relative_to(chain_root).as_posix()
+        ),
+        "source_immutable_status_sha256": (
+            None
+            if source_status_path is None
+            else hashlib.sha256(source_status_path.read_bytes()).hexdigest()
+        ),
+        "source_checkpoint_path": source_checkpoint_path.relative_to(
+            chain_root
+        ).as_posix(),
+        "source_checkpoint_sha256": source_checkpoint_hash,
+        "source_extension_epoch": source_epoch,
+        "source_job_attempt": source_attempt,
+        "source_iteration": source_iteration,
+        "source_saved_draws": source_draws,
+        "rebound_checkpoint_path": rebound_path,
+        "rebound_checkpoint_sha256": rebound_hash,
+    }
+    start_draws = source_contract["draws"] if epoch > 0 else 0
+    retained = contract["draws"] - start_draws
+    evidence_root = chain_root / f"evidence/epoch_{epoch}/attempt_{attempt}"
+    evidence_root.mkdir(parents=True, exist_ok=True)
+    ledger = evidence_root / "retained_assertions.jsonl"
+    ledger.write_bytes(b"{}\n" * retained)
+    ledger_hash = hashlib.sha256(ledger.read_bytes()).hexdigest()
+    evidence = {
+        "schema_id": "sr_v2_spatial_attempt_evidence/v1",
+        "run_id": "sr-v2-spatial-sensitivity-20260818-v1",
+        "chain_id": chain_id,
+        "extension_epoch": epoch,
+        "job_attempt": attempt,
+        "start_saved_draws": start_draws,
+        "end_saved_draws": contract["draws"],
+        "record_count": retained,
+        "ledger_path": ledger.name,
+        "ledger_sha256": ledger_hash,
+        "evidence_builder": "actual_public_chain_loop",
+        "production_executor": True,
+        "capture_order": "after_latent_target_base6_hyper_and_scheduled_mala",
+        "count_constraint_failures": 0,
+        "spatial_constraint_failures": 0,
+        "historical_latent_y_stored": False,
+        "independent_historical_y_reconstruction_possible": False,
+        "verification_boundary": "extension authority test fixture",
+        "resume_from": resume_from,
+    }
+    evidence_path = evidence_root / "attempt_evidence.json"
+    _write_json_sidecar(evidence_path, evidence)
+    evidence_manifest: dict[str, str] = {}
+    ledger_bytes = b""
+    for path in sorted(
+        chain_root.glob("evidence/epoch_*/attempt_*/attempt_evidence.json")
+    ):
+        evidence_manifest[path.relative_to(chain_root).as_posix()] = hashlib.sha256(
+            path.read_bytes()
+        ).hexdigest()
+        ledger_bytes += (path.parent / "retained_assertions.jsonl").read_bytes()
+    status = {
+        "schema_id": "sr_v2_spatial_chain_status/v1",
+        "run_id": "sr-v2-spatial-sensitivity-20260818-v1",
+        "model_id": "sr-v2-primary-nb2-bym2-v1",
+        "preparation_identity": "b" * 64,
+        "launch_envelope_sha256": "c" * 64,
+        "final_source_manifest_sha256": "d" * 64,
+        "chain_id": chain_id,
+        "array_index": chain_id,
+        "extension_epoch": epoch,
+        "job_attempt": attempt,
+        "status": "completed",
+        "iterations": contract["iterations"],
+        "retained_draws": contract["draws"],
+        "chunks": contract["chunks"],
+        "seeds": seeds,
+        "identity": identity,
+        "target_fingerprint": target_fingerprint,
+        "chain_fingerprint": chain_fingerprint,
+        "latest_checkpoint": checkpoint.relative_to(chain_root).as_posix(),
+        "latest_checkpoint_sha256": hashlib.sha256(
+            checkpoint.read_bytes()
+        ).hexdigest(),
+        "artifact_sha256": {},
+        "executor_builder": "exact_public_chain_loop",
+        "retained_assertion_evidence": {
+            "records": contract["draws"],
+            "ledger_sha256": hashlib.sha256(ledger_bytes).hexdigest(),
+            "manifest_sha256": evidence_manifest,
+            "historical_latent_y_stored": False,
+            "independent_historical_y_reconstruction_possible": False,
+        },
+        "failure_class": None,
+        "failure_category": None,
+        "retryable": False,
+        "resume_from": resume_from,
+        "updated_utc": "2026-08-19T00:00:00+00:00",
+        "submission_authorized": False,
+    }
+    status["artifact_sha256"] = _extension_test_inventory(
+        chain_root, excluded_status=status_path
+    )
+    _write_json_sidecar(status_path, status)
+    if publish_pointer:
+        _write_json_sidecar(chain_root / "chain_status.json", status)
+    return status
+
+
+def _publish_extension_test_authorization(run_root: Path, *, to_epoch: int) -> None:
+    from bayes_constrained.spatial_pipeline import canonical_sha256
+
+    prior_epoch = to_epoch - 1
+    pre_gate = (
+        run_root / f"epochs/epoch_{prior_epoch}/merge/pre_gate_manifest.json"
+    )
+    verification = run_root / (
+        f"epochs/epoch_{prior_epoch}/verification/"
+        "independent_spatial_sensitivity_verification.json"
+    )
+    release = run_root / (
+        f"epochs/epoch_{prior_epoch}/release/"
+        "spatial_sensitivity_release_manifest.json"
+    )
+    gate = run_root / f"epochs/epoch_{prior_epoch}/gate/gate_decision.json"
+    _write_json_sidecar(pre_gate, {"fixture": pre_gate.name})
+    pre_gate_hash = hashlib.sha256(pre_gate.read_bytes()).hexdigest()
+
+    def inventory(*, excluded: set[str]) -> dict[str, str]:
+        result: dict[str, str] = {}
+        for path in sorted(run_root.rglob("*")):
+            if not path.is_file():
+                continue
+            relative = path.relative_to(run_root).as_posix()
+            if relative in excluded or any(
+                part.startswith(".") for part in Path(relative).parts
+            ):
+                continue
+            result[relative] = hashlib.sha256(path.read_bytes()).hexdigest()
+        return dict(sorted(result.items()))
+
+    verification_excluded = {
+        "spatial_sensitivity_gate.json",
+        "primary_vs_spatial.csv",
+        verification.relative_to(run_root).as_posix(),
+        verification.with_name(verification.name + ".sha256")
+        .relative_to(run_root)
+        .as_posix(),
+        release.relative_to(run_root).as_posix(),
+        release.with_name(release.name + ".sha256")
+        .relative_to(run_root)
+        .as_posix(),
+        gate.relative_to(run_root).as_posix(),
+        gate.with_name(gate.name + ".sha256").relative_to(run_root).as_posix(),
+    }
+    snapshot = inventory(excluded=verification_excluded)
+    snapshot_hash = canonical_sha256(snapshot)
+    verification_payload = {
+        "schema_id": "sr_v2_independent_spatial_sensitivity_verification/v1",
+        "run_id": "sr-v2-spatial-sensitivity-20260818-v1",
+        "model_id": "sr-v2-primary-nb2-bym2-v1",
+        "extension_epoch": prior_epoch,
+        "preparation_identity": "b" * 64,
+        "launch_envelope_sha256": "c" * 64,
+        "final_source_manifest_sha256": "d" * 64,
+        "benchmark_report_sha256": "a" * 64,
+        "pre_gate_manifest_sha256": pre_gate_hash,
+        "passed": True,
+        "source_checks": {"passed": True},
+        "graph_checks": {"passed": True},
+        "chain_checks": {"passed": True},
+        "diagnostic_checks": {"passed": True, "convergence_passed": False},
+        "comparison_checks": {"passed": True},
+        "benchmark_checks": {"passed": True},
+        "protected_tree_checks": {"passed": True},
+        "artifact_snapshot": snapshot,
+        "artifact_snapshot_sha256": snapshot_hash,
+        "submission_authorized": False,
+    }
+    _write_json_sidecar(verification, verification_payload)
+    verification_hash = hashlib.sha256(verification.read_bytes()).hexdigest()
+
+    release_excluded = {
+        "spatial_sensitivity_gate.json",
+        "primary_vs_spatial.csv",
+        release.relative_to(run_root).as_posix(),
+        release.with_name(release.name + ".sha256")
+        .relative_to(run_root)
+        .as_posix(),
+        gate.relative_to(run_root).as_posix(),
+        gate.with_name(gate.name + ".sha256").relative_to(run_root).as_posix(),
+    }
+    release_inventory = inventory(excluded=release_excluded)
+    release_payload = {
+        "schema_id": "sr_v2_spatial_sensitivity_release_manifest/v1",
+        "run_id": "sr-v2-spatial-sensitivity-20260818-v1",
+        "model_id": "sr-v2-primary-nb2-bym2-v1",
+        "extension_epoch": prior_epoch,
+        "preparation_identity": "b" * 64,
+        "launch_envelope_sha256": "c" * 64,
+        "final_source_manifest_sha256": "d" * 64,
+        "benchmark_report_sha256": "a" * 64,
+        "pre_gate_manifest_sha256": pre_gate_hash,
+        "independent_verification_sha256": verification_hash,
+        "verification_convergence_passed": False,
+        "verification_artifact_snapshot": snapshot,
+        "verification_artifact_snapshot_sha256": snapshot_hash,
+        "artifacts": release_inventory,
+        "artifact_inventory_sha256": canonical_sha256(release_inventory),
+        "planned_outputs": {
+            "primary_vs_spatial.csv": {
+                "source": (
+                    f"epochs/epoch_{prior_epoch}/merge/"
+                    "primary_vs_spatial.candidate.csv"
+                ),
+                "sha256": "9" * 64,
+            }
+        },
+        "excludes": ["primary_vs_spatial.csv", "spatial_sensitivity_gate.json"],
+        "submission_authorized": False,
+    }
+    _write_json_sidecar(release, release_payload)
+    release_hash = hashlib.sha256(release.read_bytes()).hexdigest()
+    _write_json_sidecar(
+        gate,
+        {
+            "status": "HOLD",
+            "passed": False,
+            "reason": "convergence_only",
+            "extension_eligible": True,
+            "extension_epoch": prior_epoch,
+            "preparation_identity": "b" * 64,
+            "pre_gate_manifest_sha256": pre_gate_hash,
+            "independent_verification_sha256": verification_hash,
+            "release_manifest_sha256": release_hash,
+        },
+    )
+    hashes = {
+        "prior_pre_gate_manifest_sha256": pre_gate_hash,
+        "prior_independent_verification_sha256": verification_hash,
+        "prior_release_manifest_sha256": release_hash,
+    }
+    unsigned = {
+        "schema_id": "sr_v2_spatial_extension_authorization/v1",
+        "run_id": "sr-v2-spatial-sensitivity-20260818-v1",
+        "from_extension_epoch": prior_epoch,
+        "to_extension_epoch": to_epoch,
+        "reason_convergence_only": True,
+        "reviewer": "independent-reviewer",
+        "reviewed_utc": "2026-08-19T00:00:00Z",
+        "prior_preparation_identity": "b" * 64,
+        **hashes,
+        "prior_gate_decision_sha256": hashlib.sha256(gate.read_bytes()).hexdigest(),
+    }
+    authorization = {
+        **unsigned,
+        "authorization_sha256": canonical_sha256(unsigned),
+    }
+    _write_json_sidecar(
+        run_root / f"extension_authorization_epoch_{to_epoch}.json",
+        authorization,
+    )
+
+
+def _refresh_extension_test_latest_status(
+    run_root: Path, *, chain_id: int, epoch: int
+) -> dict[str, object]:
+    chain_root = run_root / f"chains/chain_{chain_id:02d}"
+    candidates = sorted(
+        (chain_root / f"attempts/epoch_{epoch}").glob("attempt_*/status.json")
+    )
+    status_path = candidates[-1]
+    status = json.loads(status_path.read_text(encoding="utf-8"))
+    status["artifact_sha256"] = _extension_test_inventory(
+        chain_root, excluded_status=status_path
+    )
+    _write_json_sidecar(status_path, status)
+    _write_json_sidecar(chain_root / "chain_status.json", status)
+    return status
+
+
 def test_retry_and_reviewed_extension_selectors_are_bounded_and_distinct(
     tmp_path: Path,
 ) -> None:
@@ -2161,70 +3156,19 @@ def test_retry_and_reviewed_extension_selectors_are_bounded_and_distinct(
 
     shutil.rmtree(tmp_path / "chains")
     for chain_id in range(1, 5):
-        write_status(
-            chain_id,
-            {
-                "run_id": "sr-v2-spatial-sensitivity-20260818-v1",
-                "chain_id": chain_id,
-                "extension_epoch": 0,
-                "job_attempt": 1,
-                "status": "completed",
-                "iterations": 180_000,
-                "retained_draws": 4_500,
-            },
-        )
-    prior_paths = {
-        "prior_pre_gate_manifest_sha256": tmp_path / "epochs/epoch_0/merge/pre_gate_manifest.json",
-        "prior_independent_verification_sha256": tmp_path / "epochs/epoch_0/verification/independent_spatial_sensitivity_verification.json",
-        "prior_release_manifest_sha256": tmp_path / "epochs/epoch_0/release/spatial_sensitivity_release_manifest.json",
-    }
-    for path in prior_paths.values():
-        _write_json_sidecar(path, {"fixture": path.name})
-    prior_hashes = {
-        field: hashlib.sha256(path.read_bytes()).hexdigest()
-        for field, path in prior_paths.items()
-    }
-    gate_path = tmp_path / "epochs/epoch_0/gate/gate_decision.json"
-    _write_json_sidecar(
-        gate_path,
-        {
-            "status": "HOLD",
-            "passed": False,
-            "reason": "convergence_only",
-            "extension_eligible": True,
-            "extension_epoch": 0,
-            "preparation_identity": "b" * 64,
-            "pre_gate_manifest_sha256": prior_hashes["prior_pre_gate_manifest_sha256"],
-            "independent_verification_sha256": prior_hashes["prior_independent_verification_sha256"],
-            "release_manifest_sha256": prior_hashes["prior_release_manifest_sha256"],
-        },
-    )
-    unsigned = {
-        "schema_id": "sr_v2_spatial_extension_authorization/v1",
-        "run_id": "sr-v2-spatial-sensitivity-20260818-v1",
-        "from_extension_epoch": 0,
-        "to_extension_epoch": 1,
-        "reason_convergence_only": True,
-        "reviewer": "independent-reviewer",
-        "reviewed_utc": "2026-08-19T00:00:00Z",
-        "prior_preparation_identity": "b" * 64,
-        **prior_hashes,
-        "prior_gate_decision_sha256": hashlib.sha256(gate_path.read_bytes()).hexdigest(),
-    }
-    authorization = {**unsigned, "authorization_sha256": canonical_sha256(unsigned)}
-    _write_json_sidecar(
-        tmp_path / "extension_authorization_epoch_1.json", authorization
-    )
+        _publish_extension_test_status(tmp_path, chain_id=chain_id, epoch=0)
+    _publish_extension_test_authorization(tmp_path, to_epoch=1)
     extension = validate_extension_authorization(
         tmp_path, to_extension_epoch=1
     )
     assert extension["selected_array_indexes"] == [1, 2, 3, 4]
     assert extension["job_attempt"] == 1
 
-    status_path = tmp_path / "chains/chain_04/chain_status.json"
+    status_path = tmp_path / "chains/chain_04/attempts/epoch_0/attempt_1/status.json"
     bad = json.loads(status_path.read_text(encoding="utf-8"))
     bad["retained_draws"] = 4_499
-    write_status(4, bad)
+    _write_json_sidecar(status_path, bad)
+    _write_json_sidecar(tmp_path / "chains/chain_04/chain_status.json", bad)
     with pytest.raises(ValueError, match="Every prior-epoch chain"):
         validate_extension_authorization(tmp_path, to_extension_epoch=1)
 
