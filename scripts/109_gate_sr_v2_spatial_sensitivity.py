@@ -1075,6 +1075,43 @@ def _exact_integer(value: object, label: str) -> int:
     return value
 
 
+_CHUNK_INTEGER_FIELDS = (
+    "chain_id",
+    "extension_epoch",
+    "chunk_id",
+    "draw_start",
+    "draw_end",
+    "draw_count",
+    "county_count",
+)
+_ATTEMPT_EVIDENCE_INTEGER_FIELDS = (
+    "chain_id",
+    "extension_epoch",
+    "job_attempt",
+    "start_saved_draws",
+    "end_saved_draws",
+    "record_count",
+    "count_constraint_failures",
+    "spatial_constraint_failures",
+)
+_RETAINED_ASSERTION_INTEGER_FIELDS = (
+    "chain_id",
+    "draw_id",
+    "cumulative_iteration",
+    "extension_epoch",
+    "chunk_id",
+)
+
+
+def _exact_integer_fields(
+    value: Mapping[str, Any], fields: Sequence[str], *, label: str
+) -> dict[str, int]:
+    return {
+        field: _exact_integer(value.get(field), f"{label} {field}")
+        for field in fields
+    }
+
+
 def _finite_hex(value: object, label: str) -> float:
     if not isinstance(value, str):
         raise ValueError(f"{label} must be canonical float.hex text")
@@ -1542,21 +1579,24 @@ def _validate_checkpoint_payload(
     for chunk_id, record in enumerate(records, start=1):
         draw_start = (chunk_id - 1) * 250 + 1
         draw_end = chunk_id * 250
+        if not isinstance(record, Mapping) or set(record) != chunk_fields:
+            raise ValueError("Spatial checkpoint committed-chunk exact schema mismatch")
+        chunk_integers = _exact_integer_fields(
+            record, _CHUNK_INTEGER_FIELDS, label="checkpoint chunk"
+        )
         if (
-            not isinstance(record, Mapping)
-            or set(record) != chunk_fields
-            or record.get("schema_id") != "sr_v2_spatial_draw_chunk/v1"
-            or record.get("chain_id") != identity["chain"]["chain_id"]
-            or record.get("extension_epoch") != _expected_draw_epoch(draw_start)
-            or record.get("chunk_id") != chunk_id
-            or record.get("draw_start") != draw_start
-            or record.get("draw_end") != draw_end
-            or record.get("draw_count") != 250
+            record.get("schema_id") != "sr_v2_spatial_draw_chunk/v1"
+            or chunk_integers["chain_id"] != identity["chain"]["chain_id"]
+            or chunk_integers["extension_epoch"] != _expected_draw_epoch(draw_start)
+            or chunk_integers["chunk_id"] != chunk_id
+            or chunk_integers["draw_start"] != draw_start
+            or chunk_integers["draw_end"] != draw_end
+            or chunk_integers["draw_count"] != 250
             or record.get("scalar_path") != f"scalar_chunk_{chunk_id:06d}.parquet"
             or record.get("spatial_path") != f"spatial_chunk_{chunk_id:06d}.npz"
             or record.get("graph_contract_sha256")
             != target["graph_contract_sha256"]
-            or record.get("county_count") != county_count
+            or chunk_integers["county_count"] != county_count
             or record.get("parameter_schema") != target["parameter_schema"]
         ):
             raise ValueError("Spatial checkpoint committed-chunk exact schema mismatch")
@@ -2088,22 +2128,28 @@ def _verify_schedule(
         )
         evidence_hash = _sidecar(evidence_path)
         evidence = json.loads(evidence_path.read_text(encoding="utf-8"))
+        if not isinstance(evidence, Mapping):
+            raise ValueError("Retained-assertion evidence contract mismatch")
+        evidence_integers = _exact_integer_fields(
+            evidence,
+            _ATTEMPT_EVIDENCE_INTEGER_FIELDS,
+            label="attempt evidence",
+        )
         if (
-            not isinstance(evidence, Mapping)
-            or set(evidence) != ATTEMPT_EVIDENCE_EXACT_FIELDS
+            set(evidence) != ATTEMPT_EVIDENCE_EXACT_FIELDS
             or evidence.get("schema_id") != "sr_v2_spatial_attempt_evidence/v1"
             or evidence.get("run_id") != RUN_ID
-            or evidence.get("chain_id") != chain_id
-            or evidence.get("extension_epoch") != evidence_epoch
-            or evidence.get("job_attempt") != evidence_attempt
-            or evidence.get("start_saved_draws") != len(records)
+            or evidence_integers["chain_id"] != chain_id
+            or evidence_integers["extension_epoch"] != evidence_epoch
+            or evidence_integers["job_attempt"] != evidence_attempt
+            or evidence_integers["start_saved_draws"] != len(records)
             or evidence.get("resume_from") != item_status.get("resume_from")
             or evidence.get("evidence_builder") != "actual_public_chain_loop"
             or evidence.get("production_executor") is not True
             or evidence.get("capture_order")
             != "after_latent_target_base6_hyper_and_scheduled_mala"
-            or evidence.get("count_constraint_failures") != 0
-            or evidence.get("spatial_constraint_failures") != 0
+            or evidence_integers["count_constraint_failures"] != 0
+            or evidence_integers["spatial_constraint_failures"] != 0
             or evidence.get("historical_latent_y_stored") is not False
             or evidence.get("independent_historical_y_reconstruction_possible")
             is not False
@@ -2119,12 +2165,17 @@ def _verify_schedule(
         if _sha(ledger) != evidence.get("ledger_sha256"):
             raise ValueError("Retained-assertion ledger hash mismatch")
         lines = ledger.read_bytes().splitlines()
-        if len(lines) != evidence.get("record_count"):
+        if len(lines) != evidence_integers["record_count"]:
             raise ValueError("Retained-assertion ledger cardinality mismatch")
         for line in lines:
             record = json.loads(line)
             if not isinstance(record, dict) or set(record) != record_fields:
                 raise ValueError("Retained-assertion record exact schema mismatch")
+            _exact_integer_fields(
+                record,
+                _RETAINED_ASSERTION_INTEGER_FIELDS,
+                label="retained assertion",
+            )
             unsigned = {
                 key: record[key]
                 for key in record
@@ -2133,13 +2184,14 @@ def _verify_schedule(
             if record.get("assertion_sha256") != _canonical_sha(unsigned):
                 raise ValueError("Retained-assertion record digest mismatch")
             records.append(record)
-        if evidence.get("end_saved_draws") != len(records):
+        if evidence_integers["end_saved_draws"] != len(records):
             raise ValueError("Retained-assertion end position mismatch")
         if (
-            evidence.get("end_saved_draws") != item_status.get("retained_draws")
-            or evidence.get("record_count")
-            != evidence.get("end_saved_draws")
-            - evidence.get("start_saved_draws")
+            evidence_integers["end_saved_draws"]
+            != item_status.get("retained_draws")
+            or evidence_integers["record_count"]
+            != evidence_integers["end_saved_draws"]
+            - evidence_integers["start_saved_draws"]
         ):
             raise ValueError("Attempt evidence/status saved-draw boundary mismatch")
         manifest_hashes[evidence_path.relative_to(chain_root).as_posix()] = evidence_hash
@@ -2147,15 +2199,19 @@ def _verify_schedule(
             b"".join(_canonical_bytes(record) + b"\n" for record in records)
         ).hexdigest()
         bound_prefix = item_status.get("retained_assertion_evidence")
+        if not isinstance(bound_prefix, Mapping):
+            raise ValueError("Immutable status does not bind its evidence prefix")
+        bound_prefix_records = _exact_integer(
+            bound_prefix.get("records"), "status retained-evidence records"
+        )
         if (
-            not isinstance(bound_prefix, Mapping)
-            or set(bound_prefix)
+            set(bound_prefix)
             != {
                 "records", "ledger_sha256", "manifest_sha256",
                 "historical_latent_y_stored",
                 "independent_historical_y_reconstruction_possible",
             }
-            or bound_prefix.get("records") != len(records)
+            or bound_prefix_records != len(records)
             or bound_prefix.get("ledger_sha256") != prefix_digest
             or bound_prefix.get("manifest_sha256") != manifest_hashes
             or bound_prefix.get("historical_latent_y_stored") is not False
@@ -2166,13 +2222,18 @@ def _verify_schedule(
     if len(records) != draws:
         raise ValueError("Retained-assertion cumulative cardinality mismatch")
     for draw_id, record in enumerate(records, start=1):
+        record_integers = _exact_integer_fields(
+            record,
+            _RETAINED_ASSERTION_INTEGER_FIELDS,
+            label="retained assertion",
+        )
         if (
             record.get("schema_id") != "sr_v2_spatial_retained_assertion/v1"
-            or record.get("chain_id") != chain_id
-            or record.get("draw_id") != draw_id
-            or record.get("cumulative_iteration") != 45_000 + 30 * draw_id
-            or record.get("extension_epoch") != _expected_draw_epoch(draw_id)
-            or record.get("chunk_id") != (draw_id - 1) // 250 + 1
+            or record_integers["chain_id"] != chain_id
+            or record_integers["draw_id"] != draw_id
+            or record_integers["cumulative_iteration"] != 45_000 + 30 * draw_id
+            or record_integers["extension_epoch"] != _expected_draw_epoch(draw_id)
+            or record_integers["chunk_id"] != (draw_id - 1) // 250 + 1
             or record.get("count_constraints_asserted") is not True
             or record.get("spatial_constraints_asserted") is not True
             or len(_require_hash(record.get("latent_y_sha256"), "latent y digest"))
@@ -2190,9 +2251,13 @@ def _verify_schedule(
         b"".join(_canonical_bytes(record) + b"\n" for record in records)
     ).hexdigest()
     bound = status.get("retained_assertion_evidence")
+    if not isinstance(bound, Mapping):
+        raise ValueError("Status does not bind retained-assertion evidence")
+    bound_records = _exact_integer(
+        bound.get("records"), "status retained-evidence records"
+    )
     if (
-        not isinstance(bound, Mapping)
-        or bound.get("records") != draws
+        bound_records != draws
         or bound.get("ledger_sha256") != digest
         or bound.get("manifest_sha256") != manifest_hashes
         or bound.get("historical_latent_y_stored") is not False
@@ -2575,6 +2640,8 @@ def _validate_attempt_custody(
         raise ValueError("Prepared initial checkpoint hash authority changed")
 
     prior_inventory: dict[str, str] = {}
+    prior_chunk_records: list[Mapping[str, Any]] = []
+    validated_chunk_records: set[tuple[object, ...]] = set()
     recomputed: set[tuple[str, str]] = set()
     for index, (epoch, attempt, status_path, status) in enumerate(history):
         status_integers = _validate_status_integer_fields(status)
@@ -2809,9 +2876,23 @@ def _validate_attempt_custody(
         current_inventory = _expected_status_artifact_inventory(
             chain_root, history, index, checkpoint
         )
+        current_chunk_records = checkpoint.get("committed_chunks")
+        if not isinstance(current_chunk_records, list):
+            raise ValueError("Status checkpoint committed chunks are malformed")
+        _validate_chunk_custody_transition(
+            chunk_root=chain_root / "chunks",
+            previous_records=prior_chunk_records,
+            current_records=current_chunk_records,
+            previous_inventory=prior_inventory,
+            current_inventory=current_inventory,
+            chain_id=chain_id,
+            parameter_schema=identity["target"]["parameter_schema"],
+            counties=counties,
+            labels=labels,
+            graph_contract_sha256=identity["target"]["graph_contract_sha256"],
+            validated_records=validated_chunk_records,
+        )
         if prior_inventory:
-            if any(current_inventory.get(path) != digest for path, digest in prior_inventory.items()):
-                raise ValueError("Immutable status inventory changed a prior artifact")
             assert index > 0
             previous_path = history[index - 1][2]
             for previous_artifact in (
@@ -2822,6 +2903,10 @@ def _validate_attempt_custody(
                 if current_inventory.get(relative) != _sha(previous_artifact):
                     raise ValueError("Immutable status inventory omits prior status authority")
         prior_inventory = current_inventory
+        prior_chunk_records = list(current_chunk_records)
+    _validate_current_chunk_manifest(
+        chunk_root=chain_root / "chunks", records=prior_chunk_records
+    )
     return len(recomputed)
 
 
@@ -3015,6 +3100,9 @@ def _validate_raw_chunk(
 ) -> tuple[pd.DataFrame, dict[str, np.ndarray]]:
     if not isinstance(record, Mapping) or set(record) != _CHUNK_RECORD_FIELDS:
         raise ValueError("Raw chunk record exact schema mismatch")
+    chunk_integers = _exact_integer_fields(
+        record, _CHUNK_INTEGER_FIELDS, label="raw chunk"
+    )
     draw_start = (chunk_id - 1) * 250 + 1
     draw_end = chunk_id * 250
     record_epoch = _expected_draw_epoch(draw_start)
@@ -3025,20 +3113,17 @@ def _validate_raw_chunk(
     ).hexdigest()
     if (
         record.get("schema_id") != "sr_v2_spatial_draw_chunk/v1"
-        or type(record.get("chain_id")) is not int
-        or record.get("chain_id") != chain_id
-        or type(record.get("extension_epoch")) is not int
-        or record.get("extension_epoch") != record_epoch
-        or type(record.get("chunk_id")) is not int
-        or record.get("chunk_id") != chunk_id
-        or record.get("draw_start") != draw_start
-        or record.get("draw_end") != draw_end
-        or record.get("draw_count") != 250
+        or chunk_integers["chain_id"] != chain_id
+        or chunk_integers["extension_epoch"] != record_epoch
+        or chunk_integers["chunk_id"] != chunk_id
+        or chunk_integers["draw_start"] != draw_start
+        or chunk_integers["draw_end"] != draw_end
+        or chunk_integers["draw_count"] != 250
         or record.get("scalar_path") != expected_scalar
         or record.get("spatial_path") != expected_spatial
         or record.get("graph_contract_sha256") != graph_contract_sha256
         or record.get("county_order_sha256") != county_order_hash
-        or record.get("county_count") != len(counties)
+        or chunk_integers["county_count"] != len(counties)
         or record.get("parameter_schema") != list(parameter_schema)
     ):
         raise ValueError("Raw chunk identity/schedule mismatch")
@@ -3097,6 +3182,121 @@ def _validate_raw_chunk(
         elif np.max(np.abs(structured[:, indices].mean(axis=1))) > 1e-12:
             raise ValueError("Raw structured draws are not component-centered")
     return scalar, arrays
+
+
+_CHUNK_MANIFEST_RELATIVE = "chunks/spatial_chunk_manifest.json"
+
+
+def _chunk_manifest_bytes(records: Sequence[Mapping[str, Any]]) -> bytes:
+    return _canonical_bytes(
+        {
+            "schema_id": "sr_v2_spatial_chunk_manifest/v1",
+            "records": list(records),
+        }
+    )
+
+
+def _validate_chunk_custody_transition(
+    *,
+    chunk_root: Path,
+    previous_records: Sequence[Mapping[str, Any]],
+    current_records: Sequence[Mapping[str, Any]],
+    previous_inventory: Mapping[str, str],
+    current_inventory: Mapping[str, str],
+    chain_id: int,
+    parameter_schema: Sequence[str],
+    counties: Sequence[str],
+    labels: np.ndarray,
+    graph_contract_sha256: str,
+    validated_records: set[tuple[object, ...]],
+) -> None:
+    """Bind one status's cumulative chunk prefix to every immutable raw pair."""
+
+    if not isinstance(previous_records, Sequence) or isinstance(
+        previous_records, (str, bytes)
+    ):
+        raise ValueError("Prior committed-chunk history is malformed")
+    if not isinstance(current_records, Sequence) or isinstance(
+        current_records, (str, bytes)
+    ):
+        raise ValueError("Current committed-chunk history is malformed")
+    prior = list(previous_records)
+    current = list(current_records)
+    if len(current) < len(prior) or _canonical_bytes(current[: len(prior)]) != _canonical_bytes(prior):
+        raise ValueError("Committed-chunk history changed its canonical prior prefix")
+
+    def bind_manifest(
+        records: Sequence[Mapping[str, Any]],
+        inventory: Mapping[str, str],
+        *,
+        label: str,
+    ) -> None:
+        recorded = inventory.get(_CHUNK_MANIFEST_RELATIVE)
+        if records:
+            expected = hashlib.sha256(_chunk_manifest_bytes(records)).hexdigest()
+            if recorded != expected:
+                raise ValueError(f"{label} chunk manifest digest mismatch")
+        elif recorded is not None:
+            raise ValueError(f"{label} empty chunk history must omit its manifest")
+
+    bind_manifest(prior, previous_inventory, label="Prior status")
+    bind_manifest(current, current_inventory, label="Current status")
+    for path, digest in previous_inventory.items():
+        if path == _CHUNK_MANIFEST_RELATIVE:
+            continue
+        if current_inventory.get(path) != digest:
+            raise ValueError("Immutable status inventory changed a prior artifact")
+
+    for chunk_id, record in enumerate(current, start=1):
+        if not isinstance(record, Mapping) or set(record) != _CHUNK_RECORD_FIELDS:
+            raise ValueError("Historical raw chunk record exact schema mismatch")
+        _exact_integer_fields(
+            record, _CHUNK_INTEGER_FIELDS, label="historical raw chunk"
+        )
+        scalar_relative = f"chunks/{record.get('scalar_path')}"
+        spatial_relative = f"chunks/{record.get('spatial_path')}"
+        scalar_hash = record.get("scalar_sha256")
+        spatial_hash = record.get("spatial_sha256")
+        if (
+            current_inventory.get(scalar_relative) != scalar_hash
+            or current_inventory.get(spatial_relative) != spatial_hash
+        ):
+            raise ValueError("Historical chunk record is not bound to status inventory")
+        cache_key = (
+            scalar_relative,
+            scalar_hash,
+            spatial_relative,
+            spatial_hash,
+        )
+        if cache_key not in validated_records:
+            _validate_raw_chunk(
+                chunk_root=chunk_root,
+                record=record,
+                chain_id=chain_id,
+                chunk_id=chunk_id,
+                parameter_schema=parameter_schema,
+                counties=counties,
+                labels=labels,
+                graph_contract_sha256=graph_contract_sha256,
+            )
+            validated_records.add(cache_key)
+
+
+def _validate_current_chunk_manifest(
+    *, chunk_root: Path, records: Sequence[Mapping[str, Any]]
+) -> None:
+    """Require the mutable cumulative manifest to equal the latest prefix bytes."""
+
+    manifest = chunk_root / "spatial_chunk_manifest.json"
+    if not records:
+        if os.path.lexists(manifest):
+            raise ValueError("Empty chunk history has an unexpected current manifest")
+        return
+    if not manifest.is_file() or manifest.is_symlink():
+        raise ValueError("Current chunk manifest is missing or unsafe")
+    expected = _chunk_manifest_bytes(records)
+    if manifest.read_bytes() != expected:
+        raise ValueError("Current chunk manifest is not exact canonical latest bytes")
 
 
 def _verify_chains(

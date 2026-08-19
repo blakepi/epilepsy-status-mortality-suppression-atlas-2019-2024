@@ -1920,6 +1920,53 @@ def _write_json_sidecar(path: Path, payload: dict[str, object]) -> None:
     )
 
 
+def _commit_tiny_spatial_chunk_history(
+    root: Path, *, chunk_count: int
+) -> tuple[Path, list[dict[str, object]], object, list[str]]:
+    from bayes_constrained.spatial_bym2 import commit_spatial_draw_chunk
+
+    _, design, identity, _, _, _ = _tiny_spatial_runtime(root / "runtime")
+    graph = design.spatial_graph
+    parameters = list(identity["target"]["parameter_schema"])
+    chunk_root = root / "chunks"
+    records: list[dict[str, object]] = []
+    for chunk_id in range(1, chunk_count + 1):
+        draw_start = (chunk_id - 1) * 250 + 1
+        draw_ids = np.arange(draw_start, draw_start + 250, dtype=np.int64)
+        epoch = 0 if draw_start <= 4_500 else 1
+        values = np.zeros(250 * len(parameters), dtype=np.float64)
+        for name, replacement in (("sigma_county", 1.0), ("phi_structured", 0.5)):
+            values[np.tile(np.asarray(parameters) == name, 250)] = replacement
+        scalar = pd.DataFrame(
+            {
+                "chain_id": np.ones(len(values), dtype=np.int64),
+                "draw_id": np.repeat(draw_ids, len(parameters)),
+                "extension_epoch": np.full(len(values), epoch, dtype=np.int64),
+                "parameter": parameters * 250,
+                "value": values,
+            }
+        )
+        records.append(
+            commit_spatial_draw_chunk(
+                chunk_root,
+                chain_id=1,
+                extension_epoch=epoch,
+                graph=graph,
+                parameter_schema=parameters,
+                chunk_id=chunk_id,
+                draw_ids=draw_ids,
+                scalar_draws=scalar,
+                structured=np.zeros(
+                    (250, len(graph.counties)), dtype=np.float64
+                ),
+                unstructured=np.zeros(
+                    (250, len(graph.counties)), dtype=np.float64
+                ),
+            )
+        )
+    return chunk_root, records, graph, parameters
+
+
 def test_retry_and_reviewed_extension_selectors_are_bounded_and_distinct(
     tmp_path: Path,
 ) -> None:
@@ -3115,3 +3162,519 @@ def test_verifier_snapshot_rejects_coherent_post_verifier_spatial_rewrite(
         encoding="utf-8"
     )
     assert source.count("_verify_merged_semantics(") >= 3
+
+
+def test_isolated_chunk_custody_accepts_retry_extension_and_immediate_failure_growth(
+    tmp_path: Path,
+) -> None:
+    verifier = _load_script(
+        "109_gate_sr_v2_spatial_sensitivity.py",
+        "spatial_verifier_chunk_history_growth",
+    )
+    transition = getattr(verifier, "_validate_chunk_custody_transition", None)
+    validate_current = getattr(verifier, "_validate_current_chunk_manifest", None)
+    assert callable(transition), "missing independent historical chunk transition validator"
+    assert callable(validate_current), "missing exact current chunk-manifest validator"
+    chunk_root, records, graph, parameters = _commit_tiny_spatial_chunk_history(
+        tmp_path, chunk_count=30
+    )
+
+    def inventory(prefix: list[dict[str, object]]) -> dict[str, str]:
+        result: dict[str, str] = {}
+        for record in prefix:
+            result[f"chunks/{record['scalar_path']}"] = str(record["scalar_sha256"])
+            result[f"chunks/{record['spatial_path']}"] = str(record["spatial_sha256"])
+        if prefix:
+            result["chunks/spatial_chunk_manifest.json"] = hashlib.sha256(
+                verifier._canonical_bytes(
+                    {
+                        "schema_id": "sr_v2_spatial_chunk_manifest/v1",
+                        "records": prefix,
+                    }
+                )
+            ).hexdigest()
+        return result
+
+    context = {
+        "chunk_root": chunk_root,
+        "chain_id": 1,
+        "parameter_schema": parameters,
+        "counties": graph.counties,
+        "labels": graph.component_id,
+        "graph_contract_sha256": graph.contract_sha256,
+    }
+    cache: set[tuple[object, ...]] = set()
+    # Ordinary retry: A1 acknowledges one committed pair and A2 appends one.
+    transition(
+        previous_records=[],
+        current_records=records[:1],
+        previous_inventory={},
+        current_inventory=inventory(records[:1]),
+        validated_records=cache,
+        **context,
+    )
+    transition(
+        previous_records=records[:1],
+        current_records=records[:2],
+        previous_inventory=inventory(records[:1]),
+        current_inventory=inventory(records[:2]),
+        validated_records=cache,
+        **context,
+    )
+    # Extension transition: epoch 0's 18 chunks are an immutable prefix of 30.
+    transition(
+        previous_records=records[:18],
+        current_records=records[:30],
+        previous_inventory=inventory(records[:18]),
+        current_inventory=inventory(records[:30]),
+        validated_records=cache,
+        **context,
+    )
+    # Immediate A2 failure makes no progress; A3 may then append from that prefix.
+    transition(
+        previous_records=records[:1],
+        current_records=records[:1],
+        previous_inventory=inventory(records[:1]),
+        current_inventory=inventory(records[:1]),
+        validated_records=cache,
+        **context,
+    )
+    transition(
+        previous_records=records[:1],
+        current_records=records[:2],
+        previous_inventory=inventory(records[:1]),
+        current_inventory=inventory(records[:2]),
+        validated_records=cache,
+        **context,
+    )
+    validate_current(chunk_root=chunk_root, records=records)
+
+
+def test_isolated_chunk_custody_rejects_manifest_prefix_hash_and_raw_splices(
+    tmp_path: Path,
+) -> None:
+    verifier = _load_script(
+        "109_gate_sr_v2_spatial_sensitivity.py",
+        "spatial_verifier_chunk_history_adversarial",
+    )
+    transition = getattr(verifier, "_validate_chunk_custody_transition", None)
+    validate_current = getattr(verifier, "_validate_current_chunk_manifest", None)
+    assert callable(transition), "missing independent historical chunk transition validator"
+    assert callable(validate_current), "missing exact current chunk-manifest validator"
+    chunk_root, records, graph, parameters = _commit_tiny_spatial_chunk_history(
+        tmp_path / "history", chunk_count=2
+    )
+
+    def inventory(prefix: list[dict[str, object]]) -> dict[str, str]:
+        result = {
+            f"chunks/{record['scalar_path']}": str(record["scalar_sha256"])
+            for record in prefix
+        }
+        result.update(
+            {
+                f"chunks/{record['spatial_path']}": str(record["spatial_sha256"])
+                for record in prefix
+            }
+        )
+        if prefix:
+            result["chunks/spatial_chunk_manifest.json"] = hashlib.sha256(
+                verifier._canonical_bytes(
+                    {
+                        "schema_id": "sr_v2_spatial_chunk_manifest/v1",
+                        "records": prefix,
+                    }
+                )
+            ).hexdigest()
+        return result
+
+    context = {
+        "chunk_root": chunk_root,
+        "chain_id": 1,
+        "parameter_schema": parameters,
+        "counties": graph.counties,
+        "labels": graph.component_id,
+        "graph_contract_sha256": graph.contract_sha256,
+        "validated_records": set(),
+    }
+    bad_historical = json.loads(json.dumps(records[:1]))
+    bad_historical[0]["scalar_sha256"] = "f" * 64
+    with pytest.raises(ValueError, match="Raw chunk bytes changed"):
+        transition(
+            previous_records=[],
+            current_records=bad_historical,
+            previous_inventory={},
+            current_inventory=inventory(bad_historical),
+            **context,
+        )
+    later_splice = json.loads(json.dumps(records[:2]))
+    later_splice[0]["spatial_sha256"] = "e" * 64
+    with pytest.raises(ValueError, match="prefix"):
+        transition(
+            previous_records=records[:1],
+            current_records=later_splice,
+            previous_inventory=inventory(records[:1]),
+            current_inventory=inventory(later_splice),
+            **context,
+        )
+    wrong_manifest = inventory(records[:1])
+    wrong_manifest["chunks/spatial_chunk_manifest.json"] = "0" * 64
+    with pytest.raises(ValueError, match="manifest"):
+        transition(
+            previous_records=[],
+            current_records=records[:1],
+            previous_inventory={},
+            current_inventory=wrong_manifest,
+            **context,
+        )
+    previous_inventory = {**inventory(records[:1]), "authority.bin": "a" * 64}
+    current_inventory = {**inventory(records[:2]), "authority.bin": "b" * 64}
+    with pytest.raises(ValueError, match="prior artifact"):
+        transition(
+            previous_records=records[:1],
+            current_records=records[:2],
+            previous_inventory=previous_inventory,
+            current_inventory=current_inventory,
+            **context,
+        )
+
+    manifest = chunk_root / "spatial_chunk_manifest.json"
+    manifest.write_text(
+        json.dumps(
+            {
+                "schema_id": "sr_v2_spatial_chunk_manifest/v1",
+                "records": records,
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+        newline="\n",
+    )
+    with pytest.raises(ValueError, match="canonical|manifest"):
+        validate_current(chunk_root=chunk_root, records=records)
+
+    raw_root, raw_records, raw_graph, raw_parameters = (
+        _commit_tiny_spatial_chunk_history(tmp_path / "raw", chunk_count=1)
+    )
+    scalar_path = raw_root / str(raw_records[0]["scalar_path"])
+    scalar = pd.read_parquet(scalar_path)
+    pd.concat([scalar, scalar.iloc[[0]]], ignore_index=True).to_parquet(
+        scalar_path, index=False
+    )
+    coherent = json.loads(json.dumps(raw_records))
+    coherent[0]["scalar_sha256"] = hashlib.sha256(
+        scalar_path.read_bytes()
+    ).hexdigest()
+    (raw_root / "spatial_chunk_manifest.json").write_bytes(
+        verifier._canonical_bytes(
+            {
+                "schema_id": "sr_v2_spatial_chunk_manifest/v1",
+                "records": coherent,
+            }
+        )
+    )
+    with pytest.raises(ValueError, match="scalar chunk"):
+        transition(
+            chunk_root=raw_root,
+            previous_records=[],
+            current_records=coherent,
+            previous_inventory={},
+            current_inventory=inventory(coherent),
+            chain_id=1,
+            parameter_schema=raw_parameters,
+            counties=raw_graph.counties,
+            labels=raw_graph.component_id,
+            graph_contract_sha256=raw_graph.contract_sha256,
+            validated_records=set(),
+        )
+    verifier._set_hold(
+        tmp_path,
+        reason="independent_verification_not_passed",
+        stage="independent_verification",
+        extension_epoch=0,
+        output_base_override=tmp_path,
+    )
+    gate = json.loads(
+        (tmp_path / verifier.RUN_ID / "spatial_sensitivity_gate.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert gate["status"] == "HOLD" and gate["passed"] is False
+
+
+@pytest.mark.parametrize(
+    ("field", "alias"),
+    (
+        ("chain_id", True),
+        ("extension_epoch", False),
+        ("chunk_id", True),
+        ("draw_start", True),
+        ("draw_end", True),
+        ("draw_count", True),
+        ("county_count", True),
+    ),
+)
+def test_isolated_raw_chunk_rejects_bool_alias_for_every_integer_field(
+    tmp_path: Path, field: str, alias: bool
+) -> None:
+    verifier = _load_script(
+        "109_gate_sr_v2_spatial_sensitivity.py",
+        f"spatial_verifier_chunk_bool_{field}",
+    )
+    chunk_root, records, graph, parameters = _commit_tiny_spatial_chunk_history(
+        tmp_path, chunk_count=1
+    )
+    tampered = dict(records[0])
+    tampered[field] = alias
+    with pytest.raises(ValueError, match="exact integer"):
+        verifier._validate_raw_chunk(
+            chunk_root=chunk_root,
+            record=tampered,
+            chain_id=1,
+            chunk_id=1,
+            parameter_schema=parameters,
+            counties=graph.counties,
+            labels=graph.component_id,
+            graph_contract_sha256=graph.contract_sha256,
+        )
+
+
+def test_isolated_checkpoint_chunk_rejects_bool_alias_for_every_integer_field(
+    tmp_path: Path,
+) -> None:
+    verifier = _load_script(
+        "109_gate_sr_v2_spatial_sensitivity.py",
+        "spatial_verifier_checkpoint_chunk_bool_aliases",
+    )
+    frame, design, identity, initial, _, _ = _tiny_spatial_runtime(
+        tmp_path / "checkpoint"
+    )
+    _, records, _, _ = _commit_tiny_spatial_chunk_history(
+        tmp_path / "raw", chunk_count=1
+    )
+    checkpoint = verifier._load_canonical_checkpoint(initial)
+    iteration = 52_500
+    checkpoint.update(
+        {
+            "iteration": iteration,
+            "saved_draws": 250,
+            "next_draw_id": 251,
+            "committed_chunks": records,
+            "output_positions": {
+                "scalar_rows": 250 * len(identity["target"]["parameter_schema"]),
+                "spatial_draws": 250,
+            },
+        }
+    )
+    for name in (
+        "beta",
+        "state",
+        "year",
+        "log_sigma_state",
+        "log_sigma_year",
+        "log_kappa",
+        "spatial_hyperparameters",
+    ):
+        checkpoint["proposed"][name] = iteration
+    checkpoint["proposed"].update(
+        {
+            "transfer": iteration,
+            "blocked_refresh": (iteration // 25) * 12,
+            "mala": iteration // 5,
+        }
+    )
+    checkpoint["adaptation_state"].update(
+        {
+            "attempted": iteration // 5,
+            "accepted": 0,
+            "window_attempted": 0,
+            "window_accepted": 0,
+            "windows_completed": 90,
+            "adaptation_frozen": True,
+        }
+    )
+    seeds = {
+        "chain_seed": 74291,
+        "allocation_initialization_seed": 74251,
+        "spatial_initialization_seed": 74261,
+    }
+    validation = {
+        "identity": identity,
+        "seeds": seeds,
+        "expected_epoch": 0,
+        "expected_attempt": 1,
+        "expected_iteration": iteration,
+        "expected_draws": 250,
+        "expected_chunks": 1,
+        "row_count": len(frame),
+        "county_count": len(design.spatial_graph.counties),
+        "labels": design.spatial_graph.component_id,
+        "expected_y": frame["latent_count"].to_numpy(dtype=np.int64),
+        "count_moves_per_iteration": 1,
+        "blocked_refresh_frequency": 25,
+        "blocked_refresh_attempts": 12,
+    }
+    verifier._validate_checkpoint_payload(checkpoint, **validation)
+    aliases = {
+        "chain_id": True,
+        "extension_epoch": False,
+        "chunk_id": True,
+        "draw_start": True,
+        "draw_end": True,
+        "draw_count": True,
+        "county_count": True,
+    }
+    for field, alias in aliases.items():
+        tampered = json.loads(json.dumps(checkpoint))
+        tampered["committed_chunks"][0][field] = alias
+        with pytest.raises(ValueError, match="exact integer"):
+            verifier._validate_checkpoint_payload(tampered, **validation)
+
+
+def test_isolated_schedule_rejects_rehashed_bool_aliases_in_all_nested_integers(
+    tmp_path: Path,
+) -> None:
+    verifier = _load_script(
+        "109_gate_sr_v2_spatial_sensitivity.py",
+        "spatial_verifier_nested_schedule_bool_aliases",
+    )
+    assertion_template: dict[str, object] = {
+        "schema_id": "sr_v2_spatial_retained_assertion/v1",
+        "chain_id": 1,
+        "draw_id": 1,
+        "cumulative_iteration": 45_030,
+        "extension_epoch": 0,
+        "chunk_id": 1,
+        "capture_order": "after_latent_target_base6_hyper_and_scheduled_mala",
+        "count_constraints_asserted": True,
+        "spatial_constraints_asserted": True,
+        "latent_y_sha256": "1" * 64,
+        "structured_effect_sha256": "2" * 64,
+    }
+    evidence_template: dict[str, object] = {
+        "schema_id": "sr_v2_spatial_attempt_evidence/v1",
+        "run_id": verifier.RUN_ID,
+        "chain_id": 1,
+        "extension_epoch": 0,
+        "job_attempt": 1,
+        "start_saved_draws": 0,
+        "end_saved_draws": 1,
+        "record_count": 1,
+        "ledger_path": "retained_assertions.jsonl",
+        "ledger_sha256": "",
+        "evidence_builder": "actual_public_chain_loop",
+        "production_executor": True,
+        "capture_order": "after_latent_target_base6_hyper_and_scheduled_mala",
+        "count_constraint_failures": 0,
+        "spatial_constraint_failures": 0,
+        "historical_latent_y_stored": False,
+        "independent_historical_y_reconstruction_possible": False,
+        "verification_boundary": (
+            "The verifier checks the exact retained schedule and in-loop assertion "
+            "evidence but cannot independently reconstruct historical latent y."
+        ),
+        "resume_from": {},
+    }
+
+    def publish(
+        case_root: Path,
+        *,
+        evidence_changes: dict[str, object] | None = None,
+        assertion_changes: dict[str, object] | None = None,
+        status_records: object = 1,
+    ) -> tuple[Path, dict[str, object], list[tuple[int, int, Path, dict[str, object]]]]:
+        chain_root = case_root / "chain"
+        evidence_root = chain_root / "evidence/epoch_0/attempt_1"
+        assertion = {**assertion_template, **(assertion_changes or {})}
+        assertion["assertion_sha256"] = verifier._canonical_sha(
+            {
+                key: value
+                for key, value in assertion.items()
+                if key != "assertion_sha256"
+            }
+        )
+        ledger_payload = verifier._canonical_bytes(assertion) + b"\n"
+        evidence_root.mkdir(parents=True, exist_ok=True)
+        ledger = evidence_root / "retained_assertions.jsonl"
+        ledger.write_bytes(ledger_payload)
+        evidence = {**evidence_template, **(evidence_changes or {})}
+        evidence["ledger_sha256"] = hashlib.sha256(ledger_payload).hexdigest()
+        evidence_path = evidence_root / "attempt_evidence.json"
+        _write_json_sidecar(evidence_path, evidence)
+        status = {
+            "executor_builder": "exact_public_chain_loop",
+            "resume_from": {},
+            "retained_draws": 1,
+            "retained_assertion_evidence": {
+                "records": status_records,
+                "ledger_sha256": hashlib.sha256(ledger_payload).hexdigest(),
+                "manifest_sha256": {
+                    evidence_path.relative_to(chain_root).as_posix(): hashlib.sha256(
+                        evidence_path.read_bytes()
+                    ).hexdigest()
+                },
+                "historical_latent_y_stored": False,
+                "independent_historical_y_reconstruction_possible": False,
+            },
+        }
+        status_path = chain_root / "attempts/epoch_0/attempt_1/status.json"
+        _write_json_sidecar(status_path, status)
+        return chain_root, status, [(0, 1, status_path, status)]
+
+    baseline_root, baseline_status, baseline_history = publish(
+        tmp_path / "baseline"
+    )
+    assert verifier._verify_schedule(
+        baseline_root, 1, 0, 1, baseline_status, baseline_history
+    )["records"] == 1
+
+    evidence_aliases = {
+        "chain_id": True,
+        "extension_epoch": False,
+        "job_attempt": True,
+        "start_saved_draws": False,
+        "end_saved_draws": True,
+        "record_count": True,
+        "count_constraint_failures": False,
+        "spatial_constraint_failures": False,
+    }
+    for field, alias in evidence_aliases.items():
+        chain_root, status, history = publish(
+            tmp_path / f"evidence-{field}", evidence_changes={field: alias}
+        )
+        with pytest.raises(ValueError, match="exact integer"):
+            verifier._verify_schedule(chain_root, 1, 0, 1, status, history)
+
+    assertion_aliases = {
+        "chain_id": True,
+        "draw_id": True,
+        "cumulative_iteration": True,
+        "extension_epoch": False,
+        "chunk_id": True,
+    }
+    for field, alias in assertion_aliases.items():
+        chain_root, status, history = publish(
+            tmp_path / f"assertion-{field}", assertion_changes={field: alias}
+        )
+        with pytest.raises(ValueError, match="exact integer"):
+            verifier._verify_schedule(chain_root, 1, 0, 1, status, history)
+
+    chain_root, status, history = publish(
+        tmp_path / "status-records", status_records=True
+    )
+    with pytest.raises(ValueError, match="exact integer"):
+        verifier._verify_schedule(chain_root, 1, 0, 1, status, history)
+    verifier._set_hold(
+        tmp_path,
+        reason="independent_verification_not_passed",
+        stage="independent_verification",
+        extension_epoch=0,
+        output_base_override=tmp_path,
+    )
+    gate = json.loads(
+        (tmp_path / verifier.RUN_ID / "spatial_sensitivity_gate.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert gate["status"] == "HOLD" and gate["passed"] is False
