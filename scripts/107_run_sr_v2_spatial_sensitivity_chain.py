@@ -68,6 +68,20 @@ FROZEN_CHAIN_SETTINGS: dict[str, object] = {
         "cycle_swap": 0.05,
     },
 }
+RESUME_FROM_EXACT_FIELDS = {
+    "schema_id",
+    "mode",
+    "source_immutable_status_path",
+    "source_immutable_status_sha256",
+    "source_checkpoint_path",
+    "source_checkpoint_sha256",
+    "source_extension_epoch",
+    "source_job_attempt",
+    "source_iteration",
+    "source_saved_draws",
+    "rebound_checkpoint_path",
+    "rebound_checkpoint_sha256",
+}
 
 
 def _write_sidecar(path: Path) -> None:
@@ -122,6 +136,108 @@ def _copy_initial_checkpoint(source: Path, destination: Path) -> Path:
     shutil.copyfile(source.with_name(source.name + ".sha256"), sidecar)
     verify_sha256_sidecar(destination)
     return destination
+
+
+def _resume_from_certificate(
+    chain_root: Path,
+    *,
+    mode: str,
+    source_checkpoint: Path,
+    source_status: Mapping[str, Any] | None,
+    rebound_checkpoint: Path | None,
+) -> dict[str, object]:
+    """Freeze the exact checkpoint/status input consumed by one attempt."""
+
+    if mode not in {"prepared_initial", "retry", "extension"}:
+        raise ValueError("Resume source mode is outside the frozen contract")
+    chain_root = chain_root.resolve()
+    source = source_checkpoint.resolve()
+    if source.parent != (chain_root / "checkpoints").resolve():
+        raise ValueError("Resume source checkpoint lies outside the chain root")
+    source_hash = verify_sha256_sidecar(source)
+    source_payload = json.loads(source.read_text(encoding="ascii"))
+    source_fields = {
+        "extension_epoch": source_payload.get("extension_epoch"),
+        "job_attempt": source_payload.get("job_attempt"),
+        "iteration": source_payload.get("iteration"),
+        "saved_draws": source_payload.get("saved_draws"),
+    }
+    if any(isinstance(value, bool) or not isinstance(value, int) for value in source_fields.values()):
+        raise ValueError("Resume source checkpoint position is malformed")
+    status_relative: str | None = None
+    status_hash: str | None = None
+    if source_status is None:
+        if (
+            mode != "prepared_initial"
+            or source_fields
+            != {
+                "extension_epoch": 0,
+                "job_attempt": 1,
+                "iteration": 0,
+                "saved_draws": 0,
+            }
+            or rebound_checkpoint is not None
+        ):
+            raise ValueError("Prepared initial resume source is not exact")
+    else:
+        source_epoch = source_status.get("extension_epoch")
+        source_attempt = source_status.get("job_attempt")
+        if (
+            isinstance(source_epoch, bool)
+            or not isinstance(source_epoch, int)
+            or source_epoch not in range(4)
+            or isinstance(source_attempt, bool)
+            or not isinstance(source_attempt, int)
+            or source_attempt not in range(1, 4)
+        ):
+            raise ValueError("Resume source immutable-status position is malformed")
+        immutable = (
+            chain_root
+            / f"attempts/epoch_{source_epoch}/attempt_{source_attempt}/status.json"
+        )
+        status_hash = verify_sha256_sidecar(immutable)
+        immutable_payload = json.loads(immutable.read_text(encoding="utf-8"))
+        status_relative = immutable.relative_to(chain_root).as_posix()
+        if (
+            immutable_payload != dict(source_status)
+            or
+            source_status.get("latest_checkpoint")
+            != source.relative_to(chain_root).as_posix()
+            or source_status.get("latest_checkpoint_sha256") != source_hash
+            or source_status.get("iterations") != source_fields["iteration"]
+            or source_status.get("retained_draws") != source_fields["saved_draws"]
+            or source_epoch != source_fields["extension_epoch"]
+        ):
+            raise ValueError("Resume source status/checkpoint binding mismatch")
+        if mode == "retry" and rebound_checkpoint is not None:
+            raise ValueError("Within-epoch retry cannot have a rebound checkpoint")
+        if mode == "extension" and rebound_checkpoint is None:
+            raise ValueError("Extension requires an immutable rebound checkpoint")
+    rebound_relative: str | None = None
+    rebound_hash: str | None = None
+    if rebound_checkpoint is not None:
+        rebound = rebound_checkpoint.resolve()
+        if rebound.parent != (chain_root / "checkpoints").resolve():
+            raise ValueError("Extension rebound checkpoint lies outside the chain root")
+        rebound_hash = verify_sha256_sidecar(rebound)
+        rebound_relative = rebound.relative_to(chain_root).as_posix()
+    certificate = {
+        "schema_id": "sr_v2_spatial_resume_from/v1",
+        "mode": mode,
+        "source_immutable_status_path": status_relative,
+        "source_immutable_status_sha256": status_hash,
+        "source_checkpoint_path": source.relative_to(chain_root).as_posix(),
+        "source_checkpoint_sha256": source_hash,
+        "source_extension_epoch": source_fields["extension_epoch"],
+        "source_job_attempt": source_fields["job_attempt"],
+        "source_iteration": source_fields["iteration"],
+        "source_saved_draws": source_fields["saved_draws"],
+        "rebound_checkpoint_path": rebound_relative,
+        "rebound_checkpoint_sha256": rebound_hash,
+    }
+    if set(certificate) != RESUME_FROM_EXACT_FIELDS:
+        raise AssertionError("Resume certificate schema drift")
+    return certificate
 
 
 def _rebind_extension_checkpoint(
@@ -211,6 +327,7 @@ def _write_attempt_evidence(
     records: object,
     evidence_builder: object,
     production_executor: bool,
+    resume_from: Mapping[str, object],
 ) -> dict[str, object]:
     if not isinstance(records, list):
         raise ValueError("Public loop retained-assertion evidence must be a list")
@@ -255,6 +372,13 @@ def _write_attempt_evidence(
         normalized.append(record)
     if production_executor and evidence_builder != "actual_public_chain_loop":
         raise ValueError("Production evidence must come from the actual public chain loop")
+    if (
+        not isinstance(resume_from, Mapping)
+        or set(resume_from) != RESUME_FROM_EXACT_FIELDS
+        or resume_from.get("schema_id") != "sr_v2_spatial_resume_from/v1"
+        or resume_from.get("source_saved_draws") != start_saved_draws
+    ):
+        raise ValueError("Attempt evidence resume certificate mismatch")
     epoch_dir = chain_root / f"evidence/epoch_{extension_epoch}"
     epoch_dir.mkdir(parents=True, exist_ok=True)
     destination = epoch_dir / f"attempt_{job_attempt}"
@@ -290,6 +414,7 @@ def _write_attempt_evidence(
             "The verifier checks the exact retained schedule and in-loop assertion "
             "evidence but cannot independently reconstruct historical latent y."
         ),
+        "resume_from": dict(resume_from),
     }
     manifest = staging / "attempt_evidence.json"
     try:
@@ -328,6 +453,13 @@ def _cumulative_evidence(
                 raise ValueError("Retained-assertion ledger SHA-256 mismatch")
             if manifest.get("start_saved_draws") != expected_start:
                 raise ValueError("Retained-assertion attempts are not contiguous")
+            resume_from = manifest.get("resume_from")
+            if (
+                not isinstance(resume_from, Mapping)
+                or set(resume_from) != RESUME_FROM_EXACT_FIELDS
+                or resume_from.get("source_saved_draws") != expected_start
+            ):
+                raise ValueError("Retained-assertion resume certificate is invalid")
             raw_lines = ledger.read_bytes().splitlines()
             if len(raw_lines) != manifest.get("record_count"):
                 raise ValueError("Retained-assertion ledger cardinality mismatch")
@@ -597,6 +729,13 @@ def run_chain(
             initial_source,
             checkpoint_dir / initial_source.name,
         )
+        resume_from = _resume_from_certificate(
+            chain_root,
+            mode="prepared_initial",
+            source_checkpoint=checkpoint,
+            source_status=None,
+            rebound_checkpoint=None,
+        )
     elif status.get("extension_epoch") == extension_epoch:
         _require_retry_authority(status)
         prior_attempt = status.get("job_attempt")
@@ -608,9 +747,23 @@ def run_chain(
         identity = status["identity"]
         checkpoint = chain_root / str(status["latest_checkpoint"])
         verify_sha256_sidecar(checkpoint)
+        resume_from = _resume_from_certificate(
+            chain_root,
+            mode="retry",
+            source_checkpoint=checkpoint,
+            source_status=status,
+            rebound_checkpoint=None,
+        )
     else:
         if status.get("extension_epoch") != extension_epoch - 1:
             raise ValueError("Extension epochs must be consecutive")
+        if (
+            status.get("status") != "completed"
+            or status.get("failure_class") is not None
+            or status.get("failure_category") is not None
+            or status.get("retryable") is not False
+        ):
+            raise ValueError("Extension requires an exact completed source status")
         extension = validate_extension_authorization(
             run_root, to_extension_epoch=extension_epoch
         )
@@ -628,8 +781,9 @@ def run_chain(
             allocation_initialization_seed=assignment.allocation_initialization_seed,
             spatial_initialization_seed=assignment.spatial_initialization_seed,
         )
+        prior_checkpoint = chain_root / str(status["latest_checkpoint"])
         checkpoint = _rebind_extension_checkpoint(
-            prior_checkpoint=chain_root / str(status["latest_checkpoint"]),
+            prior_checkpoint=prior_checkpoint,
             checkpoint_dir=checkpoint_dir,
             chunk_dir=chunk_dir,
             prior_identity=prior_identity,
@@ -638,6 +792,13 @@ def run_chain(
             frame=frame,
             design=design,
             prior=prior,
+        )
+        resume_from = _resume_from_certificate(
+            chain_root,
+            mode="extension",
+            source_checkpoint=prior_checkpoint,
+            source_status=status,
+            rebound_checkpoint=checkpoint,
         )
     production_dependencies = (
         prepared_validator is validate_prepared_source_envelope
@@ -695,6 +856,7 @@ def run_chain(
             records=result.get("retained_assertion_records"),
             evidence_builder=result.get("evidence_builder"),
             production_executor=production_executor,
+            resume_from=resume_from,
         )
         cumulative_evidence = _cumulative_evidence(
             chain_root,
@@ -738,7 +900,9 @@ def run_chain(
             ),
             "retained_assertion_evidence": cumulative_evidence,
             "failure_category": None,
+            "failure_class": None,
             "retryable": state == "checkpointed",
+            "resume_from": resume_from,
             "updated_utc": datetime.now(timezone.utc).isoformat(),
             "submission_authorized": False,
         }
@@ -791,6 +955,7 @@ def run_chain(
                     else "injected_failed_executor"
                 ),
                 production_executor=production_dependencies,
+                resume_from=resume_from,
             )
         cumulative_evidence = _cumulative_evidence(
             chain_root,
@@ -831,6 +996,7 @@ def run_chain(
             "failure_class": type(error).__name__,
             "failure_category": failure_category,
             "retryable": retryable,
+            "resume_from": resume_from,
             "executor_builder": (
                 "exact_public_chain_loop"
                 if production_dependencies

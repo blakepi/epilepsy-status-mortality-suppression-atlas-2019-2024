@@ -90,6 +90,38 @@ COUNTER_FIELDS = {
     "blocked_refresh", "beta", "state", "year", "log_sigma_state",
     "log_sigma_year", "log_kappa", "spatial_hyperparameters", "mala",
 }
+LATENT_PROPOSAL_FIELDS = {
+    "transfer", "interval_transfer", "interval_path", "swap_2x2", "cycle_swap",
+}
+FROZEN_LATENT_SCHEDULE = {
+    "count_move_sweeps_per_iter": 0.1,
+    "max_count_proposals_per_iter": 350,
+    "blocked_refresh_frequency": 25,
+    "blocked_refresh_attempts": 12,
+    "proposed_family_sum": [
+        "transfer", "interval_transfer", "interval_path", "swap_2x2", "cycle_swap",
+    ],
+}
+RESUME_FROM_EXACT_FIELDS = {
+    "schema_id", "mode", "source_immutable_status_path",
+    "source_immutable_status_sha256", "source_checkpoint_path",
+    "source_checkpoint_sha256", "source_extension_epoch", "source_job_attempt",
+    "source_iteration", "source_saved_draws", "rebound_checkpoint_path",
+    "rebound_checkpoint_sha256",
+}
+ATTEMPT_EVIDENCE_EXACT_FIELDS = {
+    "schema_id", "run_id", "chain_id", "extension_epoch", "job_attempt",
+    "start_saved_draws", "end_saved_draws", "record_count", "ledger_path",
+    "ledger_sha256", "evidence_builder", "production_executor", "capture_order",
+    "count_constraint_failures", "spatial_constraint_failures",
+    "historical_latent_y_stored",
+    "independent_historical_y_reconstruction_possible", "verification_boundary",
+    "resume_from",
+}
+FAILURE_CATEGORIES = {
+    "source", "graph", "constraint", "fingerprint", "nonfinite_value",
+    "evidence_integrity", "transient_runtime", "internal_nonretryable",
+}
 CHAIN_STATUS_EXACT_FIELDS = {
     "schema_id", "run_id", "model_id", "preparation_identity",
     "launch_envelope_sha256", "final_source_manifest_sha256", "chain_id",
@@ -97,7 +129,8 @@ CHAIN_STATUS_EXACT_FIELDS = {
     "retained_draws", "chunks", "seeds", "identity", "target_fingerprint",
     "chain_fingerprint", "latest_checkpoint", "latest_checkpoint_sha256",
     "artifact_sha256", "executor_builder", "retained_assertion_evidence",
-    "failure_category", "retryable", "updated_utc", "submission_authorized",
+    "failure_class", "failure_category", "retryable", "resume_from",
+    "updated_utc", "submission_authorized",
 }
 COMPARISON_ROWS = (
     "primary_rurality_metro_other",
@@ -456,6 +489,8 @@ def _load_config(config_path: Path) -> dict[str, Any]:
         raise ValueError("Frozen epoch contract changed")
     if config.get("comparison", {}).get("rows") != list(COMPARISON_ROWS):
         raise ValueError("Frozen comparison row order changed")
+    if config.get("execution", {}).get("latent_schedule") != FROZEN_LATENT_SCHEDULE:
+        raise ValueError("Frozen latent proposal schedule changed")
     final_source = config.get("final_source_manifest")
     if (
         not isinstance(final_source, Mapping)
@@ -934,7 +969,7 @@ def _validate_target_identity(
         identity.get("schema_version") != 2
         or not isinstance(target, Mapping)
         or set(target) != TARGET_EXACT_FIELDS
-        or dict(target) != dict(expected_target)
+        or _canonical_bytes(dict(target)) != _canonical_bytes(dict(expected_target))
     ):
         raise ValueError("Spatial target exact field/value contract mismatch")
     target_fingerprint = _canonical_sha(target)
@@ -949,7 +984,7 @@ def _validate_target_identity(
     if (
         set(observed_chain) != set(chain)
         or identity.get("target_fingerprint") != target_fingerprint
-        or dict(observed_chain) != chain
+        or _canonical_bytes(dict(observed_chain)) != _canonical_bytes(chain)
         or identity.get("chain_fingerprint") != _canonical_sha(chain)
     ):
         raise ValueError("Spatial chain exact seed/fingerprint contract mismatch")
@@ -1064,6 +1099,242 @@ def _load_canonical_checkpoint(path: Path) -> dict[str, Any]:
     return payload
 
 
+def _checkpoint_relative_path(checkpoint: Mapping[str, Any]) -> str:
+    epoch = _exact_integer(checkpoint.get("extension_epoch"), "checkpoint epoch")
+    attempt = _exact_integer(checkpoint.get("job_attempt"), "checkpoint attempt")
+    iteration = _exact_integer(checkpoint.get("iteration"), "checkpoint iteration")
+    if epoch not in range(4) or attempt not in range(1, 4) or iteration < 0:
+        raise ValueError("Checkpoint generator position is outside the frozen contract")
+    return (
+        f"checkpoints/checkpoint_epoch_{epoch}_attempt_{attempt}_"
+        f"iter_{iteration:09d}.json"
+    )
+
+
+def _validate_resume_from_certificate(
+    certificate: object,
+    *,
+    evidence_certificate: object,
+    chain_root: Path,
+    current_epoch: int,
+    current_attempt: int,
+    prior_status: Mapping[str, Any] | None,
+    prior_status_path: Path | None,
+) -> dict[str, Any]:
+    """Independently authenticate one attempt's exact continuation boundary."""
+
+    if (
+        not isinstance(certificate, Mapping)
+        or set(certificate) != RESUME_FROM_EXACT_FIELDS
+        or not isinstance(evidence_certificate, Mapping)
+        or set(evidence_certificate) != RESUME_FROM_EXACT_FIELDS
+        or certificate.get("schema_id") != "sr_v2_spatial_resume_from/v1"
+        or _canonical_bytes(dict(certificate))
+        != _canonical_bytes(dict(evidence_certificate))
+    ):
+        raise ValueError("Attempt resume certificate exact schema/evidence mismatch")
+    epoch = _exact_integer(current_epoch, "current resume epoch")
+    attempt = _exact_integer(current_attempt, "current resume attempt")
+    source_epoch_value = _exact_integer(
+        certificate.get("source_extension_epoch"), "resume source epoch"
+    )
+    source_attempt_value = _exact_integer(
+        certificate.get("source_job_attempt"), "resume source attempt"
+    )
+    source_iteration_value = _exact_integer(
+        certificate.get("source_iteration"), "resume source iteration"
+    )
+    source_draws_value = _exact_integer(
+        certificate.get("source_saved_draws"), "resume source saved draws"
+    )
+    if epoch not in range(4) or attempt not in range(1, 4):
+        raise ValueError("Current resume position is outside the frozen contract")
+    if (
+        source_epoch_value not in range(4)
+        or source_attempt_value not in range(1, 4)
+        or source_iteration_value < 0
+        or source_draws_value < 0
+    ):
+        raise ValueError("Resume source position is outside the frozen contract")
+    expected_mode = (
+        "retry"
+        if attempt > 1
+        else "extension"
+        if epoch > 0
+        else "prepared_initial"
+    )
+    if certificate.get("mode") != expected_mode:
+        raise ValueError("Attempt resume mode does not match its epoch/attempt")
+    chain_root = chain_root.resolve()
+    status_relative = certificate.get("source_immutable_status_path")
+    status_hash = certificate.get("source_immutable_status_sha256")
+    if expected_mode == "prepared_initial":
+        if (
+            prior_status is not None
+            or prior_status_path is not None
+            or status_relative is not None
+            or status_hash is not None
+        ):
+            raise ValueError("Prepared initial resume cannot cite an immutable status")
+    else:
+        if prior_status is None or prior_status_path is None:
+            raise ValueError("Retry/extension resume source status is missing")
+        prior_epoch = _exact_integer(
+            prior_status.get("extension_epoch"), "resume source status epoch"
+        )
+        prior_attempt = _exact_integer(
+            prior_status.get("job_attempt"), "resume source status attempt"
+        )
+        expected_status_relative = (
+            f"attempts/epoch_{prior_epoch}/attempt_{prior_attempt}/status.json"
+        )
+        status_path = _safe(chain_root, expected_status_relative)
+        if prior_status_path.resolve() != status_path:
+            raise ValueError("Resume source status path is not generator-exact")
+        actual_status_hash = _sidecar(status_path)
+        loaded_status = json.loads(status_path.read_text(encoding="utf-8"))
+        if (
+            status_relative != expected_status_relative
+            or status_hash != actual_status_hash
+            or loaded_status != dict(prior_status)
+        ):
+            raise ValueError("Resume source immutable-status hash/payload changed")
+        if expected_mode == "retry":
+            if (
+                prior_epoch != epoch
+                or prior_attempt != attempt - 1
+                or prior_status.get("status") not in {"checkpointed", "failed"}
+                or prior_status.get("retryable") is not True
+                or (
+                    prior_status.get("status") == "checkpointed"
+                    and (
+                        prior_status.get("failure_class") is not None
+                        or prior_status.get("failure_category") is not None
+                    )
+                )
+                or (
+                    prior_status.get("status") == "failed"
+                    and (
+                        not isinstance(prior_status.get("failure_class"), str)
+                        or not prior_status["failure_class"].strip()
+                        or prior_status.get("failure_category") != "transient_runtime"
+                    )
+                )
+            ):
+                raise ValueError("Retry must cite the immediate prior attempt status")
+        elif (
+            prior_epoch != epoch - 1
+            or prior_status.get("status") != "completed"
+            or prior_status.get("failure_class") is not None
+            or prior_status.get("failure_category") is not None
+            or prior_status.get("retryable") is not False
+        ):
+            raise ValueError("Extension must cite the prior completed epoch status")
+    source_relative = certificate.get("source_checkpoint_path")
+    if not isinstance(source_relative, str) or not source_relative:
+        raise ValueError("Resume source checkpoint path is missing")
+    source_path = _safe(chain_root, source_relative)
+    source_hash = _sidecar(source_path)
+    source_checkpoint = _load_canonical_checkpoint(source_path)
+    if (
+        source_relative != _checkpoint_relative_path(source_checkpoint)
+        or certificate.get("source_checkpoint_sha256") != source_hash
+        or source_epoch_value != source_checkpoint.get("extension_epoch")
+        or source_attempt_value != source_checkpoint.get("job_attempt")
+        or source_iteration_value != source_checkpoint.get("iteration")
+        or source_draws_value != source_checkpoint.get("saved_draws")
+    ):
+        raise ValueError("Resume source checkpoint path/hash/position mismatch")
+    if expected_mode == "prepared_initial":
+        if (
+            source_relative
+            != "checkpoints/checkpoint_epoch_0_attempt_1_iter_000000000.json"
+            or source_epoch_value != 0
+            or source_attempt_value != 1
+            or source_iteration_value != 0
+            or source_draws_value != 0
+        ):
+            raise ValueError("Prepared initial resume checkpoint is not exact")
+    else:
+        assert prior_status is not None
+        if (
+            source_relative != prior_status.get("latest_checkpoint")
+            or source_hash != prior_status.get("latest_checkpoint_sha256")
+            or source_iteration_value != prior_status.get("iterations")
+            or source_draws_value != prior_status.get("retained_draws")
+            or source_epoch_value != prior_status.get("extension_epoch")
+        ):
+            raise ValueError("Resume source differs from prior acknowledged checkpoint")
+    rebound_relative = certificate.get("rebound_checkpoint_path")
+    rebound_hash = certificate.get("rebound_checkpoint_sha256")
+    rebound_checkpoint: dict[str, Any] | None = None
+    if expected_mode != "extension":
+        if rebound_relative is not None or rebound_hash is not None:
+            raise ValueError("Only an extension may cite a rebound checkpoint")
+    else:
+        expected_rebound = (
+            f"checkpoints/checkpoint_epoch_{epoch}_attempt_1_"
+            f"iter_{source_iteration_value:09d}.json"
+        )
+        if rebound_relative != expected_rebound:
+            raise ValueError("Extension rebound checkpoint path is not generator-exact")
+        rebound_path = _safe(chain_root, rebound_relative)
+        actual_rebound_hash = _sidecar(rebound_path)
+        rebound_checkpoint = _load_canonical_checkpoint(rebound_path)
+        if (
+            rebound_hash != actual_rebound_hash
+            or rebound_relative != _checkpoint_relative_path(rebound_checkpoint)
+            or rebound_checkpoint.get("extension_epoch") != epoch
+            or rebound_checkpoint.get("job_attempt") != 1
+            or rebound_checkpoint.get("iteration")
+            != source_iteration_value
+            or rebound_checkpoint.get("saved_draws")
+            != source_draws_value
+        ):
+            raise ValueError("Extension rebound checkpoint hash/position mismatch")
+        reviewed_identity_fields = {
+            "target_fingerprint", "chain_fingerprint", "extension_epoch", "job_attempt"
+        }
+        for field in CHECKPOINT_EXACT_FIELDS - reviewed_identity_fields:
+            if rebound_checkpoint.get(field) != source_checkpoint.get(field):
+                raise ValueError(
+                    f"Extension rebound semantic state changed at field: {field}"
+                )
+    return {
+        "source_checkpoint": source_checkpoint,
+        "source_checkpoint_path": source_path,
+        "rebound_checkpoint": rebound_checkpoint,
+    }
+
+
+def _count_moves_per_iteration(frame: pd.DataFrame) -> int:
+    if not {"q002_lower", "q002_upper"}.issubset(frame.columns):
+        raise ValueError("Model frame lacks frozen count-bound columns")
+    lower = frame["q002_lower"].to_numpy()
+    upper = frame["q002_upper"].to_numpy()
+    if (
+        lower.ndim != 1
+        or upper.shape != lower.shape
+        or np.issubdtype(lower.dtype, np.bool_)
+        or np.issubdtype(upper.dtype, np.bool_)
+        or not np.issubdtype(lower.dtype, np.integer)
+        or not np.issubdtype(upper.dtype, np.integer)
+        or np.any(upper < lower)
+    ):
+        raise ValueError("Model-frame count bounds are not exact valid integers")
+    free_cells = int(np.count_nonzero(upper > lower))
+    return min(
+        int(FROZEN_LATENT_SCHEDULE["max_count_proposals_per_iter"]),
+        max(
+            1,
+            int(
+                free_cells
+                * float(FROZEN_LATENT_SCHEDULE["count_move_sweeps_per_iter"])
+            ),
+        ),
+    )
+
+
 def _validate_checkpoint_payload(
     checkpoint: object,
     *,
@@ -1078,6 +1349,9 @@ def _validate_checkpoint_payload(
     county_count: int,
     labels: np.ndarray | None = None,
     expected_y: np.ndarray | None = None,
+    count_moves_per_iteration: int,
+    blocked_refresh_frequency: int,
+    blocked_refresh_attempts: int,
 ) -> dict[str, Any]:
     if not isinstance(checkpoint, Mapping) or set(checkpoint) != CHECKPOINT_EXACT_FIELDS:
         raise ValueError("Spatial checkpoint exact v2 schema mismatch")
@@ -1190,6 +1464,27 @@ def _validate_checkpoint_payload(
             raise ValueError("Spatial checkpoint scheduled block counter mismatch")
     if counters["proposed"]["mala"] != expected_iteration // 5:
         raise ValueError("Spatial checkpoint MALA schedule mismatch")
+    count_moves = _exact_integer(
+        count_moves_per_iteration, "count moves per iteration"
+    )
+    blocked_frequency = _exact_integer(
+        blocked_refresh_frequency, "blocked refresh frequency"
+    )
+    blocked_attempts = _exact_integer(
+        blocked_refresh_attempts, "blocked refresh attempts"
+    )
+    if count_moves <= 0 or blocked_frequency <= 0 or blocked_attempts <= 0:
+        raise ValueError("Frozen latent proposal settings must be positive")
+    if (
+        sum(counters["proposed"][name] for name in LATENT_PROPOSAL_FIELDS)
+        != count_moves * expected_iteration
+    ):
+        raise ValueError("Spatial checkpoint latent proposal schedule mismatch")
+    if (
+        counters["proposed"]["blocked_refresh"]
+        != (expected_iteration // blocked_frequency) * blocked_attempts
+    ):
+        raise ValueError("Spatial checkpoint blocked-refresh schedule mismatch")
     adaptation = checkpoint.get("adaptation_state")
     adaptation_fields = {
         "multiplier_hex", "epsilon_structured_hex", "epsilon_unstructured_hex",
@@ -1236,6 +1531,37 @@ def _validate_checkpoint_payload(
     records = checkpoint.get("committed_chunks")
     if not isinstance(records, list) or len(records) != expected_chunks:
         raise ValueError("Spatial checkpoint committed-chunk cardinality mismatch")
+    if expected_chunks != expected_draws // 250:
+        raise ValueError("Spatial checkpoint chunk count disagrees with saved draws")
+    chunk_fields = {
+        "schema_id", "chain_id", "extension_epoch", "chunk_id", "draw_start",
+        "draw_end", "draw_count", "scalar_path", "scalar_sha256", "spatial_path",
+        "spatial_sha256", "graph_contract_sha256", "county_order_sha256",
+        "county_count", "parameter_schema",
+    }
+    for chunk_id, record in enumerate(records, start=1):
+        draw_start = (chunk_id - 1) * 250 + 1
+        draw_end = chunk_id * 250
+        if (
+            not isinstance(record, Mapping)
+            or set(record) != chunk_fields
+            or record.get("schema_id") != "sr_v2_spatial_draw_chunk/v1"
+            or record.get("chain_id") != identity["chain"]["chain_id"]
+            or record.get("extension_epoch") != _expected_draw_epoch(draw_start)
+            or record.get("chunk_id") != chunk_id
+            or record.get("draw_start") != draw_start
+            or record.get("draw_end") != draw_end
+            or record.get("draw_count") != 250
+            or record.get("scalar_path") != f"scalar_chunk_{chunk_id:06d}.parquet"
+            or record.get("spatial_path") != f"spatial_chunk_{chunk_id:06d}.npz"
+            or record.get("graph_contract_sha256")
+            != target["graph_contract_sha256"]
+            or record.get("county_count") != county_count
+            or record.get("parameter_schema") != target["parameter_schema"]
+        ):
+            raise ValueError("Spatial checkpoint committed-chunk exact schema mismatch")
+        for field in ("scalar_sha256", "spatial_sha256", "county_order_sha256"):
+            _require_hash(record.get(field), f"checkpoint chunk {field}")
     pending = checkpoint.get("pending_buffers")
     if not isinstance(pending, Mapping) or set(pending) != {"scalar", "structured", "unstructured"}:
         raise ValueError("Spatial checkpoint pending-buffer exact schema mismatch")
@@ -1249,20 +1575,68 @@ def _validate_checkpoint_payload(
         or set(scalar_pending) != scalar_fields
         or scalar_pending.get("columns")
         != ["chain_id", "draw_id", "extension_epoch", "parameter", "value"]
-        or _exact_integer(scalar_pending.get("row_count"), "pending row_count") != 0
-        or scalar_pending.get("parameter") != []
     ):
         raise ValueError("Spatial checkpoint pending scalar exact schema mismatch")
-    for name, dtype in (
-        ("chain_id", "<i8"), ("draw_id", "<i8"), ("extension_epoch", "<i8"),
-        ("value", "<f8"),
+    pending_draws = expected_draws - expected_chunks * 250
+    parameter_count = len(target["parameter_schema"])
+    pending_rows = pending_draws * parameter_count
+    if (
+        pending_draws not in range(250)
+        or _exact_integer(scalar_pending.get("row_count"), "pending row_count")
+        != pending_rows
+        or scalar_pending.get("parameter") != target["parameter_schema"] * pending_draws
     ):
-        if _array(scalar_pending[name], dtype).shape != (0,):
-            raise ValueError("Spatial checkpoint pending scalar array is not empty")
-    for name in ("structured", "unstructured"):
-        values = _array(pending[name], "<f8")
-        if values.shape != (0, county_count):
-            raise ValueError("Spatial checkpoint pending spatial buffer is not empty")
+        raise ValueError("Spatial checkpoint pending scalar cardinality/order mismatch")
+    pending_arrays = {
+        "chain_id": _array(scalar_pending["chain_id"], "<i8"),
+        "draw_id": _array(scalar_pending["draw_id"], "<i8"),
+        "extension_epoch": _array(scalar_pending["extension_epoch"], "<i8"),
+        "value": _array(scalar_pending["value"], "<f8"),
+    }
+    if any(values.shape != (pending_rows,) for values in pending_arrays.values()):
+        raise ValueError("Spatial checkpoint pending scalar array shape mismatch")
+    expected_pending_ids = np.arange(
+        expected_chunks * 250 + 1, expected_draws + 1, dtype=np.int64
+    )
+    if (
+        not np.array_equal(
+            pending_arrays["chain_id"],
+            np.full(pending_rows, identity["chain"]["chain_id"], dtype=np.int64),
+        )
+        or not np.array_equal(
+            pending_arrays["draw_id"], np.repeat(expected_pending_ids, parameter_count)
+        )
+        or not np.array_equal(
+            pending_arrays["extension_epoch"],
+            np.repeat(
+                np.asarray(
+                    [_expected_draw_epoch(int(draw)) for draw in expected_pending_ids],
+                    dtype=np.int64,
+                ),
+                parameter_count,
+            ),
+        )
+        or not np.isfinite(pending_arrays["value"]).all()
+    ):
+        raise ValueError("Spatial checkpoint pending scalar content mismatch")
+    pending_spatial = {
+        name: _array(pending[name], "<f8")
+        for name in ("structured", "unstructured")
+    }
+    if any(
+        values.shape != (pending_draws, county_count)
+        or not np.isfinite(values).all()
+        for values in pending_spatial.values()
+    ):
+        raise ValueError("Spatial checkpoint pending spatial buffer mismatch")
+    if labels is not None:
+        for row in pending_spatial["structured"]:
+            for component in np.unique(labels):
+                indices = np.flatnonzero(labels == component)
+                if len(indices) == 1 and np.any(row[indices] != 0.0):
+                    raise ValueError("Pending singleton structured effect is nonzero")
+                if len(indices) > 1 and abs(float(row[indices].mean())) > 1e-12:
+                    raise ValueError("Pending structured effect is not component-centered")
     output = checkpoint.get("output_positions")
     if (
         not isinstance(output, Mapping)
@@ -1522,6 +1896,13 @@ def _verify_prepared(
             county_count=len(counties),
             labels=labels,
             expected_y=allocation["latent_count"].to_numpy(dtype=np.int64),
+            count_moves_per_iteration=_count_moves_per_iteration(prepared_frame),
+            blocked_refresh_frequency=int(
+                FROZEN_LATENT_SCHEDULE["blocked_refresh_frequency"]
+            ),
+            blocked_refresh_attempts=int(
+                FROZEN_LATENT_SCHEDULE["blocked_refresh_attempts"]
+            ),
         )
         _validate_checkpoint_target(
             checkpoint,
@@ -1674,74 +2055,114 @@ def _verify_schedule(
     epoch: int,
     draws: int,
     status: Mapping[str, Any],
+    history: Sequence[tuple[int, int, Path, Mapping[str, Any]]],
 ) -> dict[str, object]:
     if status.get("executor_builder") != "exact_public_chain_loop":
         raise ValueError("Independent verification requires actual public-loop evidence")
     records: list[dict[str, object]] = []
     manifest_hashes: dict[str, str] = {}
-    evidence_fields = {
-        "schema_id", "run_id", "chain_id", "extension_epoch", "job_attempt",
-        "start_saved_draws", "end_saved_draws", "record_count", "ledger_path",
-        "ledger_sha256", "evidence_builder", "production_executor", "capture_order",
-        "count_constraint_failures", "spatial_constraint_failures",
-        "historical_latent_y_stored",
-        "independent_historical_y_reconstruction_possible", "verification_boundary",
+    expected_paths = {
+        (
+            chain_root
+            / f"evidence/epoch_{item_epoch}/attempt_{item_attempt}/attempt_evidence.json"
+        ).resolve()
+        for item_epoch, item_attempt, _path, _item_status in history
     }
-    for evidence_epoch in range(epoch + 1):
-        evidence_root = chain_root / f"evidence/epoch_{evidence_epoch}"
-        manifests = sorted(evidence_root.glob("attempt_*/attempt_evidence.json"))
-        if not manifests:
-            raise ValueError("Retained-assertion evidence manifest is missing")
-        for evidence_path in manifests:
-            evidence_hash = _sidecar(evidence_path)
-            evidence = json.loads(evidence_path.read_text(encoding="utf-8"))
-            if (
-                not isinstance(evidence, Mapping)
-                or set(evidence) != evidence_fields
-                or
-                evidence.get("schema_id") != "sr_v2_spatial_attempt_evidence/v1"
-                or evidence.get("run_id") != RUN_ID
-                or evidence.get("chain_id") != chain_id
-                or evidence.get("extension_epoch") != evidence_epoch
-                or evidence.get("job_attempt")
-                != int(evidence_path.parent.name.removeprefix("attempt_"))
-                or evidence.get("start_saved_draws") != len(records)
-                or evidence.get("evidence_builder") != "actual_public_chain_loop"
-                or evidence.get("production_executor") is not True
-                or evidence.get("capture_order")
-                != "after_latent_target_base6_hyper_and_scheduled_mala"
-                or evidence.get("count_constraint_failures") != 0
-                or evidence.get("spatial_constraint_failures") != 0
-                or evidence.get("historical_latent_y_stored") is not False
-                or evidence.get("independent_historical_y_reconstruction_possible")
-                is not False
-            ):
-                raise ValueError("Retained-assertion evidence contract mismatch")
-            ledger = evidence_path.parent / str(evidence.get("ledger_path", ""))
-            _inventory(
-                evidence_path.parent,
-                {str(evidence.get("ledger_path", "")): evidence.get("ledger_sha256")},
-                exact_files=True,
-                allowed_files=("attempt_evidence.json", "attempt_evidence.json.sha256"),
-            )
-            if _sha(ledger) != evidence.get("ledger_sha256"):
-                raise ValueError("Retained-assertion ledger hash mismatch")
-            lines = ledger.read_bytes().splitlines()
-            if len(lines) != evidence.get("record_count"):
-                raise ValueError("Retained-assertion ledger cardinality mismatch")
-            for line in lines:
-                record = json.loads(line)
-                unsigned = {
-                    key: record[key]
-                    for key in record
-                    if key != "assertion_sha256"
-                }
-                if record.get("assertion_sha256") != _canonical_sha(unsigned):
-                    raise ValueError("Retained-assertion record digest mismatch")
-                records.append(record)
-            if evidence.get("end_saved_draws") != len(records):
-                raise ValueError("Retained-assertion end position mismatch")
-            manifest_hashes[evidence_path.relative_to(chain_root).as_posix()] = evidence_hash
+    actual_paths = {
+        path.resolve()
+        for path in chain_root.glob("evidence/epoch_*/attempt_*/attempt_evidence.json")
+    }
+    if actual_paths != expected_paths:
+        raise ValueError("Retained-assertion evidence/status custody paths differ")
+    record_fields = {
+        "schema_id", "chain_id", "draw_id", "cumulative_iteration",
+        "extension_epoch", "chunk_id", "capture_order",
+        "count_constraints_asserted", "spatial_constraints_asserted",
+        "latent_y_sha256", "structured_effect_sha256", "assertion_sha256",
+    }
+    for evidence_epoch, evidence_attempt, _status_path, item_status in history:
+        evidence_path = (
+            chain_root
+            / f"evidence/epoch_{evidence_epoch}/attempt_{evidence_attempt}/"
+            "attempt_evidence.json"
+        )
+        evidence_hash = _sidecar(evidence_path)
+        evidence = json.loads(evidence_path.read_text(encoding="utf-8"))
+        if (
+            not isinstance(evidence, Mapping)
+            or set(evidence) != ATTEMPT_EVIDENCE_EXACT_FIELDS
+            or evidence.get("schema_id") != "sr_v2_spatial_attempt_evidence/v1"
+            or evidence.get("run_id") != RUN_ID
+            or evidence.get("chain_id") != chain_id
+            or evidence.get("extension_epoch") != evidence_epoch
+            or evidence.get("job_attempt") != evidence_attempt
+            or evidence.get("start_saved_draws") != len(records)
+            or evidence.get("resume_from") != item_status.get("resume_from")
+            or evidence.get("evidence_builder") != "actual_public_chain_loop"
+            or evidence.get("production_executor") is not True
+            or evidence.get("capture_order")
+            != "after_latent_target_base6_hyper_and_scheduled_mala"
+            or evidence.get("count_constraint_failures") != 0
+            or evidence.get("spatial_constraint_failures") != 0
+            or evidence.get("historical_latent_y_stored") is not False
+            or evidence.get("independent_historical_y_reconstruction_possible")
+            is not False
+        ):
+            raise ValueError("Retained-assertion evidence contract mismatch")
+        ledger = evidence_path.parent / str(evidence.get("ledger_path", ""))
+        _inventory(
+            evidence_path.parent,
+            {str(evidence.get("ledger_path", "")): evidence.get("ledger_sha256")},
+            exact_files=True,
+            allowed_files=("attempt_evidence.json", "attempt_evidence.json.sha256"),
+        )
+        if _sha(ledger) != evidence.get("ledger_sha256"):
+            raise ValueError("Retained-assertion ledger hash mismatch")
+        lines = ledger.read_bytes().splitlines()
+        if len(lines) != evidence.get("record_count"):
+            raise ValueError("Retained-assertion ledger cardinality mismatch")
+        for line in lines:
+            record = json.loads(line)
+            if not isinstance(record, dict) or set(record) != record_fields:
+                raise ValueError("Retained-assertion record exact schema mismatch")
+            unsigned = {
+                key: record[key]
+                for key in record
+                if key != "assertion_sha256"
+            }
+            if record.get("assertion_sha256") != _canonical_sha(unsigned):
+                raise ValueError("Retained-assertion record digest mismatch")
+            records.append(record)
+        if evidence.get("end_saved_draws") != len(records):
+            raise ValueError("Retained-assertion end position mismatch")
+        if (
+            evidence.get("end_saved_draws") != item_status.get("retained_draws")
+            or evidence.get("record_count")
+            != evidence.get("end_saved_draws")
+            - evidence.get("start_saved_draws")
+        ):
+            raise ValueError("Attempt evidence/status saved-draw boundary mismatch")
+        manifest_hashes[evidence_path.relative_to(chain_root).as_posix()] = evidence_hash
+        prefix_digest = hashlib.sha256(
+            b"".join(_canonical_bytes(record) + b"\n" for record in records)
+        ).hexdigest()
+        bound_prefix = item_status.get("retained_assertion_evidence")
+        if (
+            not isinstance(bound_prefix, Mapping)
+            or set(bound_prefix)
+            != {
+                "records", "ledger_sha256", "manifest_sha256",
+                "historical_latent_y_stored",
+                "independent_historical_y_reconstruction_possible",
+            }
+            or bound_prefix.get("records") != len(records)
+            or bound_prefix.get("ledger_sha256") != prefix_digest
+            or bound_prefix.get("manifest_sha256") != manifest_hashes
+            or bound_prefix.get("historical_latent_y_stored") is not False
+            or bound_prefix.get("independent_historical_y_reconstruction_possible")
+            is not False
+        ):
+            raise ValueError("Immutable status does not bind its evidence prefix")
     if len(records) != draws:
         raise ValueError("Retained-assertion cumulative cardinality mismatch")
     for draw_id, record in enumerate(records, start=1):
@@ -1781,9 +2202,9 @@ def _verify_schedule(
     return {"records": draws, "ledger_sha256": digest}
 
 
-def _latest_immutable_status(
+def _immutable_status_history(
     chain_root: Path, chain_id: int
-) -> tuple[dict[str, Any], Path]:
+) -> list[tuple[int, int, Path, dict[str, Any]]]:
     attempts_root = chain_root / "attempts"
     if not attempts_root.is_dir() or attempts_root.is_symlink():
         raise ValueError("Immutable attempt root is missing or unsafe")
@@ -1805,20 +2226,41 @@ def _latest_immutable_status(
             raise ValueError("Immutable status path violates epoch/attempt bounds")
         _sidecar(path)
         payload = json.loads(path.read_text(encoding="utf-8"))
+        if isinstance(payload, Mapping):
+            status_integers = _validate_status_integer_fields(payload)
+        else:
+            status_integers = {}
         if (
             not isinstance(payload, dict)
-            or payload.get("chain_id") != chain_id
-            or payload.get("extension_epoch") != epoch
-            or payload.get("job_attempt") != attempt
+            or status_integers.get("chain_id") != chain_id
+            or status_integers.get("extension_epoch") != epoch
+            or status_integers.get("job_attempt") != attempt
         ):
             raise ValueError("Immutable status path/payload identity mismatch")
         candidates.append((epoch, attempt, path, payload))
     if not candidates:
         raise ValueError("No immutable attempt status exists")
+    candidates.sort(key=lambda row: row[:2])
     keys = [(epoch, attempt) for epoch, attempt, _path, _payload in candidates]
     if len(keys) != len(set(keys)):
         raise ValueError("Immutable attempt position is not unique")
-    _epoch, _attempt, immutable, status = max(candidates, key=lambda row: row[:2])
+    expected_positions: list[tuple[int, int]] = []
+    maximum_epoch = max(epoch for epoch, _attempt in keys)
+    for epoch in range(maximum_epoch + 1):
+        attempts = [attempt for item_epoch, attempt in keys if item_epoch == epoch]
+        if not attempts:
+            raise ValueError("Immutable status history has an epoch gap")
+        expected_positions.extend((epoch, attempt) for attempt in range(1, max(attempts) + 1))
+    if keys != expected_positions:
+        raise ValueError("Immutable attempt paths are not consecutive")
+    return candidates
+
+
+def _latest_immutable_status(
+    chain_root: Path, chain_id: int
+) -> tuple[dict[str, Any], Path]:
+    candidates = _immutable_status_history(chain_root, chain_id)
+    _epoch, _attempt, immutable, status = candidates[-1]
     allowed = [
         immutable.relative_to(chain_root).as_posix(),
         immutable.with_name(immutable.name + ".sha256")
@@ -1838,6 +2280,549 @@ def _latest_immutable_status(
         allowed_files=tuple(allowed),
     )
     return status, immutable
+
+
+def _expected_status_artifact_inventory(
+    chain_root: Path,
+    history: Sequence[tuple[int, int, Path, Mapping[str, Any]]],
+    history_index: int,
+    checkpoint: Mapping[str, Any],
+) -> dict[str, str]:
+    """Reconstruct the exact publication-time artifact prefix for one status."""
+
+    epoch, attempt, _status_path, status = history[history_index]
+    expected: dict[str, str] = {}
+
+    def bind(path: Path) -> None:
+        if not path.is_file() or path.is_symlink():
+            raise ValueError("Status artifact prefix contains a missing/unsafe file")
+        expected[path.relative_to(chain_root).as_posix()] = _sha(path)
+
+    checkpoint_root = chain_root / "checkpoints"
+    for path in sorted(checkpoint_root.glob("checkpoint_*.json")):
+        candidate = _load_canonical_checkpoint(path)
+        candidate_epoch = _exact_integer(
+            candidate.get("extension_epoch"), "artifact checkpoint epoch"
+        )
+        candidate_attempt = _exact_integer(
+            candidate.get("job_attempt"), "artifact checkpoint attempt"
+        )
+        candidate_iteration = _exact_integer(
+            candidate.get("iteration"), "artifact checkpoint iteration"
+        )
+        include = candidate_epoch < epoch or (
+            candidate_epoch == epoch
+            and (
+                candidate_attempt < attempt
+                or (
+                    candidate_attempt == attempt
+                    and candidate_iteration <= int(status["iterations"])
+                )
+            )
+        )
+        if include:
+            if path.relative_to(chain_root).as_posix() != _checkpoint_relative_path(
+                candidate
+            ):
+                raise ValueError("Status artifact checkpoint path is not generator-exact")
+            bind(path)
+            bind(path.with_name(path.name + ".sha256"))
+
+    records = checkpoint.get("committed_chunks")
+    if not isinstance(records, list):
+        raise ValueError("Status checkpoint chunk inventory is malformed")
+    if records:
+        chunk_root = chain_root / "chunks"
+        for record in records:
+            bind(_safe(chunk_root, record.get("scalar_path")))
+            bind(_safe(chunk_root, record.get("spatial_path")))
+        manifest_relative = "chunks/spatial_chunk_manifest.json"
+        expected[manifest_relative] = hashlib.sha256(
+            _canonical_bytes(
+                {"schema_id": "sr_v2_spatial_chunk_manifest/v1", "records": records}
+            )
+        ).hexdigest()
+
+    for prior_index, (item_epoch, item_attempt, path, _payload) in enumerate(history):
+        if prior_index < history_index:
+            bind(path)
+            bind(path.with_name(path.name + ".sha256"))
+        if prior_index <= history_index:
+            evidence_root = (
+                chain_root / f"evidence/epoch_{item_epoch}/attempt_{item_attempt}"
+            )
+            bind(evidence_root / "retained_assertions.jsonl")
+            bind(evidence_root / "attempt_evidence.json")
+            bind(evidence_root / "attempt_evidence.json.sha256")
+
+    recorded = status.get("artifact_sha256")
+    if not isinstance(recorded, Mapping) or dict(recorded) != dict(sorted(expected.items())):
+        raise ValueError("Immutable status publication-time artifact inventory mismatch")
+    certificate = status.get("resume_from")
+    if not isinstance(certificate, Mapping):
+        raise ValueError("Immutable status resume certificate is missing")
+    required = {
+        str(certificate["source_checkpoint_path"]),
+        str(certificate["source_checkpoint_path"]) + ".sha256",
+        (
+            f"evidence/epoch_{epoch}/attempt_{attempt}/attempt_evidence.json"
+        ),
+        (
+            f"evidence/epoch_{epoch}/attempt_{attempt}/attempt_evidence.json.sha256"
+        ),
+        f"evidence/epoch_{epoch}/attempt_{attempt}/retained_assertions.jsonl",
+    }
+    if certificate.get("source_immutable_status_path") is not None:
+        required.add(str(certificate["source_immutable_status_path"]))
+        required.add(str(certificate["source_immutable_status_path"]) + ".sha256")
+    if certificate.get("rebound_checkpoint_path") is not None:
+        required.add(str(certificate["rebound_checkpoint_path"]))
+        required.add(str(certificate["rebound_checkpoint_path"]) + ".sha256")
+    if not required.issubset(expected):
+        raise ValueError("Status inventory omits certified resume/evidence artifacts")
+    return dict(sorted(expected.items()))
+
+
+def _identity_for_epoch(
+    run_root: Path,
+    prepared_manifest: Mapping[str, Any],
+    prepared_row: Mapping[str, Any],
+    *,
+    epoch: int,
+    chain_id: int,
+    seeds: Mapping[str, int],
+) -> dict[str, Any]:
+    base_identity = prepared_row.get("target_identity")
+    if not isinstance(base_identity, Mapping) or not isinstance(
+        base_identity.get("target"), Mapping
+    ):
+        raise ValueError("Prepared base target identity is missing")
+    expected_target = dict(base_identity["target"])
+    expected_target["extension_epoch"] = epoch
+    if epoch == 0:
+        expected_target["extension_authorization_sha256"] = "0" * 64
+    else:
+        authorization = _load_extension_authorization(
+            run_root, to_epoch=epoch, prepared_manifest=prepared_manifest
+        )
+        expected_target["extension_authorization_sha256"] = authorization[
+            "authorization_sha256"
+        ]
+    identity = {
+        "schema_version": 2,
+        "target": expected_target,
+        "target_fingerprint": _canonical_sha(expected_target),
+        "chain": {
+            "target_fingerprint": _canonical_sha(expected_target),
+            "chain_id": chain_id,
+            **dict(seeds),
+        },
+    }
+    identity["chain_fingerprint"] = _canonical_sha(identity["chain"])
+    validated = _validate_target_identity(
+        identity,
+        expected_target=expected_target,
+        chain_id=chain_id,
+        seeds=seeds,
+    )
+    if epoch == 0 and validated != base_identity:
+        raise ValueError("Epoch-zero chain identity differs from preparation")
+    return validated
+
+
+def _validate_status_integer_fields(status: Mapping[str, Any]) -> dict[str, Any]:
+    fields = (
+        "chain_id",
+        "array_index",
+        "extension_epoch",
+        "job_attempt",
+        "iterations",
+        "retained_draws",
+        "chunks",
+    )
+    normalized = {
+        field: _exact_integer(status.get(field), f"status {field}")
+        for field in fields
+    }
+    seeds = status.get("seeds")
+    seed_fields = {
+        "chain_seed",
+        "allocation_initialization_seed",
+        "spatial_initialization_seed",
+    }
+    if not isinstance(seeds, Mapping) or set(seeds) != seed_fields:
+        raise ValueError("Status seed exact schema mismatch")
+    normalized["seeds"] = {
+        field: _exact_integer(seeds.get(field), f"status seed {field}")
+        for field in seed_fields
+    }
+    return normalized
+
+
+def _validate_status_failure_contract(
+    status: Mapping[str, Any], *, iterations: int, terminal_iteration: int
+) -> None:
+    state = status.get("status")
+    failure_class = status.get("failure_class")
+    category = status.get("failure_category")
+    retryable = status.get("retryable")
+    if state == "completed":
+        if failure_class is not None or category is not None or retryable is not False:
+            raise ValueError("Completed status failure taxonomy mismatch")
+    elif state == "checkpointed":
+        if failure_class is not None or category is not None or retryable is not True:
+            raise ValueError("Checkpointed status failure taxonomy mismatch")
+    elif state == "failed":
+        if (
+            not isinstance(failure_class, str)
+            or not failure_class.strip()
+            or category not in FAILURE_CATEGORIES
+            or retryable is not (category == "transient_runtime")
+        ):
+            raise ValueError("Failed status failure taxonomy mismatch")
+    else:
+        raise ValueError("Immutable status state is outside the frozen contract")
+    if iterations == terminal_iteration and state != "completed" and retryable is True:
+        raise ValueError("Retryable terminal status must be completed")
+
+
+def _validate_retry_progress_authority(
+    status: Mapping[str, Any],
+    certificate: Mapping[str, Any],
+    *,
+    checkpoint_creator_attempt: int,
+) -> None:
+    if certificate.get("mode") != "retry":
+        return
+    source_iteration = _exact_integer(
+        certificate.get("source_iteration"), "retry source iteration"
+    )
+    source_draws = _exact_integer(
+        certificate.get("source_saved_draws"), "retry source saved draws"
+    )
+    current_iteration = _exact_integer(
+        status.get("iterations"), "retry status iteration"
+    )
+    current_draws = _exact_integer(
+        status.get("retained_draws"), "retry status saved draws"
+    )
+    current_attempt = _exact_integer(
+        status.get("job_attempt"), "retry status attempt"
+    )
+    if current_iteration < source_iteration or current_draws < source_draws:
+        raise ValueError("Retry status checkpoint rollback is forbidden")
+    unchanged = (
+        current_iteration == source_iteration and current_draws == source_draws
+    )
+    source_exact = (
+        status.get("latest_checkpoint")
+        == certificate.get("source_checkpoint_path")
+        and status.get("latest_checkpoint_sha256")
+        == certificate.get("source_checkpoint_sha256")
+    )
+    if unchanged and not source_exact:
+        raise ValueError("No-progress retry must retain the exact certified source")
+    if not unchanged and checkpoint_creator_attempt != current_attempt:
+        raise ValueError("Progressed retry checkpoint must belong to the current attempt")
+    if checkpoint_creator_attempt < current_attempt and not source_exact:
+        raise ValueError("Older retry checkpoint must be the exact certified source")
+
+
+def _validate_attempt_custody(
+    *,
+    run_root: Path,
+    chain_root: Path,
+    history: Sequence[tuple[int, int, Path, Mapping[str, Any]]],
+    chain_id: int,
+    prepared_manifest: Mapping[str, Any],
+    prepared_row: Mapping[str, Any],
+    seeds: Mapping[str, int],
+    final_epoch: int,
+    frame: pd.DataFrame,
+    counties: Sequence[str],
+    adjacency: sparse.csr_matrix,
+    labels: np.ndarray,
+    components: Sequence[np.ndarray],
+    scales: Sequence[float],
+) -> int:
+    """Validate every immutable attempt and its exact continuation certificate."""
+
+    if not history or history[-1][0] != final_epoch:
+        raise ValueError("Immutable status history does not reach the requested epoch")
+    count_moves = _count_moves_per_iteration(frame)
+    blocked_frequency = int(FROZEN_LATENT_SCHEDULE["blocked_refresh_frequency"])
+    blocked_attempts = int(FROZEN_LATENT_SCHEDULE["blocked_refresh_attempts"])
+    identities = {
+        epoch: _identity_for_epoch(
+            run_root,
+            prepared_manifest,
+            prepared_row,
+            epoch=epoch,
+            chain_id=chain_id,
+            seeds=seeds,
+        )
+        for epoch in range(final_epoch + 1)
+    }
+    prepared_checkpoint = (
+        run_root / "prepared" / str(prepared_row.get("initial_checkpoint", ""))
+    )
+    if (
+        not prepared_checkpoint.is_file()
+        or prepared_checkpoint.is_symlink()
+        or _sidecar(prepared_checkpoint)
+        != prepared_row.get("initial_checkpoint_sha256")
+    ):
+        raise ValueError("Prepared initial checkpoint hash authority changed")
+
+    prior_inventory: dict[str, str] = {}
+    recomputed: set[tuple[str, str]] = set()
+    for index, (epoch, attempt, status_path, status) in enumerate(history):
+        status_integers = _validate_status_integer_fields(status)
+        expected_contract = EPOCH_CONTRACT[epoch]
+        start_contract = (
+            {"iterations": 0, "draws": 0, "chunks": 0}
+            if epoch == 0
+            else EPOCH_CONTRACT[epoch - 1]
+        )
+        identity = identities[epoch]
+        iterations = status_integers["iterations"]
+        draws = status_integers["retained_draws"]
+        chunks = status_integers["chunks"]
+        if (
+            set(status) != CHAIN_STATUS_EXACT_FIELDS
+            or status.get("schema_id") != "sr_v2_spatial_chain_status/v1"
+            or status.get("run_id") != RUN_ID
+            or status.get("model_id") != MODEL_ID
+            or status.get("preparation_identity")
+            != prepared_manifest["preparation_identity"]
+            or status.get("launch_envelope_sha256")
+            != prepared_manifest["launch_envelope_sha256"]
+            or status.get("final_source_manifest_sha256")
+            != prepared_manifest["final_source_manifest_sha256"]
+            or status_integers["chain_id"] != chain_id
+            or status_integers["array_index"] != chain_id
+            or status_integers["extension_epoch"] != epoch
+            or status_integers["job_attempt"] != attempt
+            or status_integers["seeds"] != dict(seeds)
+            or not isinstance(status.get("identity"), Mapping)
+            or _canonical_bytes(dict(status["identity"])) != _canonical_bytes(identity)
+            or status.get("target_fingerprint") != identity["target_fingerprint"]
+            or status.get("chain_fingerprint") != identity["chain_fingerprint"]
+            or status.get("executor_builder") != "exact_public_chain_loop"
+            or status.get("submission_authorized") is not False
+            or not isinstance(status.get("updated_utc"), str)
+            or not status["updated_utc"].strip()
+            or not start_contract["iterations"] <= iterations <= expected_contract["iterations"]
+            or draws != max(0, (iterations - 45_000) // 30)
+            or chunks != draws // 250
+        ):
+            raise ValueError("Immutable chain status exact identity/progress mismatch")
+        _validate_status_failure_contract(
+            status,
+            iterations=iterations,
+            terminal_iteration=expected_contract["iterations"],
+        )
+        if status["status"] == "completed" and (
+            iterations != expected_contract["iterations"]
+            or draws != expected_contract["draws"]
+            or chunks != expected_contract["chunks"]
+        ):
+            raise ValueError("Completed status misses the exact epoch boundary")
+        if index + 1 < len(history):
+            next_epoch, next_attempt, _next_path, _next_status = history[index + 1]
+            if next_epoch == epoch:
+                if next_attempt != attempt + 1 or status.get("retryable") is not True:
+                    raise ValueError("A retry follows a nonretryable/non-immediate status")
+            elif (
+                next_epoch != epoch + 1
+                or next_attempt != 1
+                or status.get("status") != "completed"
+            ):
+                raise ValueError("Extension attempt custody is not consecutive/completed")
+
+        checkpoint_relative = status.get("latest_checkpoint")
+        if not isinstance(checkpoint_relative, str) or not checkpoint_relative:
+            raise ValueError("Immutable status latest checkpoint path is missing")
+        checkpoint_path = _safe(chain_root, checkpoint_relative)
+        checkpoint_hash = _sidecar(checkpoint_path)
+        checkpoint = _load_canonical_checkpoint(checkpoint_path)
+        checkpoint_attempt = _exact_integer(
+            checkpoint.get("job_attempt"), "status checkpoint creator attempt"
+        )
+        if (
+            checkpoint_relative != _checkpoint_relative_path(checkpoint)
+            or checkpoint_hash != status.get("latest_checkpoint_sha256")
+            or checkpoint.get("extension_epoch") != epoch
+            or checkpoint_attempt > attempt
+            or checkpoint.get("iteration") != iterations
+            or checkpoint.get("saved_draws") != draws
+        ):
+            raise ValueError("Immutable status latest checkpoint authority mismatch")
+        if checkpoint_attempt != attempt and status.get("status") != "failed":
+            raise ValueError("Only a failed attempt may acknowledge an older checkpoint")
+        _validate_checkpoint_payload(
+            checkpoint,
+            identity=identity,
+            seeds=seeds,
+            expected_epoch=epoch,
+            expected_attempt=checkpoint_attempt,
+            expected_iteration=iterations,
+            expected_draws=draws,
+            expected_chunks=chunks,
+            row_count=len(frame),
+            county_count=len(counties),
+            labels=labels,
+            count_moves_per_iteration=count_moves,
+            blocked_refresh_frequency=blocked_frequency,
+            blocked_refresh_attempts=blocked_attempts,
+        )
+        _validate_checkpoint_target(
+            checkpoint,
+            target=identity["target"],
+            frame=frame,
+            counties=counties,
+            adjacency=adjacency,
+            components=components,
+            scales=scales,
+            label="Immutable status checkpoint",
+        )
+        recomputed.add((checkpoint_relative, checkpoint_hash))
+
+        evidence_path = (
+            chain_root
+            / f"evidence/epoch_{epoch}/attempt_{attempt}/attempt_evidence.json"
+        )
+        _sidecar(evidence_path)
+        evidence = json.loads(evidence_path.read_text(encoding="utf-8"))
+        if not isinstance(evidence, Mapping):
+            raise ValueError("Attempt evidence must be a mapping")
+        if attempt > 1:
+            prior_epoch, prior_attempt, prior_status_path, prior_status = history[index - 1]
+            if prior_epoch != epoch or prior_attempt != attempt - 1:
+                raise ValueError("Retry certificate source status is not immediate")
+        elif epoch > 0:
+            prior_epoch, prior_attempt, prior_status_path, prior_status = history[index - 1]
+            if prior_epoch != epoch - 1:
+                raise ValueError("Extension certificate source epoch is not immediate")
+        else:
+            prior_status_path = None
+            prior_status = None
+        resume = _validate_resume_from_certificate(
+            status.get("resume_from"),
+            evidence_certificate=evidence.get("resume_from"),
+            chain_root=chain_root,
+            current_epoch=epoch,
+            current_attempt=attempt,
+            prior_status=prior_status,
+            prior_status_path=prior_status_path,
+        )
+        _validate_retry_progress_authority(
+            status,
+            status["resume_from"],
+            checkpoint_creator_attempt=checkpoint_attempt,
+        )
+        source_checkpoint = resume["source_checkpoint"]
+        source_relative = str(status["resume_from"]["source_checkpoint_path"])
+        source_hash = str(status["resume_from"]["source_checkpoint_sha256"])
+        source_epoch = _exact_integer(
+            source_checkpoint.get("extension_epoch"), "resume checkpoint epoch"
+        )
+        source_attempt = _exact_integer(
+            source_checkpoint.get("job_attempt"), "resume checkpoint attempt"
+        )
+        source_identity = identities[source_epoch]
+        source_draws = _exact_integer(
+            source_checkpoint.get("saved_draws"), "resume checkpoint draws"
+        )
+        _validate_checkpoint_payload(
+            source_checkpoint,
+            identity=source_identity,
+            seeds=seeds,
+            expected_epoch=source_epoch,
+            expected_attempt=source_attempt,
+            expected_iteration=_exact_integer(
+                source_checkpoint.get("iteration"), "resume checkpoint iteration"
+            ),
+            expected_draws=source_draws,
+            expected_chunks=source_draws // 250,
+            row_count=len(frame),
+            county_count=len(counties),
+            labels=labels,
+            count_moves_per_iteration=count_moves,
+            blocked_refresh_frequency=blocked_frequency,
+            blocked_refresh_attempts=blocked_attempts,
+        )
+        _validate_checkpoint_target(
+            source_checkpoint,
+            target=source_identity["target"],
+            frame=frame,
+            counties=counties,
+            adjacency=adjacency,
+            components=components,
+            scales=scales,
+            label="Resume source checkpoint",
+        )
+        recomputed.add((source_relative, source_hash))
+        if epoch == 0 and attempt == 1:
+            if (
+                source_hash != prepared_row.get("initial_checkpoint_sha256")
+                or source_checkpoint != _load_canonical_checkpoint(prepared_checkpoint)
+            ):
+                raise ValueError("Chain-root initial checkpoint differs from preparation")
+        rebound = resume["rebound_checkpoint"]
+        if rebound is not None:
+            rebound_relative = str(status["resume_from"]["rebound_checkpoint_path"])
+            rebound_hash = str(status["resume_from"]["rebound_checkpoint_sha256"])
+            rebound_draws = _exact_integer(
+                rebound.get("saved_draws"), "extension rebound draws"
+            )
+            _validate_checkpoint_payload(
+                rebound,
+                identity=identity,
+                seeds=seeds,
+                expected_epoch=epoch,
+                expected_attempt=1,
+                expected_iteration=_exact_integer(
+                    rebound.get("iteration"), "extension rebound iteration"
+                ),
+                expected_draws=rebound_draws,
+                expected_chunks=rebound_draws // 250,
+                row_count=len(frame),
+                county_count=len(counties),
+                labels=labels,
+                count_moves_per_iteration=count_moves,
+                blocked_refresh_frequency=blocked_frequency,
+                blocked_refresh_attempts=blocked_attempts,
+            )
+            _validate_checkpoint_target(
+                rebound,
+                target=identity["target"],
+                frame=frame,
+                counties=counties,
+                adjacency=adjacency,
+                components=components,
+                scales=scales,
+                label="Extension rebound checkpoint",
+            )
+            recomputed.add((rebound_relative, rebound_hash))
+
+        current_inventory = _expected_status_artifact_inventory(
+            chain_root, history, index, checkpoint
+        )
+        if prior_inventory:
+            if any(current_inventory.get(path) != digest for path, digest in prior_inventory.items()):
+                raise ValueError("Immutable status inventory changed a prior artifact")
+            assert index > 0
+            previous_path = history[index - 1][2]
+            for previous_artifact in (
+                previous_path,
+                previous_path.with_name(previous_path.name + ".sha256"),
+            ):
+                relative = previous_artifact.relative_to(chain_root).as_posix()
+                if current_inventory.get(relative) != _sha(previous_artifact):
+                    raise ValueError("Immutable status inventory omits prior status authority")
+        prior_inventory = current_inventory
+    return len(recomputed)
 
 
 def _frame_scalar_token(value: Any) -> bytes:
@@ -2130,6 +3115,7 @@ def _verify_chains(
     list[dict[str, Any]],
     dict[str, str],
     list[dict[str, Any]],
+    int,
 ]:
     expected = EPOCH_CONTRACT[epoch]
     parameter_schema = list(prepared_manifest["parameter_schema"])
@@ -2145,17 +3131,36 @@ def _verify_chains(
     fingerprints: set[str] = set()
     ledger_hashes: dict[str, str] = {}
     terminal_checkpoints: list[dict[str, Any]] = []
+    custody_checkpoint_targets_recomputed = 0
     singleton = np.asarray(
         [len(np.flatnonzero(labels == labels[index])) == 1 for index in range(len(labels))]
     )
     for chain_id in range(1, 5):
         chain_root = run_root / f"chains/chain_{chain_id:02d}"
-        status, immutable_status = _latest_immutable_status(chain_root, chain_id)
         seeds = {
             "chain_seed": CHAIN_SEEDS[chain_id - 1],
             "allocation_initialization_seed": ALLOCATION_SEEDS[chain_id - 1],
             "spatial_initialization_seed": SPATIAL_SEEDS[chain_id - 1],
         }
+        prepared_row = prepared_manifest["chain_mapping"][chain_id - 1]
+        history = _immutable_status_history(chain_root, chain_id)
+        custody_checkpoint_targets_recomputed += _validate_attempt_custody(
+            run_root=run_root,
+            chain_root=chain_root,
+            history=history,
+            chain_id=chain_id,
+            prepared_manifest=prepared_manifest,
+            prepared_row=prepared_row,
+            seeds=seeds,
+            final_epoch=epoch,
+            frame=frame,
+            counties=counties,
+            adjacency=adjacency,
+            labels=labels,
+            components=components,
+            scales=scales,
+        )
+        status, immutable_status = _latest_immutable_status(chain_root, chain_id)
         if (
             set(status) != CHAIN_STATUS_EXACT_FIELDS
             or status.get("schema_id") != "sr_v2_spatial_chain_status/v1"
@@ -2198,7 +3203,6 @@ def _verify_chains(
             raise ValueError("Chain identity schema mismatch")
         if identity.get("schema_version") != 2:
             raise ValueError("Chain identity schema version mismatch")
-        prepared_row = prepared_manifest["chain_mapping"][chain_id - 1]
         if (
             prepared_row.get("array_index") != chain_id
             or prepared_row.get("chain_id") != chain_id
@@ -2318,6 +3322,13 @@ def _verify_chains(
             row_count=len(frame),
             county_count=len(counties),
             labels=labels,
+            count_moves_per_iteration=_count_moves_per_iteration(frame),
+            blocked_refresh_frequency=int(
+                FROZEN_LATENT_SCHEDULE["blocked_refresh_frequency"]
+            ),
+            blocked_refresh_attempts=int(
+                FROZEN_LATENT_SCHEDULE["blocked_refresh_attempts"]
+            ),
         )
         _validate_checkpoint_target(
             checkpoint,
@@ -2380,7 +3391,7 @@ def _verify_chains(
         if not isinstance(records, list) or len(records) != expected["chunks"]:
             raise ValueError("Terminal checkpoint chunk count mismatch")
         ledger = _verify_schedule(
-            chain_root, chain_id, epoch, expected["draws"], status
+            chain_root, chain_id, epoch, expected["draws"], status, history
         )
         ledger_hashes[str(chain_id)] = str(ledger["ledger_sha256"])
         chunk_root = chain_root / "chunks"
@@ -2436,7 +3447,14 @@ def _verify_chains(
     spatial = {key: np.concatenate(parts, axis=0) for key, parts in spatial_parts.items()}
     order = np.lexsort((spatial["draw_id"], spatial["chain_id"]))
     spatial = {key: value[order] for key, value in spatial.items()}
-    return scalar, spatial, statuses, ledger_hashes, terminal_checkpoints
+    return (
+        scalar,
+        spatial,
+        statuses,
+        ledger_hashes,
+        terminal_checkpoints,
+        custody_checkpoint_targets_recomputed,
+    )
 
 
 def _diagnostics(
@@ -2996,6 +4014,7 @@ def _validate_passed_verification(
             "retained_assertion_ledger_sha256",
             "prepared_checkpoint_targets_recomputed",
             "terminal_checkpoint_targets_recomputed",
+            "custody_checkpoint_targets_recomputed",
         },
         "diagnostic_checks": {
             "passed", "rows", "arviz_version", "thresholds_inclusive",
@@ -3059,6 +4078,10 @@ def _validate_passed_verification(
         or verification["chain_checks"]["chunks_per_chain"] != expected["chunks"]
         or verification["chain_checks"]["prepared_checkpoint_targets_recomputed"] != 4
         or verification["chain_checks"]["terminal_checkpoint_targets_recomputed"] != 4
+        or type(
+            verification["chain_checks"]["custody_checkpoint_targets_recomputed"]
+        ) is not int
+        or verification["chain_checks"]["custody_checkpoint_targets_recomputed"] < 8
         or verification["chain_checks"]["historical_latent_y_stored"] is not False
         or verification["chain_checks"]["independent_historical_y_reconstruction_possible"] is not False
         or verification["diagnostic_checks"]["rows"] != 9_483
@@ -3105,7 +4128,14 @@ def independent_verify(
         )
         frame = pd.read_parquet(prepared_root / str(prepared_manifest["model_frame"]))
         benchmark = _verify_benchmark(run_root, prepared_manifest)
-        raw_scalar, raw_spatial, statuses, ledger_hashes, terminal_checkpoints = _verify_chains(
+        (
+            raw_scalar,
+            raw_spatial,
+            statuses,
+            ledger_hashes,
+            terminal_checkpoints,
+            custody_targets_recomputed,
+        ) = _verify_chains(
             run_root,
             prepared_manifest,
             extension_epoch,
@@ -3189,6 +4219,7 @@ def independent_verify(
                 "chunks_per_chain": expected["chunks"],
                 "prepared_checkpoint_targets_recomputed": 4,
                 "terminal_checkpoint_targets_recomputed": len(terminal_checkpoints),
+                "custody_checkpoint_targets_recomputed": custody_targets_recomputed,
                 "historical_latent_y_stored": False,
                 "independent_historical_y_reconstruction_possible": False,
                 "claim_boundary": (
@@ -3470,7 +4501,14 @@ def gate(
         pre_gate, merge_root = _load_pre_gate(run_root, extension_epoch)
         pre_gate_path = merge_root / "pre_gate_manifest.json"
         pre_gate_hash = _sha(pre_gate_path)
-        raw_scalar, raw_spatial, statuses, ledger_hashes, terminal_checkpoints = _verify_chains(
+        (
+            raw_scalar,
+            raw_spatial,
+            statuses,
+            ledger_hashes,
+            terminal_checkpoints,
+            custody_targets_recomputed,
+        ) = _verify_chains(
             run_root,
             prepared,
             extension_epoch,
@@ -3494,6 +4532,11 @@ def gate(
             benchmark_hash=benchmark["sha256"],
             pre_gate_hash=pre_gate_hash,
         )
+        if (
+            verification["chain_checks"]["custody_checkpoint_targets_recomputed"]
+            != custody_targets_recomputed
+        ):
+            raise ValueError("Verification custody-target count changed before release")
         verification_snapshot = _validate_verification_snapshot(
             run_root, extension_epoch, verification
         )

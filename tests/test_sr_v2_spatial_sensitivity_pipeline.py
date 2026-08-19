@@ -481,6 +481,24 @@ def test_isolated_verifier_rejects_resigned_sparse_target_wrong_seed_and_checkpo
             chain_id=1,
             seeds=seeds,
         )
+    bool_target = json.loads(json.dumps(identity))
+    bool_target["target"]["extension_epoch"] = False
+    with pytest.raises(ValueError, match="target exact field/value"):
+        verifier._validate_target_identity(
+            resign(bool_target),
+            expected_target=identity["target"],
+            chain_id=1,
+            seeds=seeds,
+        )
+    bool_chain = json.loads(json.dumps(identity))
+    bool_chain["chain"]["chain_id"] = True
+    with pytest.raises(ValueError, match="seed/fingerprint"):
+        verifier._validate_target_identity(
+            resign(bool_chain),
+            expected_target=identity["target"],
+            chain_id=1,
+            seeds=seeds,
+        )
 
     checkpoint = verifier._load_canonical_checkpoint(initial)
     verifier._validate_checkpoint_payload(
@@ -496,6 +514,9 @@ def test_isolated_verifier_rejects_resigned_sparse_target_wrong_seed_and_checkpo
         county_count=len(design.spatial_graph.counties),
         labels=design.spatial_graph.component_id,
         expected_y=frame["latent_count"].to_numpy(dtype=np.int64),
+        count_moves_per_iteration=1,
+        blocked_refresh_frequency=25,
+        blocked_refresh_attempts=12,
     )
 
     def publish_resigned_checkpoint(
@@ -536,6 +557,9 @@ def test_isolated_verifier_rejects_resigned_sparse_target_wrong_seed_and_checkpo
                 county_count=len(design.spatial_graph.counties),
                 labels=design.spatial_graph.component_id,
                 expected_y=frame["latent_count"].to_numpy(dtype=np.int64),
+                count_moves_per_iteration=1,
+                blocked_refresh_frequency=25,
+                blocked_refresh_attempts=12,
             )
 
     corrupt_sidecar = tmp_path / "corrupt-sidecar.json"
@@ -553,6 +577,665 @@ def test_isolated_verifier_rejects_resigned_sparse_target_wrong_seed_and_checkpo
     ).write_bytes((digest + "\n\n").encode("ascii"))
     with pytest.raises(ValueError, match="Noncanonical SHA-256 sidecar"):
         verifier._load_canonical_checkpoint(noncanonical_sidecar)
+
+
+def test_isolated_resume_from_custody_rejects_resigned_retry_extension_and_rng_splices(
+    tmp_path: Path,
+) -> None:
+    verifier = _load_script(
+        "109_gate_sr_v2_spatial_sensitivity.py",
+        "spatial_verifier_resume_from_adversarial",
+    )
+
+    def publish_checkpoint(path: Path, payload: dict[str, object]) -> str:
+        raw = verifier._canonical_bytes(payload)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(raw)
+        path.with_name(path.name + ".sha256").write_bytes(
+            (hashlib.sha256(raw).hexdigest() + "\n").encode("ascii")
+        )
+        return hashlib.sha256(raw).hexdigest()
+
+    def certificate(
+        *,
+        mode: str,
+        chain_root: Path,
+        status_path: Path,
+        status: dict[str, object],
+        rebound_path: Path | None = None,
+    ) -> dict[str, object]:
+        return {
+            "schema_id": "sr_v2_spatial_resume_from/v1",
+            "mode": mode,
+            "source_immutable_status_path": status_path.relative_to(
+                chain_root
+            ).as_posix(),
+            "source_immutable_status_sha256": hashlib.sha256(
+                status_path.read_bytes()
+            ).hexdigest(),
+            "source_checkpoint_path": status["latest_checkpoint"],
+            "source_checkpoint_sha256": status["latest_checkpoint_sha256"],
+            "source_extension_epoch": status["extension_epoch"],
+            "source_job_attempt": status["job_attempt"],
+            "source_iteration": status["iterations"],
+            "source_saved_draws": status["retained_draws"],
+            "rebound_checkpoint_path": (
+                None
+                if rebound_path is None
+                else rebound_path.relative_to(chain_root).as_posix()
+            ),
+            "rebound_checkpoint_sha256": (
+                None
+                if rebound_path is None
+                else hashlib.sha256(rebound_path.read_bytes()).hexdigest()
+            ),
+        }
+
+    # Retry custody is anchored to the exact prior immutable status and its
+    # acknowledged checkpoint.  Re-signing both source files cannot alter the
+    # already-published next-attempt certificate.
+    _, _, _, retry_checkpoint, _, _ = _tiny_spatial_runtime(
+        tmp_path / "retry-chain"
+    )
+    retry_root = retry_checkpoint.parents[1]
+    retry_status_path = (
+        retry_root / "attempts/epoch_0/attempt_1/status.json"
+    )
+    retry_status: dict[str, object] = {
+        "status": "checkpointed",
+        "failure_class": None,
+        "failure_category": None,
+        "retryable": True,
+        "extension_epoch": 0,
+        "job_attempt": 1,
+        "iterations": 0,
+        "retained_draws": 0,
+        "latest_checkpoint": retry_checkpoint.relative_to(retry_root).as_posix(),
+        "latest_checkpoint_sha256": hashlib.sha256(
+            retry_checkpoint.read_bytes()
+        ).hexdigest(),
+    }
+    _write_json_sidecar(retry_status_path, retry_status)
+    retry_certificate = certificate(
+        mode="retry",
+        chain_root=retry_root,
+        status_path=retry_status_path,
+        status=retry_status,
+    )
+    checked = verifier._validate_resume_from_certificate(
+        retry_certificate,
+        evidence_certificate=retry_certificate,
+        chain_root=retry_root,
+        current_epoch=0,
+        current_attempt=2,
+        prior_status=retry_status,
+        prior_status_path=retry_status_path,
+    )
+    assert checked["source_checkpoint"]["current_state"]
+    bool_aliases = {
+        "source_extension_epoch": False,
+        "source_job_attempt": True,
+        "source_iteration": False,
+        "source_saved_draws": False,
+    }
+    for field, value in bool_aliases.items():
+        aliased = dict(retry_certificate)
+        aliased[field] = value
+        with pytest.raises(ValueError, match="exact integer"):
+            verifier._validate_resume_from_certificate(
+                aliased,
+                evidence_certificate=aliased,
+                chain_root=retry_root,
+                current_epoch=0,
+                current_attempt=2,
+                prior_status=retry_status,
+                prior_status_path=retry_status_path,
+            )
+    evidence_alias = dict(retry_certificate)
+    evidence_alias["source_iteration"] = False
+    with pytest.raises(ValueError, match="schema/evidence mismatch"):
+        verifier._validate_resume_from_certificate(
+            retry_certificate,
+            evidence_certificate=evidence_alias,
+            chain_root=retry_root,
+            current_epoch=0,
+            current_attempt=2,
+            prior_status=retry_status,
+            prior_status_path=retry_status_path,
+        )
+
+    spliced_retry = verifier._load_canonical_checkpoint(retry_checkpoint)
+    spliced_retry["current_state"]["log_sigma_county_hex"] = np.nextafter(
+        float.fromhex(spliced_retry["current_state"]["log_sigma_county_hex"]),
+        np.inf,
+    ).hex()
+    retry_status["latest_checkpoint_sha256"] = publish_checkpoint(
+        retry_checkpoint, spliced_retry
+    )
+    _write_json_sidecar(retry_status_path, retry_status)
+    verifier._set_hold(
+        tmp_path,
+        reason="independent_verification_not_passed",
+        stage="independent_verification",
+        extension_epoch=0,
+        output_base_override=tmp_path,
+    )
+    with pytest.raises(ValueError, match="resume|source|status|SHA-256"):
+        verifier._validate_resume_from_certificate(
+            retry_certificate,
+            evidence_certificate=retry_certificate,
+            chain_root=retry_root,
+            current_epoch=0,
+            current_attempt=2,
+            prior_status=retry_status,
+            prior_status_path=retry_status_path,
+        )
+
+    # An extension rebound changes only reviewed identity/epoch/attempt fields.
+    # Even when a forged rebound and both certificates are coherently rehashed,
+    # state and RNG differences must fail semantic equality.
+    _, _, _, prior_checkpoint, _, _ = _tiny_spatial_runtime(
+        tmp_path / "extension-chain"
+    )
+    extension_root = prior_checkpoint.parents[1]
+    prior_status_path = extension_root / "attempts/epoch_0/attempt_1/status.json"
+    prior_status: dict[str, object] = {
+        "status": "completed",
+        "failure_class": None,
+        "failure_category": None,
+        "retryable": False,
+        "extension_epoch": 0,
+        "job_attempt": 1,
+        "iterations": 0,
+        "retained_draws": 0,
+        "latest_checkpoint": prior_checkpoint.relative_to(
+            extension_root
+        ).as_posix(),
+        "latest_checkpoint_sha256": hashlib.sha256(
+            prior_checkpoint.read_bytes()
+        ).hexdigest(),
+    }
+    _write_json_sidecar(prior_status_path, prior_status)
+    prior_payload = verifier._load_canonical_checkpoint(prior_checkpoint)
+    rebound_payload = json.loads(json.dumps(prior_payload))
+    rebound_payload["target_fingerprint"] = "e" * 64
+    rebound_payload["extension_epoch"] = 1
+    rebound_payload["job_attempt"] = 1
+    rebound_path = (
+        extension_root
+        / "checkpoints/checkpoint_epoch_1_attempt_1_iter_000000000.json"
+    )
+    publish_checkpoint(rebound_path, rebound_payload)
+    extension_certificate = certificate(
+        mode="extension",
+        chain_root=extension_root,
+        status_path=prior_status_path,
+        status=prior_status,
+        rebound_path=rebound_path,
+    )
+    checked = verifier._validate_resume_from_certificate(
+        extension_certificate,
+        evidence_certificate=extension_certificate,
+        chain_root=extension_root,
+        current_epoch=1,
+        current_attempt=1,
+        prior_status=prior_status,
+        prior_status_path=prior_status_path,
+    )
+    assert checked["rebound_checkpoint"]["extension_epoch"] == 1
+
+    state_splice = json.loads(json.dumps(rebound_payload))
+    state_splice["current_state"]["log_sigma_county_hex"] = np.nextafter(
+        float.fromhex(state_splice["current_state"]["log_sigma_county_hex"]),
+        np.inf,
+    ).hex()
+    publish_checkpoint(rebound_path, state_splice)
+    state_certificate = certificate(
+        mode="extension",
+        chain_root=extension_root,
+        status_path=prior_status_path,
+        status=prior_status,
+        rebound_path=rebound_path,
+    )
+    with pytest.raises(ValueError, match="semantic"):
+        verifier._validate_resume_from_certificate(
+            state_certificate,
+            evidence_certificate=state_certificate,
+            chain_root=extension_root,
+            current_epoch=1,
+            current_attempt=1,
+            prior_status=prior_status,
+            prior_status_path=prior_status_path,
+        )
+
+    rng_splice = json.loads(json.dumps(rebound_payload))
+    rng_splice["rng_state"]["state"]["state"] += 1
+    publish_checkpoint(rebound_path, rng_splice)
+    rng_certificate = certificate(
+        mode="extension",
+        chain_root=extension_root,
+        status_path=prior_status_path,
+        status=prior_status,
+        rebound_path=rebound_path,
+    )
+    with pytest.raises(ValueError, match="semantic"):
+        verifier._validate_resume_from_certificate(
+            rng_certificate,
+            evidence_certificate=rng_certificate,
+            chain_root=extension_root,
+            current_epoch=1,
+            current_attempt=1,
+            prior_status=prior_status,
+            prior_status_path=prior_status_path,
+        )
+    gate = json.loads(
+        (tmp_path / verifier.RUN_ID / "spatial_sensitivity_gate.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert gate["status"] == "HOLD" and gate["passed"] is False
+
+
+def test_resume_certificate_preserves_immediate_failure_checkpoint_authority(
+    tmp_path: Path,
+) -> None:
+    runner = _load_script(
+        "107_run_sr_v2_spatial_sensitivity_chain.py",
+        "spatial_runner_immediate_failure_resume",
+    )
+    _, _, _, checkpoint, _, _ = _tiny_spatial_runtime(
+        tmp_path / "immediate-failure-chain"
+    )
+    chain_root = checkpoint.parents[1]
+    status = {
+        "extension_epoch": 0,
+        "job_attempt": 2,
+        "iterations": 0,
+        "retained_draws": 0,
+        "latest_checkpoint": checkpoint.relative_to(chain_root).as_posix(),
+        "latest_checkpoint_sha256": hashlib.sha256(
+            checkpoint.read_bytes()
+        ).hexdigest(),
+    }
+    status_path = chain_root / "attempts/epoch_0/attempt_2/status.json"
+    _write_json_sidecar(status_path, status)
+    resume_from = runner._resume_from_certificate(
+        chain_root,
+        mode="retry",
+        source_checkpoint=checkpoint,
+        source_status=status,
+        rebound_checkpoint=None,
+    )
+    assert resume_from["source_immutable_status_path"].endswith(
+        "attempt_2/status.json"
+    )
+    assert resume_from["source_job_attempt"] == 1
+    assert resume_from["source_iteration"] == status["iterations"]
+
+
+def test_isolated_checkpoint_recomputes_latent_and_blocked_proposal_totals(
+    tmp_path: Path,
+) -> None:
+    verifier = _load_script(
+        "109_gate_sr_v2_spatial_sensitivity.py",
+        "spatial_verifier_counter_schedule_adversarial",
+    )
+    frame, design, identity, initial, _, _ = _tiny_spatial_runtime(
+        tmp_path / "counter-runtime"
+    )
+    seeds = {
+        "chain_seed": 74291,
+        "allocation_initialization_seed": 74251,
+        "spatial_initialization_seed": 74261,
+    }
+    checkpoint = verifier._load_canonical_checkpoint(initial)
+    checkpoint["iteration"] = 25
+    for name in (
+        "beta",
+        "state",
+        "year",
+        "log_sigma_state",
+        "log_sigma_year",
+        "log_kappa",
+        "spatial_hyperparameters",
+    ):
+        checkpoint["proposed"][name] = 25
+    checkpoint["proposed"]["transfer"] = 25
+    checkpoint["proposed"]["blocked_refresh"] = 12
+    checkpoint["proposed"]["mala"] = 5
+    checkpoint["adaptation_state"].update(
+        {
+            "attempted": 5,
+            "accepted": 0,
+            "window_attempted": 5,
+            "window_accepted": 0,
+            "windows_completed": 0,
+            "adaptation_frozen": False,
+        }
+    )
+    verifier._validate_checkpoint_payload(
+        checkpoint,
+        identity=identity,
+        seeds=seeds,
+        expected_epoch=0,
+        expected_attempt=1,
+        expected_iteration=25,
+        expected_draws=0,
+        expected_chunks=0,
+        row_count=len(frame),
+        county_count=len(design.spatial_graph.counties),
+        labels=design.spatial_graph.component_id,
+        expected_y=frame["latent_count"].to_numpy(dtype=np.int64),
+        count_moves_per_iteration=1,
+        blocked_refresh_frequency=25,
+        blocked_refresh_attempts=12,
+    )
+
+    checkpoint["proposed"]["transfer"] -= 1
+    tampered_path = tmp_path / "counter-tamper.json"
+    raw = verifier._canonical_bytes(checkpoint)
+    tampered_path.write_bytes(raw)
+    tampered_path.with_name(tampered_path.name + ".sha256").write_bytes(
+        (hashlib.sha256(raw).hexdigest() + "\n").encode("ascii")
+    )
+    resigned = verifier._load_canonical_checkpoint(tampered_path)
+    verifier._set_hold(
+        tmp_path,
+        reason="independent_verification_not_passed",
+        stage="independent_verification",
+        extension_epoch=0,
+        output_base_override=tmp_path,
+    )
+    with pytest.raises(ValueError, match="latent proposal schedule"):
+        verifier._validate_checkpoint_payload(
+            resigned,
+            identity=identity,
+            seeds=seeds,
+            expected_epoch=0,
+            expected_attempt=1,
+            expected_iteration=25,
+            expected_draws=0,
+            expected_chunks=0,
+            row_count=len(frame),
+            county_count=len(design.spatial_graph.counties),
+            labels=design.spatial_graph.component_id,
+            expected_y=frame["latent_count"].to_numpy(dtype=np.int64),
+            count_moves_per_iteration=1,
+            blocked_refresh_frequency=25,
+            blocked_refresh_attempts=12,
+        )
+    checkpoint["proposed"]["transfer"] += 1
+    checkpoint["proposed"]["blocked_refresh"] = 11
+    with pytest.raises(ValueError, match="blocked-refresh schedule"):
+        verifier._validate_checkpoint_payload(
+            checkpoint,
+            identity=identity,
+            seeds=seeds,
+            expected_epoch=0,
+            expected_attempt=1,
+            expected_iteration=25,
+            expected_draws=0,
+            expected_chunks=0,
+            row_count=len(frame),
+            county_count=len(design.spatial_graph.counties),
+            labels=design.spatial_graph.component_id,
+            expected_y=frame["latent_count"].to_numpy(dtype=np.int64),
+            count_moves_per_iteration=1,
+            blocked_refresh_frequency=25,
+            blocked_refresh_attempts=12,
+        )
+    gate = json.loads(
+        (tmp_path / verifier.RUN_ID / "spatial_sensitivity_gate.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert gate["status"] == "HOLD" and gate["passed"] is False
+
+
+def test_isolated_status_rejects_retryable_terminal_noncompletion() -> None:
+    verifier = _load_script(
+        "109_gate_sr_v2_spatial_sensitivity.py",
+        "spatial_verifier_terminal_state_machine",
+    )
+    for status in (
+        {
+            "status": "checkpointed",
+            "failure_class": None,
+            "failure_category": None,
+            "retryable": True,
+        },
+        {
+            "status": "failed",
+            "failure_class": "TimeoutError",
+            "failure_category": "transient_runtime",
+            "retryable": True,
+        },
+    ):
+        with pytest.raises(ValueError, match="terminal.*completed"):
+            verifier._validate_status_failure_contract(
+                status,
+                iterations=180_000,
+                terminal_iteration=180_000,
+            )
+
+
+def test_isolated_status_rejects_bool_aliases_for_all_integer_fields() -> None:
+    verifier = _load_script(
+        "109_gate_sr_v2_spatial_sensitivity.py",
+        "spatial_verifier_status_bool_aliases",
+    )
+    status = {
+        "chain_id": 1,
+        "array_index": 1,
+        "extension_epoch": 0,
+        "job_attempt": 1,
+        "iterations": 0,
+        "retained_draws": 0,
+        "chunks": 0,
+        "seeds": {
+            "chain_seed": 74291,
+            "allocation_initialization_seed": 74251,
+            "spatial_initialization_seed": 74261,
+        },
+    }
+    aliases = {
+        "chain_id": True,
+        "array_index": True,
+        "extension_epoch": False,
+        "job_attempt": True,
+        "iterations": False,
+        "retained_draws": False,
+        "chunks": False,
+    }
+    for field, value in aliases.items():
+        tampered = json.loads(json.dumps(status))
+        tampered[field] = value
+        with pytest.raises(ValueError, match="exact integer"):
+            verifier._validate_status_integer_fields(tampered)
+    for seed in status["seeds"]:
+        tampered = json.loads(json.dumps(status))
+        tampered["seeds"][seed] = True
+        with pytest.raises(ValueError, match="exact integer"):
+            verifier._validate_status_integer_fields(tampered)
+
+
+def test_isolated_retry_status_cannot_rollback_below_certified_source() -> None:
+    verifier = _load_script(
+        "109_gate_sr_v2_spatial_sensitivity.py",
+        "spatial_verifier_retry_rollback",
+    )
+    certificate = {
+        "mode": "retry",
+        "source_checkpoint_path": (
+            "checkpoints/checkpoint_epoch_0_attempt_1_iter_000001000.json"
+        ),
+        "source_checkpoint_sha256": "a" * 64,
+        "source_iteration": 1_000,
+        "source_saved_draws": 0,
+    }
+    rewound = {
+        "status": "failed",
+        "job_attempt": 2,
+        "iterations": 0,
+        "retained_draws": 0,
+        "latest_checkpoint": (
+            "checkpoints/checkpoint_epoch_0_attempt_1_iter_000000000.json"
+        ),
+        "latest_checkpoint_sha256": "b" * 64,
+    }
+    with pytest.raises(ValueError, match="rollback"):
+        verifier._validate_retry_progress_authority(
+            rewound,
+            certificate,
+            checkpoint_creator_attempt=1,
+        )
+    unchanged = {
+        **rewound,
+        "iterations": 1_000,
+        "latest_checkpoint": certificate["source_checkpoint_path"],
+        "latest_checkpoint_sha256": certificate["source_checkpoint_sha256"],
+    }
+    verifier._validate_retry_progress_authority(
+        unchanged,
+        certificate,
+        checkpoint_creator_attempt=1,
+    )
+    progressed_with_old_checkpoint = {
+        **unchanged,
+        "iterations": 1_001,
+    }
+    with pytest.raises(ValueError, match="current attempt"):
+        verifier._validate_retry_progress_authority(
+            progressed_with_old_checkpoint,
+            certificate,
+            checkpoint_creator_attempt=1,
+        )
+
+
+def test_isolated_retry_checkpoint_accepts_exact_nonempty_pending_buffers(
+    tmp_path: Path,
+) -> None:
+    import base64
+
+    verifier = _load_script(
+        "109_gate_sr_v2_spatial_sensitivity.py",
+        "spatial_verifier_nonempty_pending_resume",
+    )
+    frame, design, identity, initial, _, _ = _tiny_spatial_runtime(
+        tmp_path / "pending-runtime"
+    )
+    seeds = {
+        "chain_seed": 74291,
+        "allocation_initialization_seed": 74251,
+        "spatial_initialization_seed": 74261,
+    }
+    checkpoint = verifier._load_canonical_checkpoint(initial)
+    iteration = 45_030
+    parameters = list(identity["target"]["parameter_schema"])
+    county_count = len(design.spatial_graph.counties)
+
+    def encoded(values: np.ndarray, dtype: str) -> dict[str, object]:
+        array = np.ascontiguousarray(values, dtype=np.dtype(dtype))
+        return {
+            "dtype": np.dtype(dtype).str,
+            "shape": list(array.shape),
+            "data_base64": base64.b64encode(array.tobytes(order="C")).decode(
+                "ascii"
+            ),
+        }
+
+    checkpoint["iteration"] = iteration
+    checkpoint["saved_draws"] = 1
+    checkpoint["next_draw_id"] = 2
+    checkpoint["output_positions"] = {
+        "scalar_rows": len(parameters),
+        "spatial_draws": 1,
+    }
+    for name in (
+        "beta",
+        "state",
+        "year",
+        "log_sigma_state",
+        "log_sigma_year",
+        "log_kappa",
+        "spatial_hyperparameters",
+    ):
+        checkpoint["proposed"][name] = iteration
+    checkpoint["proposed"].update(
+        {
+            "transfer": iteration,
+            "blocked_refresh": (iteration // 25) * 12,
+            "mala": iteration // 5,
+        }
+    )
+    checkpoint["adaptation_state"].update(
+        {
+            "attempted": iteration // 5,
+            "accepted": 0,
+            "window_attempted": 0,
+            "window_accepted": 0,
+            "windows_completed": 90,
+            "adaptation_frozen": True,
+        }
+    )
+    checkpoint["pending_buffers"] = {
+        "scalar": {
+            "columns": [
+                "chain_id",
+                "draw_id",
+                "extension_epoch",
+                "parameter",
+                "value",
+            ],
+            "row_count": len(parameters),
+            "chain_id": encoded(np.ones(len(parameters)), "<i8"),
+            "draw_id": encoded(np.ones(len(parameters)), "<i8"),
+            "extension_epoch": encoded(np.zeros(len(parameters)), "<i8"),
+            "parameter": parameters,
+            "value": encoded(np.zeros(len(parameters)), "<f8"),
+        },
+        "structured": encoded(np.zeros((1, county_count)), "<f8"),
+        "unstructured": encoded(np.zeros((1, county_count)), "<f8"),
+    }
+    verifier._validate_checkpoint_payload(
+        checkpoint,
+        identity=identity,
+        seeds=seeds,
+        expected_epoch=0,
+        expected_attempt=1,
+        expected_iteration=iteration,
+        expected_draws=1,
+        expected_chunks=0,
+        row_count=len(frame),
+        county_count=county_count,
+        labels=design.spatial_graph.component_id,
+        expected_y=frame["latent_count"].to_numpy(dtype=np.int64),
+        count_moves_per_iteration=1,
+        blocked_refresh_frequency=25,
+        blocked_refresh_attempts=12,
+    )
+    tampered = json.loads(json.dumps(checkpoint))
+    tampered["pending_buffers"]["scalar"]["draw_id"] = encoded(
+        np.full(len(parameters), 2), "<i8"
+    )
+    with pytest.raises(ValueError, match="pending scalar content"):
+        verifier._validate_checkpoint_payload(
+            tampered,
+            identity=identity,
+            seeds=seeds,
+            expected_epoch=0,
+            expected_attempt=1,
+            expected_iteration=iteration,
+            expected_draws=1,
+            expected_chunks=0,
+            row_count=len(frame),
+            county_count=county_count,
+            labels=design.spatial_graph.component_id,
+            expected_y=frame["latent_count"].to_numpy(dtype=np.int64),
+            count_moves_per_iteration=1,
+            blocked_refresh_frequency=25,
+            blocked_refresh_attempts=12,
+        )
 
 
 def test_production_shape_prepare_target_matches_isolated_verifier() -> None:
@@ -608,6 +1291,7 @@ def test_production_shape_prepare_target_matches_isolated_verifier() -> None:
     assert isolated_target is not None
     assert prepare_target == isolated_target
     assert len(isolated_target["parameter_schema"]) == 71
+    assert verifier._count_moves_per_iteration(frame) == 350
     assert isolated_target["design_schema"]["row_county_index"]["shape"] == [
         len(frame)
     ]
@@ -1156,6 +1840,41 @@ def test_runner_publishes_exact_status_schedule_and_completed_noop(
     assert evidence["historical_latent_y_stored"] is False
     assert evidence["independent_historical_y_reconstruction_possible"] is False
     assert status["executor_builder"] == "injected_bounded_test_executor"
+    resume_fields = {
+        "schema_id",
+        "mode",
+        "source_immutable_status_path",
+        "source_immutable_status_sha256",
+        "source_checkpoint_path",
+        "source_checkpoint_sha256",
+        "source_extension_epoch",
+        "source_job_attempt",
+        "source_iteration",
+        "source_saved_draws",
+        "rebound_checkpoint_path",
+        "rebound_checkpoint_sha256",
+    }
+    assert set(status["resume_from"]) == resume_fields
+    assert status["resume_from"] == evidence["resume_from"]
+    assert status["resume_from"] == {
+        "schema_id": "sr_v2_spatial_resume_from/v1",
+        "mode": "prepared_initial",
+        "source_immutable_status_path": None,
+        "source_immutable_status_sha256": None,
+        "source_checkpoint_path": (
+            "checkpoints/checkpoint_epoch_0_attempt_1_iter_000000000.json"
+        ),
+        "source_checkpoint_sha256": hashlib.sha256(
+            prepared_checkpoint.read_bytes()
+        ).hexdigest(),
+        "source_extension_epoch": 0,
+        "source_job_attempt": 1,
+        "source_iteration": 0,
+        "source_saved_draws": 0,
+        "rebound_checkpoint_path": None,
+        "rebound_checkpoint_sha256": None,
+    }
+    assert status["failure_class"] is None
 
     reused = runner.run_chain(
         run_id="sr-v2-spatial-sensitivity-20260818-v1",

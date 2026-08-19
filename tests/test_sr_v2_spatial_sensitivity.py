@@ -852,6 +852,8 @@ def test_operational_yaml_freezes_execution_and_output_contracts() -> None:
         "graph_contract",
         "prepared_run_manifest",
         "chain_checkpoint_v2",
+        "resume_from",
+        "attempt_evidence",
         "scalar_draw_chunk",
         "spatial_draw_chunk",
         "chain_status",
