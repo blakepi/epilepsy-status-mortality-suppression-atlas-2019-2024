@@ -24,6 +24,7 @@ from .model import (
     count_logpmf,
     crude_intercept_prior,
     initialize_theta,
+    linear_predictor,
     log_posterior_theta,
     make_design,
     mu,
@@ -31,6 +32,10 @@ from .model import (
     prior_specification_from_mapping,
 )
 from .paths import BAYES_DATA, OUTPUT_DIR, PROJECT_ROOT, rel
+from .spatial_bym2 import (
+    componentwise_center,
+    validate_structured_effect,
+)
 
 
 @dataclass
@@ -52,6 +57,73 @@ class MoveState:
     years: np.ndarray
     cycle_state_counties: list[tuple[int, np.ndarray]]
     interval_path_support: IntervalPathSupport
+
+
+@dataclass(frozen=True)
+class SpatialMALAState:
+    """Adaptation state for the joint BYM2 field proposal.
+
+    The common multiplier is adapted only in 100-attempt windows during the
+    first 45,000 iterations of extension epoch zero.  All counters remain
+    cumulative after adaptation freezes so checkpoint/status evidence can be
+    reconciled exactly.
+    """
+
+    multiplier: float = 1.0
+    epsilon_structured: float = 0.02
+    epsilon_unstructured: float = 0.04
+    attempted: int = 0
+    accepted: int = 0
+    window_attempted: int = 0
+    window_accepted: int = 0
+    windows_completed: int = 0
+    adaptation_frozen: bool = False
+
+    def to_dict(self) -> dict[str, float | int | bool]:
+        return {
+            "multiplier": float(self.multiplier),
+            "epsilon_structured": float(self.epsilon_structured),
+            "epsilon_unstructured": float(self.epsilon_unstructured),
+            "attempted": int(self.attempted),
+            "accepted": int(self.accepted),
+            "window_attempted": int(self.window_attempted),
+            "window_accepted": int(self.window_accepted),
+            "windows_completed": int(self.windows_completed),
+            "adaptation_frozen": bool(self.adaptation_frozen),
+        }
+
+    @classmethod
+    def from_dict(cls, payload: dict[str, object]) -> "SpatialMALAState":
+        state = cls(
+            multiplier=float(payload.get("multiplier", 1.0)),
+            epsilon_structured=float(payload.get("epsilon_structured", 0.02)),
+            epsilon_unstructured=float(payload.get("epsilon_unstructured", 0.04)),
+            attempted=int(payload.get("attempted", 0)),
+            accepted=int(payload.get("accepted", 0)),
+            window_attempted=int(payload.get("window_attempted", 0)),
+            window_accepted=int(payload.get("window_accepted", 0)),
+            windows_completed=int(payload.get("windows_completed", 0)),
+            adaptation_frozen=bool(payload.get("adaptation_frozen", False)),
+        )
+        if (
+            not np.isfinite(state.multiplier)
+            or not 0.1 <= state.multiplier <= 5.0
+            or state.epsilon_structured != 0.02 * state.multiplier
+            or state.epsilon_unstructured != 0.04 * state.multiplier
+            or min(
+                state.attempted,
+                state.accepted,
+                state.window_attempted,
+                state.window_accepted,
+                state.windows_completed,
+            )
+            < 0
+            or state.accepted > state.attempted
+            or state.window_accepted > state.window_attempted
+            or state.window_attempted >= 100
+        ):
+            raise ValueError("Invalid spatial MALA adaptation state.")
+        return state
 
 
 def _codes(series: pd.Series) -> tuple[np.ndarray, list[str]]:
@@ -503,6 +575,31 @@ def _theta_to_rows(theta: Theta, design: Design, chain: int, draw: int, iteratio
         rows.append(
             {"chain": chain, "draw": draw, "iteration": iteration, "parameter": "kappa", "value": float(np.exp(theta.log_kappa))}
         )
+    if design.spatial_graph is not None:
+        _require_spatial_theta(theta, design)
+        if theta.logit_phi_structured >= 0:
+            phi = 1.0 / (1.0 + np.exp(-theta.logit_phi_structured))
+        else:
+            exp_value = np.exp(theta.logit_phi_structured)
+            phi = exp_value / (1.0 + exp_value)
+        rows.extend(
+            [
+                {
+                    "chain": chain,
+                    "draw": draw,
+                    "iteration": iteration,
+                    "parameter": "sigma_county",
+                    "value": float(np.exp(theta.log_sigma_county)),
+                },
+                {
+                    "chain": chain,
+                    "draw": draw,
+                    "iteration": iteration,
+                    "parameter": "phi_structured",
+                    "value": float(phi),
+                },
+            ]
+        )
     return rows
 
 
@@ -546,6 +643,336 @@ def _update_theta_block(
     if np.isfinite(proposed_lp) and np.log(rng.uniform()) < proposed_lp - current_lp:
         return proposal, proposed_lp, True
     return theta, current_lp, False
+
+
+def _spatial_design_graph(design: Design):
+    graph = design.spatial_graph
+    if graph is None:
+        raise ValueError("Spatial updates require Design.spatial_graph.")
+    return graph
+
+
+def _require_spatial_theta(theta: Theta, design: Design) -> None:
+    graph = _spatial_design_graph(design)
+    if (
+        theta.spatial_structured is None
+        or theta.spatial_unstructured is None
+        or theta.log_sigma_county is None
+        or theta.logit_phi_structured is None
+    ):
+        raise ValueError("Spatial updates require the complete BYM2 Theta state.")
+    validate_structured_effect(theta.spatial_structured, graph)
+    unstructured = np.asarray(theta.spatial_unstructured, dtype=np.float64)
+    if unstructured.shape != (len(graph.counties),) or not np.isfinite(
+        unstructured
+    ).all():
+        raise ValueError("Spatial unstructured effects have invalid shape or values.")
+    if not np.isfinite(theta.log_sigma_county) or not np.isfinite(
+        theta.logit_phi_structured
+    ):
+        raise ValueError("Spatial hyperparameters must be finite.")
+
+
+def spatial_county_score(
+    y: np.ndarray,
+    theta: Theta,
+    design: Design,
+) -> np.ndarray:
+    """County-aggregate the exact NB2 score with target clipping/flooring.
+
+    ``mu`` first clips the predictor to [-30, 30] and ``nb2_logpmf`` then
+    floors the mean at 1e-12.  Both flat regions have derivative zero.  The
+    floor matters for predictors between -30 and log(1e-12), so it is applied
+    explicitly here rather than approximated from the predictor clip alone.
+    """
+
+    graph = _spatial_design_graph(design)
+    _require_spatial_theta(theta, design)
+    if design.likelihood_family != "negative_binomial_2":
+        raise ValueError("The frozen BYM2 sensitivity target requires NB2.")
+    values = np.asarray(y, dtype=np.float64)
+    if values.shape != design.offset.shape or not np.isfinite(values).all():
+        raise ValueError("Observed/latent counts have invalid shape or values.")
+    eta = linear_predictor(theta, design)
+    clipped_eta = np.clip(eta, -30.0, 30.0)
+    fitted = np.maximum(np.exp(clipped_eta), 1.0e-12)
+    kappa = float(np.exp(theta.log_kappa))
+    if not np.isfinite(kappa) or kappa <= 0:
+        raise ValueError("NB2 kappa must be finite and positive.")
+    row_score = values - (values + kappa) * fitted / (kappa + fitted)
+    active = (eta > np.log(1.0e-12)) & (eta < 30.0)
+    row_score = np.where(active, row_score, 0.0)
+    county_score = np.bincount(
+        np.asarray(graph.row_county_index, dtype=np.int64),
+        weights=row_score,
+        minlength=len(graph.counties),
+    ).astype(np.float64, copy=False)
+    if county_score.shape != (len(graph.counties),) or not np.isfinite(
+        county_score
+    ).all():
+        raise ValueError("County NB2 score is nonfinite or malformed.")
+    return county_score
+
+
+def _spatial_gradients(
+    y: np.ndarray,
+    theta: Theta,
+    design: Design,
+) -> tuple[np.ndarray, np.ndarray]:
+    graph = _spatial_design_graph(design)
+    _require_spatial_theta(theta, design)
+    score = spatial_county_score(y, theta, design)
+    sigma = float(np.exp(theta.log_sigma_county))
+    # Stable logistic transform; finite logit was checked above.
+    if theta.logit_phi_structured >= 0:
+        phi = 1.0 / (1.0 + np.exp(-theta.logit_phi_structured))
+    else:
+        exp_value = np.exp(theta.logit_phi_structured)
+        phi = exp_value / (1.0 + exp_value)
+    projected_score = componentwise_center(score, graph)
+    structured = np.asarray(theta.spatial_structured, dtype=np.float64)
+    unstructured = np.asarray(theta.spatial_unstructured, dtype=np.float64)
+    grad_structured = (
+        sigma * np.sqrt(phi) * projected_score
+        - graph.scaled_precision @ structured
+    )
+    grad_unstructured = (
+        sigma * np.sqrt(1.0 - phi) * score - unstructured
+    )
+    grad_structured = componentwise_center(grad_structured, graph)
+    if not np.isfinite(grad_structured).all() or not np.isfinite(
+        grad_unstructured
+    ).all():
+        raise ValueError("Spatial MALA gradient is nonfinite.")
+    return grad_structured, np.asarray(grad_unstructured, dtype=np.float64)
+
+
+def spatial_mala_log_q(
+    to_structured: np.ndarray,
+    to_unstructured: np.ndarray,
+    *,
+    from_structured: np.ndarray,
+    from_unstructured: np.ndarray,
+    gradient_structured: np.ndarray,
+    gradient_unstructured: np.ndarray,
+    epsilon_structured: float,
+    epsilon_unstructured: float,
+    graph,
+) -> float:
+    """Return the variable part of log q(to | from) on the exact subspace."""
+
+    epsilon_structured = float(epsilon_structured)
+    epsilon_unstructured = float(epsilon_unstructured)
+    if (
+        not np.isfinite(epsilon_structured)
+        or epsilon_structured <= 0
+        or not np.isfinite(epsilon_unstructured)
+        or epsilon_unstructured <= 0
+    ):
+        raise ValueError("MALA step sizes must be finite and positive.")
+    validate_structured_effect(from_structured, graph)
+    validate_structured_effect(to_structured, graph)
+    gradient_u = componentwise_center(gradient_structured, graph)
+    forward_u = componentwise_center(
+        np.asarray(to_structured, dtype=np.float64)
+        - np.asarray(from_structured, dtype=np.float64)
+        - 0.5 * epsilon_structured**2 * gradient_u,
+        graph,
+    )
+    forward_v = (
+        np.asarray(to_unstructured, dtype=np.float64)
+        - np.asarray(from_unstructured, dtype=np.float64)
+        - 0.5
+        * epsilon_unstructured**2
+        * np.asarray(gradient_unstructured, dtype=np.float64)
+    )
+    if forward_v.shape != (len(graph.counties),) or not np.isfinite(
+        forward_v
+    ).all():
+        raise ValueError("Unstructured MALA residual is malformed or nonfinite.")
+    # The structured Euclidean norm is the exact Gaussian norm in the
+    # rank-reduced tangent subspace because forward_u has been projected by P.
+    return float(
+        -0.5 * (forward_u @ forward_u) / epsilon_structured**2
+        - 0.5 * (forward_v @ forward_v) / epsilon_unstructured**2
+    )
+
+
+def advance_spatial_mala_adaptation(
+    state: SpatialMALAState,
+    *,
+    accepted: bool,
+    iteration: int,
+    extension_epoch: int,
+) -> SpatialMALAState:
+    """Record one attempted MALA move and perform the frozen window update."""
+
+    if iteration <= 0 or iteration % 5 != 0 or extension_epoch < 0:
+        raise ValueError(
+            "A spatial MALA attempt must occur on a positive multiple-of-five iteration."
+        )
+    attempted = state.attempted + 1
+    accepted_total = state.accepted + int(bool(accepted))
+    may_adapt = (
+        extension_epoch == 0
+        and iteration <= 45_000
+        and not state.adaptation_frozen
+    )
+    window_attempted = state.window_attempted
+    window_accepted = state.window_accepted
+    windows_completed = state.windows_completed
+    multiplier = state.multiplier
+    if may_adapt:
+        window_attempted += 1
+        window_accepted += int(bool(accepted))
+        if window_attempted == 100:
+            windows_completed += 1
+            gain = min(0.05, windows_completed ** -0.6)
+            rate = window_accepted / 100.0
+            log_multiplier = np.clip(
+                np.log(multiplier) + gain * (rate - 0.574),
+                np.log(0.1),
+                np.log(5.0),
+            )
+            multiplier = float(np.exp(log_multiplier))
+            window_attempted = 0
+            window_accepted = 0
+    frozen = bool(
+        state.adaptation_frozen
+        or extension_epoch != 0
+        or iteration >= 45_000
+    )
+    return SpatialMALAState(
+        multiplier=multiplier,
+        epsilon_structured=0.02 * multiplier,
+        epsilon_unstructured=0.04 * multiplier,
+        attempted=attempted,
+        accepted=accepted_total,
+        window_attempted=window_attempted,
+        window_accepted=window_accepted,
+        windows_completed=windows_completed,
+        adaptation_frozen=frozen,
+    )
+
+
+def update_spatial_hyperparameters(
+    y: np.ndarray,
+    theta: Theta,
+    design: Design,
+    *,
+    intercept_mean: float,
+    rng: np.random.Generator,
+    current_target: float,
+    prior: PriorSpecification | None = None,
+    log_sigma_sd: float = 0.08,
+    logit_phi_sd: float = 0.15,
+) -> tuple[Theta, float, bool]:
+    """Symmetric two-dimensional random-walk update for BYM2 hyperparameters."""
+
+    _require_spatial_theta(theta, design)
+    proposal = theta.copy()
+    increments = rng.normal(size=2)
+    proposal.log_sigma_county = float(
+        theta.log_sigma_county + log_sigma_sd * increments[0]
+    )
+    proposal.logit_phi_structured = float(
+        theta.logit_phi_structured + logit_phi_sd * increments[1]
+    )
+    proposed_target = log_posterior_theta(
+        y,
+        proposal,
+        design,
+        intercept_mean=intercept_mean,
+        prior=prior,
+    )
+    if np.isfinite(proposed_target) and np.log(rng.uniform()) < (
+        proposed_target - current_target
+    ):
+        return proposal, float(proposed_target), True
+    return theta, float(current_target), False
+
+
+def update_spatial_fields_mala(
+    y: np.ndarray,
+    theta: Theta,
+    design: Design,
+    *,
+    intercept_mean: float,
+    rng: np.random.Generator,
+    current_target: float,
+    adaptation_state: SpatialMALAState,
+    iteration: int,
+    extension_epoch: int,
+    prior: PriorSpecification | None = None,
+) -> tuple[Theta, float, SpatialMALAState, bool]:
+    """Joint exact-Hastings MALA update of structured/unstructured fields."""
+
+    graph = _spatial_design_graph(design)
+    if iteration <= 0 or iteration % 5 != 0:
+        raise ValueError("Spatial MALA updates run exactly every five iterations.")
+    _require_spatial_theta(theta, design)
+    current_u = np.asarray(theta.spatial_structured, dtype=np.float64)
+    current_v = np.asarray(theta.spatial_unstructured, dtype=np.float64)
+    grad_u, grad_v = _spatial_gradients(y, theta, design)
+    epsilon_u = adaptation_state.epsilon_structured
+    epsilon_v = adaptation_state.epsilon_unstructured
+    noise_u = componentwise_center(rng.normal(size=len(graph.counties)), graph)
+    noise_v = rng.normal(size=len(graph.counties))
+    proposed_u = componentwise_center(
+        current_u + 0.5 * epsilon_u**2 * grad_u + epsilon_u * noise_u,
+        graph,
+    )
+    proposed_v = current_v + 0.5 * epsilon_v**2 * grad_v + epsilon_v * noise_v
+    proposal = theta.copy()
+    proposal.spatial_structured = proposed_u
+    proposal.spatial_unstructured = proposed_v
+    proposed_target = log_posterior_theta(
+        y,
+        proposal,
+        design,
+        intercept_mean=intercept_mean,
+        prior=prior,
+    )
+    accepted = False
+    if np.isfinite(proposed_target):
+        proposed_grad_u, proposed_grad_v = _spatial_gradients(
+            y, proposal, design
+        )
+        log_forward = spatial_mala_log_q(
+            proposed_u,
+            proposed_v,
+            from_structured=current_u,
+            from_unstructured=current_v,
+            gradient_structured=grad_u,
+            gradient_unstructured=grad_v,
+            epsilon_structured=epsilon_u,
+            epsilon_unstructured=epsilon_v,
+            graph=graph,
+        )
+        log_reverse = spatial_mala_log_q(
+            current_u,
+            current_v,
+            from_structured=proposed_u,
+            from_unstructured=proposed_v,
+            gradient_structured=proposed_grad_u,
+            gradient_unstructured=proposed_grad_v,
+            epsilon_structured=epsilon_u,
+            epsilon_unstructured=epsilon_v,
+            graph=graph,
+        )
+        log_acceptance = (
+            proposed_target - current_target + log_reverse - log_forward
+        )
+        accepted = bool(np.log(rng.uniform()) < log_acceptance)
+    updated_state = advance_spatial_mala_adaptation(
+        adaptation_state,
+        accepted=accepted,
+        iteration=iteration,
+        extension_epoch=extension_epoch,
+    )
+    if accepted:
+        return proposal, float(proposed_target), updated_state, True
+    return theta, float(current_target), updated_state, False
 
 
 def _settings(config: dict, mode: str) -> dict:
@@ -659,6 +1086,18 @@ def _atomic_parquet(path: Path, frame: pd.DataFrame) -> None:
 
 
 def _theta_payload(theta: Theta) -> dict[str, object]:
+    if any(
+        value is not None
+        for value in (
+            theta.spatial_structured,
+            theta.spatial_unstructured,
+            theta.log_sigma_county,
+            theta.logit_phi_structured,
+        )
+    ):
+        raise ValueError(
+            "Spatial state requires the schema-v2 spatial checkpoint writer."
+        )
     theta = _center_random_effects(theta)
     return {
         "beta": theta.beta,

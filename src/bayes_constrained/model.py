@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from dataclasses import dataclass
-from typing import Iterator, Literal, Mapping
+from typing import Any, Iterator, Literal, Mapping
 
 import numpy as np
 import pandas as pd
@@ -170,6 +170,7 @@ class Design:
     states: list[str]
     years: list[str]
     likelihood_family: LikelihoodFamily = DEFAULT_LIKELIHOOD_FAMILY
+    spatial_graph: Any | None = None
 
 
 @dataclass
@@ -180,6 +181,10 @@ class Theta:
     log_sigma_state: float
     log_sigma_year: float
     log_kappa: float
+    spatial_structured: np.ndarray | None = None
+    spatial_unstructured: np.ndarray | None = None
+    log_sigma_county: float | None = None
+    logit_phi_structured: float | None = None
 
     def copy(self) -> "Theta":
         return Theta(
@@ -189,6 +194,26 @@ class Theta:
             log_sigma_state=float(self.log_sigma_state),
             log_sigma_year=float(self.log_sigma_year),
             log_kappa=float(self.log_kappa),
+            spatial_structured=(
+                None
+                if self.spatial_structured is None
+                else self.spatial_structured.copy()
+            ),
+            spatial_unstructured=(
+                None
+                if self.spatial_unstructured is None
+                else self.spatial_unstructured.copy()
+            ),
+            log_sigma_county=(
+                None
+                if self.log_sigma_county is None
+                else float(self.log_sigma_county)
+            ),
+            logit_phi_structured=(
+                None
+                if self.logit_phi_structured is None
+                else float(self.logit_phi_structured)
+            ),
         )
 
 
@@ -246,8 +271,38 @@ def make_design(
     *,
     model: str = "primary",
     likelihood_family: str = DEFAULT_LIKELIHOOD_FAMILY,
+    spatial_graph: Any | None = None,
 ) -> Design:
     family = normalize_likelihood_family(likelihood_family)
+    if spatial_graph is not None:
+        if "county_fips" not in frame.columns:
+            raise ValueError("A spatial Design requires frame county_fips.")
+        normalized_counties = (
+            frame["county_fips"].astype(str).str.strip().str.zfill(5)
+        )
+        if not normalized_counties.str.fullmatch(r"\d{5}", na=False).all():
+            raise ValueError("Spatial Design county_fips must be five digits.")
+        graph_counties = tuple(spatial_graph.counties)
+        if tuple(sorted(normalized_counties.unique())) != graph_counties:
+            raise ValueError("Spatial graph counties disagree with the model frame.")
+        county_lookup = {
+            county: index for index, county in enumerate(graph_counties)
+        }
+        expected_row_county_index = normalized_counties.map(county_lookup).to_numpy(
+            dtype=np.int64
+        )
+        observed_row_county_index = np.asarray(spatial_graph.row_county_index)
+        if (
+            observed_row_county_index.dtype != np.int64
+            or observed_row_county_index.shape != expected_row_county_index.shape
+            or not np.array_equal(
+                observed_row_county_index,
+                expected_row_county_index,
+            )
+        ):
+            raise ValueError(
+                "Spatial graph row-to-county mapping disagrees with model frame order."
+            )
     x = pd.DataFrame(index=frame.index)
     x["Intercept"] = 1.0
     if model == "binary_rucc":
@@ -351,6 +406,7 @@ def make_design(
         states=states,
         years=years,
         likelihood_family=family,
+        spatial_graph=spatial_graph,
     )
 
 
@@ -365,12 +421,33 @@ def crude_intercept_prior(frame: pd.DataFrame) -> float:
 def linear_predictor(theta: Theta, design: Design) -> np.ndarray:
     state = theta.state_effect - theta.state_effect.mean()
     year = theta.year_effect - theta.year_effect.mean()
-    return (
+    predictor = (
         design.offset
         + design.x @ theta.beta
         + state[design.state_index]
         + year[design.year_index]
     )
+    if design.spatial_graph is not None:
+        if (
+            theta.spatial_structured is None
+            or theta.spatial_unstructured is None
+            or theta.log_sigma_county is None
+            or theta.logit_phi_structured is None
+        ):
+            raise ValueError(
+                "A spatial design requires the complete BYM2 state on Theta."
+            )
+        from .spatial_bym2 import combined_county_effect
+
+        county_effect = combined_county_effect(
+            theta.spatial_structured,
+            theta.spatial_unstructured,
+            theta.log_sigma_county,
+            theta.logit_phi_structured,
+            design.spatial_graph,
+        )
+        predictor = predictor + county_effect[design.spatial_graph.row_county_index]
+    return predictor
 
 
 def mu(theta: Theta, design: Design) -> np.ndarray:
@@ -398,6 +475,7 @@ def log_prior(
     intercept_mean: float,
     prior: PriorSpecification | None = None,
     likelihood_family: str = DEFAULT_LIKELIHOOD_FAMILY,
+    design: Design | None = None,
 ) -> float:
     specification = prior or active_prior_specification()
     family = normalize_likelihood_family(likelihood_family)
@@ -449,6 +527,24 @@ def log_prior(
             ** 2
             - np.log(specification.log_kappa_sd)
         )
+    if design is not None and design.spatial_graph is not None:
+        if (
+            theta.spatial_structured is None
+            or theta.spatial_unstructured is None
+            or theta.log_sigma_county is None
+            or theta.logit_phi_structured is None
+        ):
+            return -np.inf
+        from .spatial_bym2 import BYM2Prior, bym2_log_prior
+
+        lp += bym2_log_prior(
+            theta.spatial_structured,
+            theta.spatial_unstructured,
+            theta.log_sigma_county,
+            theta.logit_phi_structured,
+            design.spatial_graph,
+            BYM2Prior(sigma_county_halfnormal_sd=1.0),
+        )
     return float(lp)
 
 
@@ -465,6 +561,7 @@ def log_posterior_theta(
         intercept_mean=intercept_mean,
         prior=prior,
         likelihood_family=design.likelihood_family,
+        design=design,
     )
     if not np.isfinite(prior_density):
         return -np.inf
@@ -496,7 +593,7 @@ def initialize_theta(frame: pd.DataFrame, y: np.ndarray, design: Design) -> Thet
         kappa = 10.0
     else:
         kappa = float(np.clip(10.0 / max(ratio, 0.5), 0.5, 50.0))
-    return Theta(
+    theta = Theta(
         beta=beta,
         state_effect=state_effect,
         year_effect=year_effect,
@@ -504,6 +601,13 @@ def initialize_theta(frame: pd.DataFrame, y: np.ndarray, design: Design) -> Thet
         log_sigma_year=np.log(0.2),
         log_kappa=np.log(kappa),
     )
+    if design.spatial_graph is not None:
+        county_count = len(design.spatial_graph.counties)
+        theta.spatial_structured = np.zeros(county_count, dtype=np.float64)
+        theta.spatial_unstructured = np.zeros(county_count, dtype=np.float64)
+        theta.log_sigma_county = 0.0
+        theta.logit_phi_structured = 0.0
+    return theta
 
 
 def term_to_label(term: str) -> str:
