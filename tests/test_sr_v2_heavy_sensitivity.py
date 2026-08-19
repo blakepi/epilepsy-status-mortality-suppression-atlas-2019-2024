@@ -16,7 +16,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from bayes_constrained.data import load_model_frame  # noqa: E402
-from bayes_constrained.model import PRIMARY_TERMS, Theta  # noqa: E402
+from bayes_constrained.model import PRIMARY_TERMS, Theta, active_prior_specification  # noqa: E402
 from bayes_constrained.sampler import load_chain_checkpoint, save_chain_checkpoint  # noqa: E402
 from bayes_constrained.sensitivity import (  # noqa: E402
     EXPECTED_INTERACTION_TERMS,
@@ -482,7 +482,155 @@ def test_actual_merge_entrypoint_rejects_missing_preparation_identity(tmp_path: 
         module.merge(spec.run_id, root=tmp_path, config_path=CONFIG_PATH)
 
 
-def test_actual_runner_stub_enforces_manifest_checkpoint_and_orphan_trust_chain(tmp_path: Path) -> None:
+def _synthetic_preparation_frame() -> pd.DataFrame:
+    county_fips = ["01001", "01003", "01005", "01007"]
+    ruralities = ["metro_large", "metro_other", "nonmetro_adjacent", "nonmetro_nonadjacent"]
+    svi = ["Q1_lowest", "Q2", "Q3", "Q4_highest"]
+    rows = []
+    for year in ("2019", "2020", "2021", "2022", "2023", "2024"):
+        for county, rurality, quartile in zip(county_fips, ruralities, svi, strict=True):
+            rows.append({
+                "county_fips": county, "state_fips": "01", "year": year,
+                "q002_count_status": "exact", "q002_lower": 1, "q002_upper": 1,
+                "q001_period_status": "exact", "q001_period_lower": 6, "q001_period_upper": 6,
+                "q004_state_year_total": 4, "q003_national_year_total": 4,
+                "population": 1000.0, "primary_rurality": rurality, "svi_quartile": quartile,
+                "z_pct_age65": 0.0, "z_pct_male": 0.0,
+            })
+    frame = pd.DataFrame(rows)
+    frame.attrs["grand_total"] = 24
+    frame.attrs["constraint_contract"] = "full_period"
+    return frame
+
+
+def _complete_all_prepared_chains(run_root: Path, spec) -> None:
+    prepared = json.loads((run_root / "prepared_run_manifest.json").read_text(encoding="utf-8"))
+    for profile_record in prepared["profiles"]:
+        schema = list(profile_record["parameter_schema"])
+        profile = profile_record["profile"]
+        for assignment in profile_record["chains"]:
+            chain_id = int(assignment["chain"])
+            chain_dir = run_root / "profiles" / profile["id"] / "chains" / f"chain_{chain_id:02d}"
+            draw_ids = np.tile(np.arange(1, 4501, dtype=np.int64), len(schema))
+            draws = pd.DataFrame({
+                "chain": np.full(len(schema) * 4500, chain_id, dtype=np.int64),
+                "draw": draw_ids,
+                "iteration": 45000 + draw_ids * 30,
+                "parameter": np.repeat(np.asarray(schema, dtype=object), 4500),
+                "value": 0.01 * chain_id + draw_ids.astype(float) / 1_000_000.0,
+            })
+            draws.to_parquet(chain_dir / "draws_params.parquet", index=False)
+            np.savez_compressed(chain_dir / "draws_latent.npz", draws=np.asarray([[1]], dtype=np.int16))
+            pd.DataFrame({"passed": [True]}).to_csv(chain_dir / "latent_validation.csv", index=False)
+            pd.DataFrame({"move": ["stub"], "rate": [1.0]}).to_csv(chain_dir / "acceptance_rates.csv", index=False)
+            pd.DataFrame({"iteration": [180000]}).to_csv(chain_dir / "runtime_log.csv", index=False)
+            (chain_dir / "chain_config_resolved.yaml").write_text("synthetic: true\n", encoding="utf-8")
+            terminal = chain_dir / "checkpoints" / "checkpoint_iter_000180000.npz"
+            _checkpoint_payload(
+                terminal,
+                assignment["checkpoint_target_identity"],
+                likelihood_family=profile["likelihood"],
+                iteration=180000,
+                saved_draws=4500,
+            )
+            artifacts = [
+                "draws_params.parquet", "draws_latent.npz", "latent_validation.csv",
+                "acceptance_rates.csv", "runtime_log.csv", "chain_config_resolved.yaml",
+            ] + sorted(path.relative_to(chain_dir).as_posix() for path in (chain_dir / "checkpoints").iterdir())
+            inventory = artifact_inventory(chain_dir, artifacts)
+            latest = terminal.relative_to(chain_dir).as_posix()
+            status = {
+                "schema_id": "sr_v2_heavy_sensitivity_chain_status/v1",
+                "status": "completed", "run_id": spec.run_id,
+                "array_index": int(assignment["array_index"]), "profile": profile["id"],
+                "chain_id": chain_id, "chain_seed": int(assignment["chain_seed"]),
+                "initialization_seed": int(assignment["initialization_seed"]),
+                "profile_fingerprint": assignment["profile_fingerprint"],
+                "checkpoint_target_identity": assignment["checkpoint_target_identity"],
+                "saved_draws": 4500, "constraint_failures": 0,
+                "parameter_schema": schema, "included_years": profile_record["included_years"],
+                "artifact_sha256": inventory, "latest_checkpoint": latest,
+                "latest_checkpoint_sha256": inventory[latest],
+            }
+            (chain_dir / "chain_status.json").write_text(json.dumps(status, sort_keys=True) + "\n", encoding="utf-8")
+
+
+@pytest.mark.filterwarnings("ignore:Perfect separation.*:statsmodels.tools.sm_exceptions.PerfectSeparationWarning")
+def test_actual_successful_prepare_merge_gate_then_single_fault_holds(tmp_path: Path) -> None:
+    spec = load_execution_spec(CONFIG_PATH)
+    for relative in spec.source_authorities:
+        destination = tmp_path / relative
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(ROOT / relative, destination)
+    envelope = _write_final_source_manifest(tmp_path, spec)
+    prepare_path = ROOT / "scripts" / "100_prepare_sr_v2_heavy_sensitivity.py"
+    prepare_spec = importlib.util.spec_from_file_location("heavy_prepare_success", prepare_path)
+    assert prepare_spec is not None and prepare_spec.loader is not None
+    prepare_module = importlib.util.module_from_spec(prepare_spec)
+    prepare_spec.loader.exec_module(prepare_module)
+    frame = _synthetic_preparation_frame()
+    prepared = prepare_module.prepare(
+        root=tmp_path,
+        config_path=CONFIG_PATH,
+        launch_envelope_path=envelope,
+        frame_loader=lambda: frame.copy(deep=True),
+        allocation_solver=lambda selected, **_: selected["q002_lower"].to_numpy(dtype=int),
+    )
+    assert prepared["status"] == "prepared_not_run"
+    reused = prepare_module.prepare(
+        root=tmp_path,
+        config_path=CONFIG_PATH,
+        launch_envelope_path=envelope,
+        frame_loader=lambda: (_ for _ in ()).throw(AssertionError("idempotent prepare rebuilt frames")),
+        allocation_solver=lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("idempotent prepare reran solver")),
+    )
+    assert reused["preparation_identity"] == prepared["preparation_identity"]
+    run_root = tmp_path / spec.output_root / spec.run_id
+    _complete_all_prepared_chains(run_root, spec)
+
+    merge_path = ROOT / "scripts" / "102_merge_sr_v2_heavy_sensitivity.py"
+    merge_spec = importlib.util.spec_from_file_location("heavy_merge_success", merge_path)
+    assert merge_spec is not None and merge_spec.loader is not None
+    merge_module = importlib.util.module_from_spec(merge_spec)
+    merge_spec.loader.exec_module(merge_module)
+
+    def perfect_diagnostics(draws: pd.DataFrame, output_dir=None) -> pd.DataFrame:
+        parameters = draws["parameter"].drop_duplicates().astype(str).tolist()
+        return pd.DataFrame({
+            "parameter": parameters, "r_hat": 1.0, "ess_bulk": 1000.0, "ess_tail": 1000.0,
+            "chains": 4, "draws_per_chain": 4500, "draws": 18000,
+        })
+
+    merged = merge_module.merge(spec.run_id, root=tmp_path, config_path=CONFIG_PATH, diagnostics_builder=perfect_diagnostics)
+    assert len(merged["profiles"]) == 6
+    assert merge_module.merge(spec.run_id, root=tmp_path, config_path=CONFIG_PATH, diagnostics_builder=perfect_diagnostics)["artifact_sha256"] == merged["artifact_sha256"]
+
+    gate_path = ROOT / "scripts" / "103_gate_sr_v2_heavy_sensitivity.py"
+    gate_spec = importlib.util.spec_from_file_location("heavy_gate_success", gate_path)
+    assert gate_spec is not None and gate_spec.loader is not None
+    gate_module = importlib.util.module_from_spec(gate_spec)
+    gate_spec.loader.exec_module(gate_module)
+    passed = gate_module.gate(spec.run_id, root=tmp_path, config_path=CONFIG_PATH)
+    assert passed["passed"] is True and passed["status"] == "PASS"
+    fault = run_root / "profiles" / "prior_broader" / "chains" / "chain_01" / "draws_params.parquet"
+    fault.write_bytes(fault.read_bytes() + b"tamper")
+    held = gate_module.gate(spec.run_id, root=tmp_path, config_path=CONFIG_PATH)
+    assert held["passed"] is False and held["status"] == "HOLD"
+
+
+@pytest.mark.parametrize(
+    ("array_index", "profile_id", "parameter_schema"),
+    [
+        (1, "prior_broader", ["Intercept", "kappa"]),
+        (9, "model_family_poisson", ["Intercept"]),
+    ],
+)
+def test_actual_runner_stub_enforces_manifest_checkpoint_and_orphan_trust_chain(
+    tmp_path: Path,
+    array_index: int,
+    profile_id: str,
+    parameter_schema: list[str],
+) -> None:
     import yaml
 
     spec = load_execution_spec(CONFIG_PATH)
@@ -499,15 +647,21 @@ def test_actual_runner_stub_enforces_manifest_checkpoint_and_orphan_trust_chain(
     final_source = load_final_source_manifest(tmp_path, spec, envelope)
     config_hash = _sha256(CONFIG_PATH)
     prep_identity = preparation_identity(spec, config_sha256=config_hash, final_source_manifest=final_source)
-    profile = spec.profile("prior_broader")
-    assignment = spec.assignment(1)
+    profile = spec.profile(profile_id)
+    assignment = spec.assignment(array_index)
     profile_root = run_root / "profiles" / profile.profile_id
     frame_path = profile_root / "inputs" / "model_frame.parquet"
     frame_path.parent.mkdir(parents=True)
     pd.DataFrame({"year": ["2019"], "dummy": [1]}).to_parquet(frame_path, index=False)
     config_path = profile_root / "config" / "resolved_profile.yaml"
     config_path.parent.mkdir(parents=True)
-    config_path.write_text(yaml.safe_dump({"run": {"n_iter": 180000}, "model": {"prior_profile": "broader"}}), encoding="utf-8")
+    config_path.write_text(
+        yaml.safe_dump({
+            "run": {"n_iter": 180000, "likelihood_family": profile.likelihood},
+            "model": {"prior_profile": profile.prior, "likelihood_family": profile.likelihood},
+        }),
+        encoding="utf-8",
+    )
     fingerprint = "a" * 64
     identity = {
         "schema_id": "sr_v2_heavy_checkpoint_target/v1",
@@ -523,14 +677,14 @@ def test_actual_runner_stub_enforces_manifest_checkpoint_and_orphan_trust_chain(
         "frame_sha256": _sha256(frame_path),
         "final_source_manifest_sha256": final_source["manifest_sha256"],
         "parameter_schema_sha256": "b" * 64,
-        "array_index": 1,
-        "chain_id": 1,
+        "array_index": array_index,
+        "chain_id": assignment.chain_id,
         "chain_seed": assignment.chain_seed,
         "initialization_seed": assignment.initialization_seed,
     }
     chain_dir = profile_root / "chains" / "chain_01"
     initial = chain_dir / "checkpoints" / "checkpoint_iter_000000000.npz"
-    _checkpoint_payload(initial, identity)
+    _checkpoint_payload(initial, identity, likelihood_family=profile.likelihood, iteration=0, saved_draws=0)
     artifacts = [
         "launch_envelope.json", "launch_envelope.json.sha256",
         frame_path.relative_to(run_root).as_posix(), config_path.relative_to(run_root).as_posix(),
@@ -547,7 +701,7 @@ def test_actual_runner_stub_enforces_manifest_checkpoint_and_orphan_trust_chain(
         "bundle_sha256": final_source["bundle_sha256"],
         "profiles": [{
             "profile": profile.to_dict(), "included_years": ["2019"], "required_columns": ["dummy", "year"],
-            "parameter_schema": ["Intercept", "kappa"],
+            "parameter_schema": parameter_schema,
             "frame": frame_path.relative_to(run_root).as_posix(), "frame_sha256": _sha256(frame_path),
             "config": config_path.relative_to(run_root).as_posix(), "config_sha256": _sha256(config_path),
             "chains": [{**assignment.to_dict(), "profile_fingerprint": fingerprint, "checkpoint_target_identity": identity,
@@ -559,12 +713,31 @@ def test_actual_runner_stub_enforces_manifest_checkpoint_and_orphan_trust_chain(
     prepared_path.write_text(json.dumps(prepared, sort_keys=True) + "\n", encoding="utf-8")
     prepared_path.with_name(prepared_path.name + ".sha256").write_text(_sha256(prepared_path) + "\n", encoding="ascii")
 
+    sampler_called = False
+
     def stub_sampler(frame, **kwargs):
+        nonlocal sampler_called
+        sampler_called = True
+        resolved = yaml.safe_load(Path(kwargs["config_path"]).read_text(encoding="utf-8"))
+        assert resolved["run"]["likelihood_family"] == profile.likelihood
+        assert resolved["model"]["prior_profile"] == profile.prior
+        assert active_prior_specification().name == profile.prior
+        assert kwargs["mode"] == "production"
+        assert kwargs["chain_id"] == assignment.chain_id
+        assert kwargs["array_task_id"] == array_index
+        assert kwargs["seed"] == assignment.chain_seed
+        assert Path(kwargs["out_dir"]) == profile_root
+        assert Path(kwargs["checkpoint_dir"]) == chain_dir / "checkpoints"
+        assert kwargs["checkpoint_every"] == spec.checkpoint_every
+        assert kwargs["resume"] is True
+        assert kwargs["model_name"] == profile.model
+        assert kwargs["target_identity"] == identity
+        assert Path(kwargs["resume_checkpoint_path"]) == initial
+        assert frame["year"].astype(str).tolist() == ["2019"]
         output = Path(kwargs["out_dir"]) / "chains" / "chain_01"
-        schema = ["Intercept", "kappa"]
         pd.DataFrame([
             {"chain": 1, "draw": draw, "iteration": 45000 + draw * 30, "parameter": parameter, "value": float(draw) / 1000}
-            for parameter in schema for draw in range(1, 4501)
+            for parameter in parameter_schema for draw in range(1, 4501)
         ]).to_parquet(output / "draws_params.parquet", index=False)
         np.savez_compressed(output / "draws_latent.npz", draws=np.asarray([[1]]))
         pd.DataFrame({"passed": [True]}).to_csv(output / "latent_validation.csv", index=False)
@@ -576,7 +749,7 @@ def test_actual_runner_stub_enforces_manifest_checkpoint_and_orphan_trust_chain(
         save_chain_checkpoint(
             terminal, y=np.asarray([1]), theta=theta, rng=np.random.default_rng(8), iteration=180000,
             saved_draws=4500, current_lp=-1.0, accepted={}, proposed={}, param_accept={}, param_prop={},
-            target_identity=identity,
+            likelihood_family=profile.likelihood, target_identity=identity,
         )
         return {"status": "completed", "saved_draws": 4500, "iteration": 180000}
 
@@ -585,11 +758,15 @@ def test_actual_runner_stub_enforces_manifest_checkpoint_and_orphan_trust_chain(
     assert module_spec is not None and module_spec.loader is not None
     runner = importlib.util.module_from_spec(module_spec)
     module_spec.loader.exec_module(runner)
-    status = runner.run_chain(spec.run_id, 1, root=tmp_path, config_path=CONFIG_PATH, sampler_runner=stub_sampler)
+    status = runner.run_chain(spec.run_id, array_index, root=tmp_path, config_path=CONFIG_PATH, sampler_runner=stub_sampler)
     assert status["status"] == "completed"
+    assert sampler_called is True
+    sampler_called = False
+    reused_status = runner.run_chain(spec.run_id, array_index, root=tmp_path, config_path=CONFIG_PATH, sampler_runner=stub_sampler)
+    assert reused_status["status"] == "completed" and sampler_called is False
     (chain_dir / "orphan.partial").write_text("partial", encoding="utf-8")
     with pytest.raises(ValueError, match="orphan|undeclared"):
-        runner.run_chain(spec.run_id, 1, root=tmp_path, config_path=CONFIG_PATH, sampler_runner=stub_sampler)
+        runner.run_chain(spec.run_id, array_index, root=tmp_path, config_path=CONFIG_PATH, sampler_runner=stub_sampler)
 
 
 @pytest.mark.parametrize(
@@ -656,7 +833,65 @@ def test_safe_paths_and_no_clobber_publication_reject_escape_and_conflict(tmp_pa
     assert (destination / "existing.txt").read_text(encoding="utf-8") == "preserve"
 
 
-def _checkpoint_payload(path: Path, identity: dict[str, object]) -> None:
+def test_no_clobber_publication_rejects_raced_empty_destination_and_dangling_symlink(tmp_path: Path) -> None:
+    staging = tmp_path / "staging"
+    staging.mkdir()
+    (staging / "payload").write_text("new", encoding="utf-8")
+    destination = tmp_path / "run"
+
+    def race() -> None:
+        destination.mkdir()
+
+    with pytest.raises(FileExistsError, match="refusing to replace"):
+        publish_directory_no_clobber(staging, destination, before_commit=race)
+    assert staging.is_dir() and destination.is_dir()
+    assert not (destination / "payload").exists()
+
+    dangling = tmp_path / "dangling"
+    try:
+        os.symlink(tmp_path / "missing-target", dangling, target_is_directory=True)
+    except OSError:
+        return
+    other = tmp_path / "other-staging"
+    other.mkdir()
+    with pytest.raises(FileExistsError, match="refusing to replace"):
+        publish_directory_no_clobber(other, dangling)
+    assert os.path.lexists(dangling)
+
+
+def test_no_clobber_publication_moves_commit_marker_last(tmp_path: Path, monkeypatch) -> None:
+    staging = tmp_path / "staging"
+    staging.mkdir()
+    (staging / "payload").write_text("data", encoding="utf-8")
+    (staging / "prepared_run_manifest.json").write_text("{}\n", encoding="utf-8")
+    marker = staging / "prepared_run_manifest.json.sha256"
+    marker.write_text("0" * 64 + "\n", encoding="ascii")
+    destination = tmp_path / "run"
+    real_rename = os.rename
+    moved: list[str] = []
+
+    def recording_rename(source, target) -> None:
+        moved.append(Path(source).name)
+        real_rename(source, target)
+
+    monkeypatch.setattr(os, "rename", recording_rename)
+    publish_directory_no_clobber(
+        staging,
+        destination,
+        commit_marker="prepared_run_manifest.json.sha256",
+    )
+    assert moved[-1] == "prepared_run_manifest.json.sha256"
+    assert not staging.exists() and marker.name in {path.name for path in destination.iterdir()}
+
+
+def _checkpoint_payload(
+    path: Path,
+    identity: dict[str, object] | None,
+    *,
+    likelihood_family: str = "negative_binomial_2",
+    iteration: int = 10,
+    saved_draws: int = 2,
+) -> None:
     theta = Theta(
         beta=np.asarray([0.0]),
         state_effect=np.asarray([0.0]),
@@ -670,13 +905,14 @@ def _checkpoint_payload(path: Path, identity: dict[str, object]) -> None:
         y=np.asarray([1]),
         theta=theta,
         rng=np.random.default_rng(7),
-        iteration=10,
-        saved_draws=2,
+        iteration=iteration,
+        saved_draws=saved_draws,
         current_lp=-1.0,
         accepted={},
         proposed={},
         param_accept={},
         param_prop={},
+        likelihood_family=likelihood_family,
         target_identity=identity,
     )
 
@@ -715,11 +951,54 @@ def test_checkpoint_embeds_full_target_identity_and_declared_resume_never_falls_
     _checkpoint_payload(newer, identity)
     newer.write_bytes(b"corrupt")
     with pytest.raises(ValueError, match="newer|declared"):
-        load_declared_checkpoint(directory, first.name, expected_target_identity=identity)
+        load_declared_checkpoint(
+            directory, first.name, expected_target_identity=identity,
+            expected_likelihood_family="negative_binomial_2",
+        )
     newer.unlink()
     first.with_name(first.name + ".sha256").write_text("0" * 64 + "\n", encoding="ascii")
     with pytest.raises(ValueError, match="sidecar"):
         load_chain_checkpoint(first, expected_target_identity=identity)
+
+
+def test_declared_poisson_checkpoint_uses_and_cross_checks_target_family(tmp_path: Path) -> None:
+    identity = {
+        "schema_id": "sr_v2_heavy_checkpoint_target/v1", "run_id": "run", "profile": "model_family_poisson",
+        "profile_fingerprint": "a" * 64, "model": "primary", "likelihood": "poisson", "frame": "full",
+        "prior": "default", "operational_config_sha256": "b" * 64, "profile_config_sha256": "c" * 64,
+        "frame_sha256": "d" * 64, "final_source_manifest_sha256": "e" * 64,
+        "parameter_schema_sha256": "f" * 64, "array_index": 9, "chain_id": 1,
+        "chain_seed": 70291, "initialization_seed": 70251,
+    }
+    checkpoint = tmp_path / "checkpoints" / "checkpoint_iter_000000000.npz"
+    theta = Theta(beta=np.asarray([0.0]), state_effect=np.asarray([0.0]), year_effect=np.asarray([0.0]), log_sigma_state=0.0, log_sigma_year=0.0, log_kappa=0.0)
+    save_chain_checkpoint(
+        checkpoint, y=np.asarray([1]), theta=theta, rng=np.random.default_rng(9), iteration=0,
+        saved_draws=0, current_lp=-1.0, accepted={}, proposed={}, param_accept={}, param_prop={},
+        likelihood_family="poisson", target_identity=identity,
+    )
+    loaded = load_declared_checkpoint(
+        checkpoint.parent, checkpoint.name,
+        expected_target_identity=identity, expected_likelihood_family="poisson",
+    )
+    assert loaded["likelihood_family"] == "poisson"
+    with pytest.raises(ValueError, match="target identity likelihood|family"):
+        load_declared_checkpoint(
+            checkpoint.parent, checkpoint.name,
+            expected_target_identity=identity, expected_likelihood_family="negative_binomial_2",
+        )
+
+
+def test_default_checkpoint_writer_preserves_exact_legacy_schema_and_artifacts(tmp_path: Path) -> None:
+    checkpoint = tmp_path / "checkpoint_iter_000000005.npz"
+    _checkpoint_payload(checkpoint, identity=None)
+    with np.load(checkpoint, allow_pickle=True) as stored:
+        assert set(stored.files) == {
+            "y", "beta", "state_effect", "year_effect", "log_sigma_state", "log_sigma_year", "log_kappa",
+            "rng_state", "iteration", "saved_draws", "current_lp", "accepted_json", "proposed_json",
+            "param_accept_json", "param_prop_json", "likelihood_family",
+        }
+    assert {path.name for path in tmp_path.iterdir()} == {checkpoint.name}
 
 
 def test_exact_draw_diagnostic_and_comparison_cardinality_contracts() -> None:
@@ -741,6 +1020,13 @@ def test_exact_draw_diagnostic_and_comparison_cardinality_contracts() -> None:
     wrong_iteration = draws.copy(); wrong_iteration.loc[0, "iteration"] = 99
     with pytest.raises(ValueError, match="iteration schedule"):
         validate_chain_draws(wrong_iteration, chain_id=1, parameter_schema=schema, retained_draws=2, burn_in=1, thin=2)
+    for column in ("chain", "draw", "iteration"):
+        fractional = draws.copy(); fractional[column] = fractional[column].astype(float); fractional.loc[0, column] += 0.9
+        with pytest.raises(ValueError, match="integral"):
+            validate_chain_draws(fractional, chain_id=1, parameter_schema=schema, retained_draws=2, burn_in=1, thin=2)
+        nonfinite = draws.copy(); nonfinite.loc[0, column] = np.nan
+        with pytest.raises(ValueError, match="finite integral"):
+            validate_chain_draws(nonfinite, chain_id=1, parameter_schema=schema, retained_draws=2, burn_in=1, thin=2)
 
     diagnostics = pd.DataFrame(
         {

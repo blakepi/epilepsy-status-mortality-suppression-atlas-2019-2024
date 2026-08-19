@@ -100,7 +100,9 @@ def validate_python() -> list[dict[str, object]]:
     module_source = (ROOT / "src" / "bayes_constrained" / "sensitivity.py").read_text(encoding="utf-8")
     prepare_source = PYTHON_SCRIPTS[0].read_text(encoding="utf-8")
     runner_source = PYTHON_SCRIPTS[1].read_text(encoding="utf-8")
-    checks.append({"check": "atomic_exclusive_publish", "passed": "open(\"x\"" in module_source and "publish_directory_no_clobber(temporary, run_root)" in prepare_source, "detail": "exclusive preparation lock and no-clobber run-root publish"})
+    exclusive_publish = all(token in module_source for token in ("target.mkdir()", "os.path.lexists(target)", "ordered.append(marker)"))
+    marker_last = "commit_marker=\"prepared_run_manifest.json.sha256\"" in prepare_source
+    checks.append({"check": "atomic_exclusive_publish", "passed": "open(\"x\"" in module_source and exclusive_publish and marker_last, "detail": "exclusive mkdir reservation and manifest-sidecar-last commit"})
     checks.append({"check": "resume_fingerprint_guards", "passed": "profile_fingerprint" in runner_source and "completed_chain_is_reusable" in runner_source and "latest_checkpoint_sha256" in runner_source, "detail": "manifest, fingerprint, checkpoint, artifact guards present"})
     return checks
 

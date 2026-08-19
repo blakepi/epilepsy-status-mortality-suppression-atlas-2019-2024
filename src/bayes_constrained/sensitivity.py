@@ -7,14 +7,14 @@ import json
 import os
 from pathlib import Path
 import re
-from typing import Any, Iterable, Mapping, Sequence
+from typing import Any, Callable, Iterable, Mapping, Sequence
 
 import numpy as np
 import pandas as pd
 import yaml
 
 from .data import augment_age17_covariate, make_pandemic_exclusion_frame
-from .model import PRIMARY_TERMS, make_design
+from .model import PRIMARY_TERMS, make_design, normalize_likelihood_family
 
 
 RUN_ID = "sr-v2-heavy-sensitivity-20260818-v1"
@@ -471,14 +471,33 @@ def acquire_prepare_lock(path: str | Path):
         lock_path.unlink(missing_ok=True)
 
 
-def publish_directory_no_clobber(staging: str | Path, destination: str | Path) -> None:
+def publish_directory_no_clobber(
+    staging: str | Path,
+    destination: str | Path,
+    *,
+    before_commit: Callable[[], None] | None = None,
+    commit_marker: str | None = None,
+) -> None:
     source = Path(staging)
     target = Path(destination)
-    if target.exists():
+    if os.path.lexists(target):
         raise FileExistsError(f"Destination exists; refusing to replace conflicting run: {target}")
-    # The exclusive sibling prepare lock serializes all cooperating publishers.
-    # os.rename is used instead of os.replace so Windows also refuses a raced target.
-    os.rename(source, target)
+    entries = list(source.iterdir())
+    marker = source / commit_marker if commit_marker is not None else None
+    if marker is not None and marker not in entries:
+        raise ValueError(f"Publication commit marker is missing from staging: {commit_marker}")
+    if before_commit is not None:
+        before_commit()
+    try:
+        target.mkdir()
+    except FileExistsError as exc:
+        raise FileExistsError(f"Destination exists; refusing to replace conflicting run: {target}") from exc
+    ordered = [entry for entry in entries if entry != marker]
+    if marker is not None:
+        ordered.append(marker)
+    for entry in ordered:
+        os.rename(entry, target / entry.name)
+    source.rmdir()
 
 
 def load_declared_checkpoint(
@@ -486,6 +505,7 @@ def load_declared_checkpoint(
     declared_name: str,
     *,
     expected_target_identity: Mapping[str, object],
+    expected_likelihood_family: str,
 ) -> dict[str, object]:
     from .sampler import load_chain_checkpoint
 
@@ -508,7 +528,17 @@ def load_declared_checkpoint(
     checkpoints.sort(key=lambda row: row[0])
     if not checkpoints or checkpoints[-1][1] != declared:
         raise ValueError("A newer or different checkpoint exists than the status-declared checkpoint")
-    return load_chain_checkpoint(declared, expected_target_identity=expected_target_identity)
+    family = normalize_likelihood_family(expected_likelihood_family)
+    identity_family = normalize_likelihood_family(str(expected_target_identity.get("likelihood", "")))
+    if family != identity_family:
+        raise ValueError(
+            f"Declared expected family differs from target identity likelihood: {family!r} != {identity_family!r}"
+        )
+    return load_chain_checkpoint(
+        declared,
+        expected_likelihood_family=family,
+        expected_target_identity=dict(expected_target_identity),
+    )
 
 
 def build_sensitivity_frame(
@@ -589,19 +619,30 @@ def validate_chain_draws(
     expected_rows = len(parameter_schema) * retained_draws
     if len(draws) != expected_rows:
         raise ValueError(f"Parameter draw row count mismatch: expected {expected_rows}, found {len(draws)}")
+    labels: dict[str, np.ndarray] = {}
+    for column in ("chain", "draw", "iteration"):
+        try:
+            values = pd.to_numeric(draws[column], errors="raise").to_numpy(dtype=float)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"Parameter draw {column} labels must be finite integral values") from exc
+        if not np.isfinite(values).all() or not np.equal(values, np.rint(values)).all():
+            raise ValueError(f"Parameter draw {column} labels must be finite integral values")
+        labels[column] = values.astype(np.int64)
     if draws.duplicated(["chain", "draw", "parameter"]).any():
         raise ValueError("Duplicate (chain, draw, parameter) rows")
-    if set(pd.to_numeric(draws["chain"], errors="raise").astype(int)) != {int(chain_id)}:
+    if set(labels["chain"].tolist()) != {int(chain_id)}:
         raise ValueError("Parameter draw chain label does not match declared chain")
     if not np.isfinite(pd.to_numeric(draws["value"], errors="coerce").to_numpy(dtype=float)).all():
         raise ValueError("Parameter draws contain nonfinite values")
     expected_draw_ids = list(range(1, retained_draws + 1))
     expected_iterations = {draw: burn_in + draw * thin for draw in expected_draw_ids}
     for parameter in parameter_schema:
-        rows = draws.loc[draws["parameter"].astype(str).eq(parameter)].sort_values("draw")
-        if rows["draw"].astype(int).tolist() != expected_draw_ids:
+        mask = draws["parameter"].astype(str).eq(parameter).to_numpy()
+        order = np.argsort(labels["draw"][mask], kind="stable")
+        actual_draws = labels["draw"][mask][order].tolist()
+        if actual_draws != expected_draw_ids:
             raise ValueError(f"Parameter {parameter} does not have the exact draw-id grid")
-        actual_iterations = rows["iteration"].astype(int).tolist()
+        actual_iterations = labels["iteration"][mask][order].tolist()
         wanted_iterations = [expected_iterations[draw] for draw in expected_draw_ids]
         if actual_iterations != wanted_iterations:
             raise ValueError(f"Parameter {parameter} violates the retained iteration schedule")
@@ -796,6 +837,7 @@ def completed_chain_is_reusable(
             root / "checkpoints",
             declared_path.name,
             expected_target_identity=target_identity,
+            expected_likelihood_family=str(target_identity.get("likelihood", "")),
         )
         if expected_terminal_iteration is not None and (
             int(checkpoint["iteration"]) != int(expected_terminal_iteration)

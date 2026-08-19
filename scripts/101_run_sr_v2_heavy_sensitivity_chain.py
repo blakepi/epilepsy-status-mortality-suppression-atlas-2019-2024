@@ -77,6 +77,7 @@ def _verify_resume_status(
     array_index: int,
     fingerprint: str,
     target_identity: dict[str, object],
+    likelihood_family: str,
 ) -> Path:
     expected = {
         "run_id": run_id,
@@ -107,6 +108,7 @@ def _verify_resume_status(
             chain_dir / "checkpoints",
             checkpoint_path.name,
             expected_target_identity=target_identity,
+            expected_likelihood_family=likelihood_family,
         )
         return checkpoint_path
     raise ValueError("Resume status does not declare an exact checkpoint")
@@ -195,6 +197,7 @@ def run_chain(
             array_index=array_index,
             fingerprint=fingerprint,
             target_identity=target_identity,
+            likelihood_family=profile.likelihood,
         )
     else:
         checkpoints = sorted(chain_dir.glob("checkpoints/checkpoint_iter_*.npz"))
@@ -204,7 +207,12 @@ def run_chain(
         expected_files = {expected_initial, expected_initial.with_name(expected_initial.name + ".sha256")}
         if set(path for path in (chain_dir / "checkpoints").iterdir() if path.is_file()) != expected_files:
             raise ValueError("Status-free chain contains orphan initial checkpoint artifacts")
-        load_declared_checkpoint(chain_dir / "checkpoints", expected_initial.name, expected_target_identity=target_identity)
+        load_declared_checkpoint(
+            chain_dir / "checkpoints",
+            expected_initial.name,
+            expected_target_identity=target_identity,
+            expected_likelihood_family=profile.likelihood,
+        )
         resume_checkpoint = expected_initial
 
     frame_path = safe_relative_path(run_root, profile_record["frame"], must_exist=True)

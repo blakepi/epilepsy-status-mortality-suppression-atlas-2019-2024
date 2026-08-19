@@ -122,7 +122,13 @@ def _load_reusable_merge(merged_root: Path, profile_id: str) -> dict | None:
     return evidence
 
 
-def merge(run_id: str, *, root: Path = ROOT, config_path: Path = CONFIG_PATH) -> dict:
+def merge(
+    run_id: str,
+    *,
+    root: Path = ROOT,
+    config_path: Path = CONFIG_PATH,
+    diagnostics_builder=diagnostics_table,
+) -> dict:
     root = Path(root).resolve()
     spec = load_execution_spec(config_path)
     if run_id != RUN_ID or run_id != spec.run_id:
@@ -260,7 +266,7 @@ def merge(run_id: str, *, root: Path = ROOT, config_path: Path = CONFIG_PATH) ->
                 }
             )
         draws = pd.concat(draws_frames, ignore_index=True)
-        diagnostics = diagnostics_table(draws, output_dir=None)
+        diagnostics = diagnostics_builder(draws, output_dir=None)
         comparisons = _comparison_rows(profile, draws, primary, parameters)
         validate_diagnostics_table(diagnostics, parameter_schema=record["parameter_schema"])
         validate_comparison_table(comparisons, profile_id=profile.profile_id)
@@ -299,7 +305,11 @@ def merge(run_id: str, *, root: Path = ROOT, config_path: Path = CONFIG_PATH) ->
             evidence_path.with_name(f"{evidence_path.name}.sha256").write_text(
                 sha256_file(evidence_path) + "\n", encoding="ascii", newline="\n"
             )
-            publish_directory_no_clobber(temporary, merged_root)
+            publish_directory_no_clobber(
+                temporary,
+                merged_root,
+                commit_marker="profile_merge.json.sha256",
+            )
         except BaseException:
             if temporary.exists():
                 shutil.rmtree(temporary)

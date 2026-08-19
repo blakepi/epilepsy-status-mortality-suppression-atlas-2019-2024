@@ -349,7 +349,11 @@ def prepare(
                     "interpretation_boundary": spec.interpretation_boundary,
                 },
             )
-            publish_directory_no_clobber(temporary, run_root)
+            publish_directory_no_clobber(
+                temporary,
+                run_root,
+                commit_marker="prepared_run_manifest.json.sha256",
+            )
         except BaseException:
             if temporary.exists():
                 shutil.rmtree(temporary)

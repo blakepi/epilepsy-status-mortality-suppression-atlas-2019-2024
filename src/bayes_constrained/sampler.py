@@ -734,36 +734,36 @@ def save_chain_checkpoint(
     tmp = path.with_suffix(path.suffix + ".tmp.npz")
     theta_state = _theta_payload(theta)
     family = normalize_likelihood_family(likelihood_family)
-    np.savez_compressed(
-        tmp,
-        y=np.asarray(y, dtype=np.int16),
-        beta=theta_state["beta"],
-        state_effect=theta_state["state_effect"],
-        year_effect=theta_state["year_effect"],
-        log_sigma_state=np.asarray(theta_state["log_sigma_state"]),
-        log_sigma_year=np.asarray(theta_state["log_sigma_year"]),
-        log_kappa=np.asarray(theta_state["log_kappa"]),
-        rng_state=np.asarray(json.dumps(rng.bit_generator.state)),
-        iteration=np.asarray(int(iteration)),
-        saved_draws=np.asarray(int(saved_draws)),
-        current_lp=np.asarray(float(current_lp)),
-        accepted_json=np.asarray(json.dumps(accepted)),
-        proposed_json=np.asarray(json.dumps(proposed)),
-        param_accept_json=np.asarray(json.dumps(param_accept)),
-        param_prop_json=np.asarray(json.dumps(param_prop)),
-        likelihood_family=np.asarray(family),
-        target_identity_json=np.asarray(
+    payload = {
+        "y": np.asarray(y, dtype=np.int16),
+        "beta": theta_state["beta"],
+        "state_effect": theta_state["state_effect"],
+        "year_effect": theta_state["year_effect"],
+        "log_sigma_state": np.asarray(theta_state["log_sigma_state"]),
+        "log_sigma_year": np.asarray(theta_state["log_sigma_year"]),
+        "log_kappa": np.asarray(theta_state["log_kappa"]),
+        "rng_state": np.asarray(json.dumps(rng.bit_generator.state)),
+        "iteration": np.asarray(int(iteration)),
+        "saved_draws": np.asarray(int(saved_draws)),
+        "current_lp": np.asarray(float(current_lp)),
+        "accepted_json": np.asarray(json.dumps(accepted)),
+        "proposed_json": np.asarray(json.dumps(proposed)),
+        "param_accept_json": np.asarray(json.dumps(param_accept)),
+        "param_prop_json": np.asarray(json.dumps(param_prop)),
+        "likelihood_family": np.asarray(family),
+    }
+    if target_identity is not None:
+        payload["target_identity_json"] = np.asarray(
             json.dumps(target_identity, sort_keys=True, separators=(",", ":"), ensure_ascii=True, allow_nan=False)
-            if target_identity is not None
-            else ""
-        ),
-    )
+        )
+    np.savez_compressed(tmp, **payload)
     os.replace(tmp, path)
-    digest = hashlib.sha256(path.read_bytes()).hexdigest()
-    sidecar = path.with_name(path.name + ".sha256")
-    sidecar_tmp = sidecar.with_name(sidecar.name + ".tmp")
-    sidecar_tmp.write_text(digest + "\n", encoding="ascii", newline="\n")
-    os.replace(sidecar_tmp, sidecar)
+    if target_identity is not None:
+        digest = hashlib.sha256(path.read_bytes()).hexdigest()
+        sidecar = path.with_name(path.name + ".sha256")
+        sidecar_tmp = sidecar.with_name(sidecar.name + ".tmp")
+        sidecar_tmp.write_text(digest + "\n", encoding="ascii", newline="\n")
+        os.replace(sidecar_tmp, sidecar)
 
 
 def load_chain_checkpoint(
