@@ -25,6 +25,7 @@ from bayes_constrained.model import Theta, nb2_logpmf  # noqa: E402
 from bayes_constrained.sampler import _center_random_effects, build_move_state, load_chain_checkpoint, save_chain_checkpoint, state_2x2_swap, state_year_transfer  # noqa: E402
 from common import read_submitted_jobs  # noqa: E402
 from gate_convergence import gate  # noqa: E402
+from submission_viz.tables import _constraint_summary  # noqa: E402
 
 
 def toy_frame() -> pd.DataFrame:
@@ -131,6 +132,36 @@ def test_milp_uses_selected_year_contract_without_source_period_total() -> None:
     assert selected.drop_duplicates("county_fips")[
         "source_full_period_q001_lower"
     ].eq(99).all()
+
+
+def test_constraint_summary_renders_legacy_and_modeled_year_grand_totals(
+    tmp_path: Path,
+) -> None:
+    constraint_path = tmp_path / "constraint-validation.csv"
+    pd.DataFrame(
+        {
+            "check": [
+                "grand_total_equals_58380",
+                "grand_total_matches_modeled_years",
+            ],
+            "labels_checked": [8, 4],
+            "validation_records": [8, 4],
+            "failed_records": [0, 0],
+        }
+    ).to_csv(constraint_path, index=False)
+
+    rendered = _constraint_summary(
+        {"paths": {"constraint_validation": str(constraint_path)}}
+    ).set_index("Validation check")
+
+    assert rendered.index.tolist() == [
+        "Grand total equals 58,380",
+        "Grand total matches modeled years",
+    ]
+    assert rendered["Units checked"].to_dict() == {
+        "Grand total equals 58,380": 8,
+        "Grand total matches modeled years": 4,
+    }
 
 
 def test_mcmc_count_moves_preserve_constraints_on_toy_problem() -> None:

@@ -216,6 +216,7 @@ def _constraint_summary(config: dict) -> pd.DataFrame:
         "county_year_bounds_respected": "County-year bounds respected",
         "exact_county_year_counts_unchanged": "Exact county-year counts unchanged",
         "explicit_zero_county_year_counts_unchanged": "Explicit-zero county-year counts unchanged",
+        "grand_total_equals_58380": "Grand total equals 58,380",
         "grand_total_matches_modeled_years": "Grand total matches modeled years",
         "national_year_totals_equal_q003": "National-year totals equal Q003",
         "no_counties_silently_dropped": "No counties silently dropped",
