@@ -25,6 +25,7 @@
 - The archived geography mismatch is retained, not silently crosswalked. The exact singleton authority is `02261, 02270, 09001, 09003, 09005, 09007, 09009, 09011, 09013, 09015, 15001, 15003, 15007, 46113`; the eight legacy Connecticut counties and the full limitation must be disclosed.
 - Gate thresholds are inclusive: all stochastic parameters and combined county effects R-hat at most 1.05 and bulk/tail ESS at least 100; the eight primary terms plus `sigma_county` and `phi_structured` R-hat at most 1.03 and bulk/tail ESS at least 400; zero count or spatial-constraint failures. Deterministic singleton structured zeros are excluded from R-hat/ESS. Diagnostics use equal-length chains, rank-normalized split R-hat, bulk ESS, and tail ESS as implemented by the repository-pinned ArviZ version, which is recorded in the gate.
 - No effect direction, attenuation, interval overlap, or value of `phi_structured` is a computational PASS criterion.
+- **Corrective amendment (2026-08-19):** comparison reporting is now fully frozen before merger/verifier implementation. The first six rurality/SVI rows use draw-wise `exp(beta)` followed by summarization on the `incidence_rate_ratio` scale; `z_pct_age65` and `z_pct_male` remain untransformed on the `standardized_log_rate_coefficient` scale. `absolute_change` is the signed `spatial_mean - primary_mean` in reporting-scale units, and `relative_change` is that signed delta divided by `abs(primary_mean)` with zero or nonfinite primary means rejected. `interval_overlap` is the Boolean closed-interval predicate `max(lower_primary, lower_spatial) <= min(upper_primary, upper_spatial)`. The exact eight-row order is unchanged. Candidate, independently verified, and final comparison bytes are identical UTF-8 LF CSV with the explicit ordered header, every float formatted by Python `.17g`, lowercase `true`/`false`, comma delimiters, and one terminating LF.
 - Do not modify `outputs/scientific_reports_v2/production_8chain/**` or `outputs/scientific_reports_v2/spatial_residual_diagnostics/**`.
 - Cross-plan order: spatial Task 1 may run immediately because it owns isolated files. Heavy-sensitivity Tasks 1-3 must then be reviewed before spatial Tasks 2-4 modify shared model/sampler code. A joint full-suite and fixed-seed default-NB2 regression gate is required before either remote launch.
 
@@ -202,11 +203,24 @@ Write the frozen county order, edge list, component table, scale certificate, so
 
 The runner accepts only `--run-id`, `--array-index`, and manifest-bound `--extension-epoch`, resolves the immutable mapping, verifies all manifests before checkpoint discovery, rejects incompatible/corrupt checkpoints, and writes atomic status plus per-artifact hashes. USR1/deadline checkpoint status exits 75 so `afterok` cannot finalize an incomplete epoch. Within-epoch retry resumes only failed/checkpointed indexes; an extension authorization continues all four prior completed chains with adaptation frozen.
 
+The supported interruption boundary is the explicit USR1/deadline path: it publishes a fully sidecar-verified checkpoint and exits 75. An asynchronous hard kill in the narrow interval after an immutable chunk commit but before its acknowledging checkpoint is deliberately fail-closed, is not automatically retryable, and carries no claim of bit-exact recovery. It requires diagnosis and a new reviewed action; orphan evidence is never silently adopted or discarded.
+
 - [ ] **Step 4: Implement merge and gate**
 
 The merger requires exactly four completed chains with a common extension epoch and the exact matching iteration/draw pair: `(180000,4500)`, `(270000,7500)`, `(360000,10500)`, or `(450000,13500)`. It writes scalar and spatial diagnostics, county structured/unstructured/combined summaries, acceptance/constraint summaries, a pre-gate raw/merged artifact manifest, and a candidate primary-versus-spatial comparison.
 
 The release sequence is fixed: merge and candidate comparison -> pre-gate manifest -> independent verifier -> final release manifest -> gate last. The release manifest covers all existing raw/merged/candidate/verifier artifacts and contains a `planned_outputs` entry mapping final `primary_vs_spatial.csv` to the exact candidate byte hash; it does not claim that the final path already exists and does not cover the gate itself. The gate validates that mapping, exact graph/run/seed/draw schemas, zero failures, all thresholds, hashes, and eight comparison rows. Only then does it publish those exact candidate bytes atomically as `primary_vs_spatial.csv`, rehash them, and atomically publish `spatial_sensitivity_gate.json` recording the final hash, action `freeze_spatial_sensitivity`, `submission_authorized: false`, and a noncausal interpretation boundary. A comparison without a passed gate is never authorized evidence.
+
+Reviewed Task-3/Task-4 handoff amendment: Task 4 invokes the public
+`benchmark_prepared_target(root=..., output_path=<run>/benchmark/benchmark_report.json)`
+callable in script 107 with its defaults.  It must run exactly the first 2,000
+iterations of the same prepared target through the public production chain loop,
+publish no retained/scientific draws, and record builder
+`exact_prepared_public_chain`.  Merge, independent verification, release, and
+gate each bind the immutable report hash plus preparation, target, reviewed
+launch-envelope, and final-source-manifest identities; the inclusive limits are
+65 projected hours and 56 GiB peak RSS.  Injected or summary-only benchmark
+evidence is test-only and can never satisfy the production gate.
 
 - [ ] **Step 5: Add an implementation-independent result verifier**
 

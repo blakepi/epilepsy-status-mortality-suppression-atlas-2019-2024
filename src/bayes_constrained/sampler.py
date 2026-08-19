@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 import signal
 import time
+from typing import Callable, Mapping
 
 import numpy as np
 import pandas as pd
@@ -973,6 +974,488 @@ def update_spatial_fields_mala(
     if accepted:
         return proposal, float(proposed_target), updated_state, True
     return theta, float(current_target), updated_state, False
+
+
+def spatial_iteration_schedule(iteration: int) -> dict[str, int | bool]:
+    """Return the frozen cumulative BYM2 schedule at one global iteration."""
+
+    if (
+        isinstance(iteration, (bool, np.bool_))
+        or not isinstance(iteration, (int, np.integer))
+        or int(iteration) < 0
+        or int(iteration) > 450_000
+    ):
+        raise ValueError("Spatial iteration must be an exact integer in 0..450000.")
+    current = int(iteration)
+    saved_draws = max(0, (current - 45_000) // 30)
+    return {
+        "iteration": current,
+        "saved_draws": saved_draws,
+        "next_draw_id": saved_draws + 1,
+        "mala_attempts": current // 5,
+        "base_theta_attempts": current,
+        "spatial_hyperparameter_attempts": current,
+        "adaptation_frozen": current >= 45_000,
+        "retains_draw": current > 45_000 and (current - 45_000) % 30 == 0,
+    }
+
+
+def _spatial_checkpoint_name(
+    *, extension_epoch: int, job_attempt: int, iteration: int
+) -> str:
+    return (
+        f"checkpoint_epoch_{extension_epoch}_attempt_{job_attempt}_"
+        f"iter_{iteration:09d}.json"
+    )
+
+
+class SpatialChainExecutionError(RuntimeError):
+    """An in-loop failure carrying only progress that reached immutable storage."""
+
+    def __init__(self, message: str, *, progress: Mapping[str, object]) -> None:
+        super().__init__(message)
+        self.progress = dict(progress)
+
+
+def run_spatial_mcmc_chain(
+    frame: pd.DataFrame,
+    *,
+    design: Design,
+    identity: Mapping[str, object],
+    checkpoint_path: str | Path,
+    checkpoint_dir: str | Path,
+    chunk_dir: str | Path,
+    job_attempt: int,
+    settings: Mapping[str, object],
+    prior: PriorSpecification | None = None,
+    checkpoint_every: int = 500,
+    max_runtime_minutes: int | None = None,
+    stop_before_time_limit_minutes: int = 15,
+    stop_requested: Callable[[int], bool] | None = None,
+) -> dict[str, object]:
+    """Execute one exact spatial epoch/retry from an identity-bound checkpoint.
+
+    The cumulative transition order is fixed: latent moves, full-target refresh,
+    the six base-theta blocks, a standalone hyperparameter update, a MALA field
+    update on global multiples of five, and only then retained-draw capture.
+    This function owns the executable loop so operational scripts never copy
+    private sampler machinery.
+    """
+
+    from .spatial_bym2 import (
+        SPATIAL_DRAW_CHUNK_SIZE,
+        commit_spatial_draw_chunk,
+        load_spatial_checkpoint,
+        save_spatial_checkpoint,
+    )
+
+    if design.spatial_graph is None:
+        raise ValueError("Spatial chain execution requires a spatial design.")
+    target = identity.get("target") if isinstance(identity, Mapping) else None
+    if not isinstance(target, Mapping):
+        raise ValueError("Spatial chain execution requires a complete identity.")
+    extension_epoch = target.get("extension_epoch")
+    if (
+        isinstance(extension_epoch, (bool, np.bool_))
+        or not isinstance(extension_epoch, (int, np.integer))
+        or int(extension_epoch) not in range(4)
+    ):
+        raise ValueError("Spatial identity extension epoch must be in 0..3.")
+    extension_epoch = int(extension_epoch)
+    if (
+        isinstance(job_attempt, (bool, np.bool_))
+        or not isinstance(job_attempt, (int, np.integer))
+        or int(job_attempt) not in range(1, 4)
+    ):
+        raise ValueError("Spatial job attempt must be an exact integer in 1..3.")
+    job_attempt = int(job_attempt)
+    target_iteration = (180_000, 270_000, 360_000, 450_000)[extension_epoch]
+    checkpoint_every = int(checkpoint_every)
+    if checkpoint_every <= 0:
+        raise ValueError("Spatial checkpoint interval must be positive.")
+    checkpoint_root = Path(checkpoint_dir)
+    chunk_root = Path(chunk_dir)
+    checkpoint_root.mkdir(parents=True, exist_ok=True)
+    chunk_root.mkdir(parents=True, exist_ok=True)
+    source_checkpoint = Path(checkpoint_path).resolve()
+    if source_checkpoint.parent != checkpoint_root.resolve():
+        raise ValueError("Spatial resume checkpoint must be in the declared root.")
+    intercept_mean = float.fromhex(str(target["intercept_mean_float_hex"]))
+    loaded = load_spatial_checkpoint(
+        source_checkpoint,
+        expected_identity=identity,
+        frame=frame,
+        design=design,
+        intercept_mean=intercept_mean,
+        prior=prior,
+        chunk_dir=chunk_root,
+    )
+    start_iteration = int(loaded["iteration"])
+    start_saved_draws = int(loaded["saved_draws"])
+    if start_iteration >= target_iteration:
+        if start_iteration != target_iteration:
+            raise ValueError("Spatial checkpoint exceeds its epoch target.")
+        return {
+            "status": "completed",
+            "iteration": start_iteration,
+            "saved_draws": int(loaded["saved_draws"]),
+            "latest_checkpoint": str(source_checkpoint),
+            "extension_epoch": extension_epoch,
+            "job_attempt": job_attempt,
+            "chain_id": int(identity["chain"]["chain_id"]),
+            "committed_chunks": loaded["committed_chunks"],
+            "start_saved_draws": start_saved_draws,
+            "retained_assertion_records": [],
+            "evidence_builder": "actual_public_chain_loop",
+        }
+    y = np.asarray(loaded["y"], dtype=np.int64).copy()
+    theta = loaded["theta"]
+    rng = loaded["rng"]
+    current_target = float(loaded["current_target"])
+    saved_draws = int(loaded["saved_draws"])
+    retained_assertion_records: list[dict[str, object]] = []
+    next_draw_id = int(loaded["next_draw_id"])
+    committed_chunks = list(loaded["committed_chunks"])
+    pending_scalar_records = loaded["pending_scalar"].to_dict("records")
+    pending_structured = [
+        row.copy() for row in np.asarray(loaded["pending_structured"], dtype=np.float64)
+    ]
+    pending_unstructured = [
+        row.copy() for row in np.asarray(loaded["pending_unstructured"], dtype=np.float64)
+    ]
+    adaptation = SpatialMALAState.from_dict(dict(loaded["adaptation_state"]))
+    accepted = {key: int(value) for key, value in loaded["accepted"].items()}
+    proposed = {key: int(value) for key, value in loaded["proposed"].items()}
+    parameter_schema = list(target["parameter_schema"])
+    chain_id = int(identity["chain"]["chain_id"])
+
+    move = build_move_state(frame, y)
+    max_count_proposals = int(settings.get("max_count_proposals_per_iter", 350))
+    blocked_frequency = int(settings.get("blocked_refresh_frequency", 25))
+    blocked_attempts = int(settings.get("blocked_refresh_attempts", 12))
+    move_weights = _normalized_move_weights(dict(settings))
+    cumulative_weights = np.cumsum(
+        [
+            move_weights["state_year_transfer"],
+            move_weights["county_period_exploration"],
+            move_weights["interval_path_transfer"],
+            move_weights["swap_2x2"],
+            move_weights["cycle_swap"],
+        ]
+    )
+    max_cycle_half_length = int(settings.get("max_cycle_half_length", 6))
+    deadline_seconds = None
+    if max_runtime_minutes is not None:
+        usable = max(1, int(max_runtime_minutes) - int(stop_before_time_limit_minutes))
+        deadline_seconds = time.monotonic() + usable * 60
+    signal_stop = {"value": False}
+
+    def _signal_handler(_signum: int, _frame: object) -> None:
+        signal_stop["value"] = True
+
+    previous_handler = (
+        signal.signal(signal.SIGUSR1, _signal_handler)
+        if hasattr(signal, "SIGUSR1")
+        else None
+    )
+
+    def _pending_frame() -> pd.DataFrame:
+        if not pending_scalar_records:
+            return pd.DataFrame()
+        return pd.DataFrame(pending_scalar_records).loc[
+            :, ["chain_id", "draw_id", "extension_epoch", "parameter", "value"]
+        ]
+
+    def _pending_array(rows: list[np.ndarray]) -> np.ndarray:
+        if not rows:
+            return np.empty((0, len(design.spatial_graph.counties)), dtype=np.float64)
+        return np.asarray(rows, dtype=np.float64)
+
+    def _save_checkpoint(iteration: int) -> Path:
+        destination = checkpoint_root / _spatial_checkpoint_name(
+            extension_epoch=extension_epoch,
+            job_attempt=job_attempt,
+            iteration=iteration,
+        )
+        save_spatial_checkpoint(
+            destination,
+            identity=identity,
+            extension_epoch=extension_epoch,
+            job_attempt=job_attempt,
+            y=y,
+            theta=theta,
+            rng=rng,
+            frame=frame,
+            design=design,
+            intercept_mean=intercept_mean,
+            prior=prior,
+            iteration=iteration,
+            saved_draws=saved_draws,
+            current_target=current_target,
+            accepted=accepted,
+            proposed=proposed,
+            committed_chunks=committed_chunks,
+            pending_scalar=_pending_frame(),
+            pending_structured=_pending_array(pending_structured),
+            pending_unstructured=_pending_array(pending_unstructured),
+            adaptation_state=adaptation.to_dict(),
+            next_draw_id=next_draw_id,
+            output_positions={
+                "scalar_rows": saved_draws * len(parameter_schema),
+                "spatial_draws": saved_draws,
+            },
+            chunk_dir=chunk_root,
+        )
+        return destination
+
+    latest_checkpoint = source_checkpoint
+    status = "running"
+    iteration = start_iteration
+    try:
+        for iteration in range(start_iteration + 1, target_iteration + 1):
+            current_mu = mu(theta, design)
+            kappa = float(np.exp(theta.log_kappa))
+            free_cells = int((move.upper > move.lower).sum())
+            count_moves = min(
+                max_count_proposals,
+                max(
+                    1,
+                    int(
+                        free_cells
+                        * float(settings.get("count_move_sweeps_per_iter", 0.1))
+                    ),
+                ),
+            )
+            for _ in range(count_moves):
+                draw = rng.uniform()
+                if draw < cumulative_weights[0]:
+                    proposed["transfer"] += 1
+                    accepted["transfer"] += int(
+                        state_year_transfer(y, move, current_mu, kappa, rng)
+                    )
+                elif draw < cumulative_weights[1]:
+                    proposed["interval_transfer"] += 1
+                    accepted["interval_transfer"] += int(
+                        period_interval_transfer(y, move, current_mu, kappa, rng)
+                    )
+                elif draw < cumulative_weights[2]:
+                    proposed["interval_path"] += 1
+                    accepted["interval_path"] += int(
+                        interval_path_transfer(y, move, current_mu, kappa, rng)
+                    )
+                elif draw < cumulative_weights[3]:
+                    proposed["swap_2x2"] += 1
+                    accepted["swap_2x2"] += int(
+                        state_2x2_swap(y, move, current_mu, kappa, rng)
+                    )
+                else:
+                    proposed["cycle_swap"] += 1
+                    accepted["cycle_swap"] += int(
+                        state_cycle_swap(
+                            y,
+                            move,
+                            current_mu,
+                            kappa,
+                            rng,
+                            max_cycle_half_length=max_cycle_half_length,
+                        )
+                    )
+            if blocked_frequency and iteration % blocked_frequency == 0:
+                proposed["blocked_refresh"] += blocked_attempts
+                accepted["blocked_refresh"] += blocked_refresh(
+                    y,
+                    move,
+                    current_mu,
+                    kappa,
+                    rng,
+                    attempts=blocked_attempts,
+                )
+
+            # Exact frozen ordering starts with a full-target refresh after all
+            # latent moves and before any continuous-parameter transition.
+            current_target = log_posterior_theta(
+                y,
+                theta,
+                design,
+                intercept_mean=intercept_mean,
+                prior=prior,
+            )
+            scales = _proposal_scales(theta, likelihood_family="negative_binomial_2")
+            if tuple(scales) != (
+                "beta",
+                "state",
+                "year",
+                "log_sigma_state",
+                "log_sigma_year",
+                "log_kappa",
+            ):
+                raise ValueError("Spatial base-theta block universe changed.")
+            for block, scale in scales.items():
+                proposed[block] += 1
+                theta, current_target, was_accepted = _update_theta_block(
+                    y,
+                    theta,
+                    design,
+                    intercept_mean,
+                    rng,
+                    block,
+                    scale,
+                    current_target,
+                    prior,
+                )
+                accepted[block] += int(was_accepted)
+            proposed["spatial_hyperparameters"] += 1
+            theta, current_target, was_accepted = update_spatial_hyperparameters(
+                y,
+                theta,
+                design,
+                intercept_mean=intercept_mean,
+                rng=rng,
+                current_target=current_target,
+                prior=prior,
+            )
+            accepted["spatial_hyperparameters"] += int(was_accepted)
+            if iteration % 5 == 0:
+                proposed["mala"] += 1
+                theta, current_target, adaptation, was_accepted = (
+                    update_spatial_fields_mala(
+                        y,
+                        theta,
+                        design,
+                        intercept_mean=intercept_mean,
+                        rng=rng,
+                        current_target=current_target,
+                        adaptation_state=adaptation,
+                        iteration=iteration,
+                        extension_epoch=extension_epoch,
+                        prior=prior,
+                    )
+                )
+                accepted["mala"] += int(was_accepted)
+
+            schedule = spatial_iteration_schedule(iteration)
+            if schedule["retains_draw"]:
+                assert_constraints(y, frame, label=f"spatial_chain{chain_id}_draw{next_draw_id}")
+                validate_structured_effect(theta.spatial_structured, design.spatial_graph)
+                draw_id = next_draw_id
+                assertion = {
+                    "schema_id": "sr_v2_spatial_retained_assertion/v1",
+                    "chain_id": chain_id,
+                    "draw_id": draw_id,
+                    "cumulative_iteration": iteration,
+                    "extension_epoch": extension_epoch,
+                    "chunk_id": (draw_id - 1) // SPATIAL_DRAW_CHUNK_SIZE + 1,
+                    "capture_order": (
+                        "after_latent_target_base6_hyper_and_scheduled_mala"
+                    ),
+                    "count_constraints_asserted": True,
+                    "spatial_constraints_asserted": True,
+                    "latent_y_sha256": hashlib.sha256(
+                        np.ascontiguousarray(y, dtype=np.dtype("<i8")).tobytes(
+                            order="C"
+                        )
+                    ).hexdigest(),
+                    "structured_effect_sha256": hashlib.sha256(
+                        np.ascontiguousarray(
+                            theta.spatial_structured, dtype=np.dtype("<f8")
+                        ).tobytes(order="C")
+                    ).hexdigest(),
+                }
+                assertion["assertion_sha256"] = hashlib.sha256(
+                    json.dumps(
+                        assertion,
+                        sort_keys=True,
+                        separators=(",", ":"),
+                        ensure_ascii=True,
+                        allow_nan=False,
+                    ).encode("utf-8")
+                ).hexdigest()
+                retained_assertion_records.append(assertion)
+                for row in _theta_to_rows(theta, design, chain_id, draw_id, iteration):
+                    pending_scalar_records.append(
+                        {
+                            "chain_id": int(row["chain"]),
+                            "draw_id": int(row["draw"]),
+                            "extension_epoch": extension_epoch,
+                            "parameter": str(row["parameter"]),
+                            "value": np.float64(row["value"]),
+                        }
+                    )
+                pending_structured.append(
+                    np.asarray(theta.spatial_structured, dtype=np.float64).copy()
+                )
+                pending_unstructured.append(
+                    np.asarray(theta.spatial_unstructured, dtype=np.float64).copy()
+                )
+                saved_draws += 1
+                next_draw_id += 1
+                if len(pending_structured) == SPATIAL_DRAW_CHUNK_SIZE:
+                    draw_end = next_draw_id - 1
+                    draw_start = draw_end - SPATIAL_DRAW_CHUNK_SIZE + 1
+                    record = commit_spatial_draw_chunk(
+                        chunk_root,
+                        chain_id=chain_id,
+                        extension_epoch=extension_epoch,
+                        graph=design.spatial_graph,
+                        parameter_schema=parameter_schema,
+                        chunk_id=len(committed_chunks) + 1,
+                        draw_ids=np.arange(draw_start, draw_end + 1, dtype=np.int64),
+                        scalar_draws=_pending_frame(),
+                        structured=_pending_array(pending_structured),
+                        unstructured=_pending_array(pending_unstructured),
+                    )
+                    committed_chunks.append(record)
+                    pending_scalar_records.clear()
+                    pending_structured.clear()
+                    pending_unstructured.clear()
+            if int(schedule["saved_draws"]) != saved_draws:
+                raise ValueError("Spatial saved-draw schedule drifted from global iteration.")
+
+            requested = bool(stop_requested(iteration)) if stop_requested else False
+            if deadline_seconds is not None and time.monotonic() >= deadline_seconds:
+                signal_stop["value"] = True
+            should_stop = requested or signal_stop["value"]
+            if iteration % checkpoint_every == 0 or should_stop:
+                assert_constraints(y, frame, label=f"spatial_chain{chain_id}_checkpoint_{iteration}")
+                latest_checkpoint = _save_checkpoint(iteration)
+            if should_stop:
+                status = "checkpointed"
+                break
+        else:
+            status = "completed"
+            if pending_structured or pending_unstructured or pending_scalar_records:
+                raise ValueError("A completed frozen epoch must end on a full draw chunk.")
+            if latest_checkpoint.name != _spatial_checkpoint_name(
+                extension_epoch=extension_epoch,
+                job_attempt=job_attempt,
+                iteration=iteration,
+            ):
+                latest_checkpoint = _save_checkpoint(iteration)
+        return {
+            "status": status,
+            "iteration": iteration,
+            "saved_draws": saved_draws,
+            "latest_checkpoint": str(latest_checkpoint),
+            "extension_epoch": extension_epoch,
+            "job_attempt": job_attempt,
+            "chain_id": chain_id,
+            "committed_chunks": committed_chunks,
+            "start_saved_draws": start_saved_draws,
+            "retained_assertion_records": retained_assertion_records,
+            "evidence_builder": "actual_public_chain_loop",
+        }
+    except Exception as error:
+        raise SpatialChainExecutionError(
+            f"Spatial public chain loop failed: {type(error).__name__}: {error}",
+            progress={
+                "start_saved_draws": start_saved_draws,
+                "retained_assertion_records": retained_assertion_records,
+                "evidence_builder": "actual_public_chain_loop",
+            },
+        ) from error
+    finally:
+        if previous_handler is not None and hasattr(signal, "SIGUSR1"):
+            signal.signal(signal.SIGUSR1, previous_handler)
 
 
 def _settings(config: dict, mode: str) -> dict:

@@ -15,6 +15,41 @@ source_authorities:
   outputs/scientific_reports_v2/spatial_residual_diagnostics/within_state_morans_i.csv: 6296899e8a789e219d245d109b55759dead7817f5ba93c75f0694f669231c995
   outputs/scientific_reports_v2/spatial_residual_diagnostics/county_adjacency2024.txt: 912ca408163016864fe64aaf667b53ad03a19ce4acbc586d3ac508395bdac980
 
+final_source_manifest:
+  schema_id: sr_v2_robustness_final_source_manifest/v1
+  required_status: reviewed_final
+  source_hash_mode: raw_bytes
+  required_sources:
+    - config/sr_v2_spatial_sensitivity_execution.yaml
+    - src/bayes_constrained/__init__.py
+    - src/bayes_constrained/paths.py
+    - src/bayes_constrained/data.py
+    - src/bayes_constrained/constraints.py
+    - src/bayes_constrained/target_density.py
+    - src/bayes_constrained/model.py
+    - src/bayes_constrained/heatbath.py
+    - src/bayes_constrained/interval_paths.py
+    - src/bayes_constrained/sampler.py
+    - src/bayes_constrained/diagnostics.py
+    - src/bayes_constrained/spatial_bym2.py
+    - src/bayes_constrained/spatial_pipeline.py
+    - scripts/106_prepare_sr_v2_spatial_sensitivity.py
+    - scripts/107_run_sr_v2_spatial_sensitivity_chain.py
+    - scripts/108_merge_sr_v2_spatial_sensitivity.py
+    - scripts/109_gate_sr_v2_spatial_sensitivity.py
+    - hpc/wahab/stage_sr_v2_spatial_sensitivity_to_scratch.sh
+    - hpc/wahab/sync_sr_v2_spatial_sensitivity_results_home.sh
+    - hpc/wahab/slurm/65_sr_v2_spatial_sensitivity_benchmark.sbatch
+    - hpc/wahab/slurm/66_sr_v2_spatial_sensitivity_chain_array.sbatch
+    - hpc/wahab/slurm/67_sr_v2_finalize_spatial_sensitivity.sbatch
+    - hpc/wahab/submit_sr_v2_spatial_sensitivity.sh
+    - hpc/wahab/resume_sr_v2_spatial_sensitivity.sh
+
+launch_envelope:
+  schema_id: sr_v2_robustness_launch_envelope/v1
+  required_status: reviewed_final
+  requires_clean_worktree: true
+
 canonical_serialization:
   county_order_record: "<fips>\\n"
   edge_list_record: "<min_fips>|<max_fips>\\n"
@@ -93,7 +128,7 @@ execution:
   job_attempt_range_per_epoch: [1, 3]
   checkpoint_exit_code: 75
   draw_chunk_size: 250
-  extension_forbidden_failure_classes: [source, graph, constraint, fingerprint, nonfinite_value]
+  extension_forbidden_failure_classes: [source, graph, constraint, fingerprint, nonfinite_value, evidence_integrity]
   state_machine:
     prepared: [running, hold]
     running: [checkpointed, completed, failed, hold]
@@ -111,7 +146,7 @@ execution:
     epoch_1_completed: [merge_if_converged, reviewed_extension_epoch_2]
     epoch_2_completed: [merge_if_converged, reviewed_extension_epoch_3]
     epoch_3_completed: [merge_or_hold_no_further_extension]
-    authorization_fields: [from_extension_epoch, to_extension_epoch, reason_convergence_only, reviewer, reviewed_utc, authorization_sha256]
+    authorization_fields: [from_extension_epoch, to_extension_epoch, reason_convergence_only, reviewer, reviewed_utc, prior_preparation_identity, prior_pre_gate_manifest_sha256, prior_independent_verification_sha256, prior_release_manifest_sha256, prior_gate_decision_sha256, authorization_sha256]
     continuation_rule: all_four_completed_chains_with_adaptation_frozen
   job_attempt_state_machine:
     attempt_1_incomplete: [resume_failed_or_checkpointed_as_attempt_2]
@@ -153,6 +188,30 @@ comparison:
     - z_pct_age65
     - z_pct_male
   fields: [parameter, scale, primary_mean, primary_lower_95, primary_upper_95, spatial_mean, spatial_lower_95, spatial_upper_95, absolute_change, relative_change, interval_overlap]
+  scale_by_row:
+    primary_rurality_metro_other: incidence_rate_ratio
+    primary_rurality_nonmetro_adjacent: incidence_rate_ratio
+    primary_rurality_nonmetro_nonadjacent: incidence_rate_ratio
+    svi_quartile_Q2: incidence_rate_ratio
+    svi_quartile_Q3: incidence_rate_ratio
+    svi_quartile_Q4_highest: incidence_rate_ratio
+    z_pct_age65: standardized_log_rate_coefficient
+    z_pct_male: standardized_log_rate_coefficient
+  spatial_draw_transform:
+    incidence_rate_ratio: draw_wise_exp_then_summarize
+    standardized_log_rate_coefficient: identity_then_summarize
+  absolute_change: spatial_mean_minus_primary_mean
+  relative_change: absolute_change_divided_by_abs_primary_mean_fail_if_zero_or_nonfinite
+  interval_overlap: max_lower_less_than_or_equal_to_min_upper_closed_intervals
+  serialization:
+    encoding: utf-8
+    delimiter: ","
+    line_ending: LF
+    terminating_newline: true
+    float_format: ".17g"
+    boolean_format: lowercase_true_false
+    header_order: [parameter, scale, primary_mean, primary_lower_95, primary_upper_95, spatial_mean, spatial_lower_95, spatial_upper_95, absolute_change, relative_change, interval_overlap]
+    candidate_verifier_final_bytes: byte_identical
   pass_criteria_exclusions: [effect_direction, attenuation, interval_overlap, phi_structured_value]
 
 thresholds:
@@ -178,7 +237,9 @@ resources:
 
 output_schemas:
   graph_contract: {format: canonical_json, required: [run_id, counties, edges, components, scales_hex, contract_sha256]}
-  prepared_run_manifest: {format: json, required: [schema_id, run_id, model_id, config_sha256, source_manifest, graph_contract_sha256, chain_mapping, fingerprints]}
+  prepared_run_manifest:
+    format: canonical_json_plus_sha256_sidecar
+    exact_fields: [schema_id, run_id, model_id, operational_config_sha256, launch_envelope_sha256, final_source_manifest_sha256, launch_commit, bundle_sha256, joint_regression_evidence_sha256, preparation_identity, generated_utc, status, production_eligible, builder_provenance, input_manifest, input_manifest_sha256, source_authorities, graph_contract, graph_contract_sha256, model_frame, model_frame_sha256, model_frame_semantic_sha256, parameter_schema, protected_tree_manifest, protected_tree_manifest_sha256, chain_mapping, prepared_artifact_sha256, interpretation_boundary, submission_authorized]
   chain_checkpoint_v2:
     format: json_plus_sha256_sidecar
     exact_fields: [schema_version, run_id, model_id, target_fingerprint, chain_fingerprint, extension_epoch, job_attempt, chain_id, seeds, current_state, rng_state, current_target, iteration, saved_draws, accepted, proposed, committed_chunks, pending_buffers, adaptation_state, next_draw_id, output_positions]
@@ -197,14 +258,15 @@ output_schemas:
   diagnostics: {format: csv_and_json, required: [parameter, r_hat, ess_bulk, ess_tail, arviz_version, constraint_failures]}
   county_effect_summary: {format: csv, required: [county_fips, component_id, singleton, structured_mean, unstructured_mean, combined_mean, combined_lower_95, combined_upper_95, r_hat, ess_bulk, ess_tail]}
   comparison_candidate: {path: primary_vs_spatial.candidate.csv, format: csv_lf, exact_rows: 8}
-  independent_verification: {path: independent_spatial_sensitivity_verification.json, format: json, required: [passed, source_checks, graph_checks, chain_checks, diagnostic_checks, comparison_checks, protected_tree_checks]}
-  release_manifest: {format: json, required: [artifacts, planned_outputs], planned_final: primary_vs_spatial.csv}
+  independent_verification: {path: independent_spatial_sensitivity_verification.json, format: canonical_json_plus_sha256_sidecar, exact_fields: [schema_id, run_id, model_id, extension_epoch, preparation_identity, launch_envelope_sha256, final_source_manifest_sha256, benchmark_report_sha256, pre_gate_manifest_sha256, passed, source_checks, graph_checks, chain_checks, diagnostic_checks, comparison_checks, benchmark_checks, protected_tree_checks, artifact_snapshot, artifact_snapshot_sha256, submission_authorized]}
+  release_manifest: {format: canonical_json_plus_sha256_sidecar, exact_fields: [schema_id, run_id, model_id, extension_epoch, preparation_identity, launch_envelope_sha256, final_source_manifest_sha256, benchmark_report_sha256, pre_gate_manifest_sha256, independent_verification_sha256, verification_convergence_passed, verification_artifact_snapshot, verification_artifact_snapshot_sha256, artifacts, artifact_inventory_sha256, planned_outputs, excludes, submission_authorized], planned_final: primary_vs_spatial.csv}
   gate: {path: spatial_sensitivity_gate.json, format: json, required: [passed, action, submission_authorized, interpretation_boundary, final_comparison_sha256]}
 
 release:
   initial_gate_state: HOLD
   pass_action: freeze_spatial_sensitivity
   submission_authorized: false
+  required_benchmark_evidence: {path: benchmark/benchmark_report.json, schema_id: sr_v2_spatial_benchmark/v1, builder: exact_prepared_public_chain, iterations: 2000, scientific_draws_published: false, paired_chunk_draws: 250, paired_chunk_builder: actual_commit_spatial_draw_chunk, paired_chunk_scientific_data: false, binds: [preparation_identity, target_fingerprint, launch_envelope_sha256, final_source_manifest_sha256]}
   publication_order: [merge_and_candidate, pre_gate_manifest, independent_verification, final_release_manifest, final_comparison, gate_last]
   protected_trees:
     - outputs/scientific_reports_v2/production_8chain
