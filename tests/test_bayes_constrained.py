@@ -15,7 +15,11 @@ sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(ROOT / "scripts" / "hpc_wahab"))
 
 from bayes_constrained.constraints import assert_constraints, solve_feasible_allocation, validate_constraints  # noqa: E402
-from bayes_constrained.data import GRAND_TOTAL, load_model_frame  # noqa: E402
+from bayes_constrained.data import (  # noqa: E402
+    GRAND_TOTAL,
+    load_model_frame,
+    make_pandemic_exclusion_frame,
+)
 from bayes_constrained.diagnostics import diagnostics_table  # noqa: E402
 from bayes_constrained.model import Theta, nb2_logpmf  # noqa: E402
 from bayes_constrained.sampler import _center_random_effects, build_move_state, load_chain_checkpoint, save_chain_checkpoint, state_2x2_swap, state_year_transfer  # noqa: E402
@@ -114,6 +118,19 @@ def test_milp_initialization_returns_feasible_toy_solution() -> None:
     frame = toy_frame()
     y = solve_feasible_allocation(frame, seed=123, time_limit_seconds=30)
     assert validate_constraints(y, frame).passed
+
+
+def test_milp_uses_selected_year_contract_without_source_period_total() -> None:
+    full = toy_frame()
+    full.loc[:, "q001_period_lower"] = 99
+    full.loc[:, "q001_period_upper"] = 99
+    selected = make_pandemic_exclusion_frame(full, excluded_years=("2020",))
+    y = solve_feasible_allocation(selected, seed=124, time_limit_seconds=30)
+    assert validate_constraints(y, selected).passed
+    assert y.sum() == 5
+    assert selected.drop_duplicates("county_fips")[
+        "source_full_period_q001_lower"
+    ].eq(99).all()
 
 
 def test_mcmc_count_moves_preserve_constraints_on_toy_problem() -> None:
@@ -261,7 +278,7 @@ def _write_gate_inputs(base: Path, *, r_hat: float = 1.01, ess: float = 500.0, e
             "draws_per_chain": [4500] * len(parameters),
         }
     ).to_csv(base / "hpc_mcmc_diagnostics.csv", index=False)
-    pd.DataFrame({"label": ["draw1"], "check": ["grand_total_equals_58380"], "passed": [True], "detail": ["58380"]}).to_csv(base / "hpc_constraint_validation_summary.csv", index=False)
+    pd.DataFrame({"label": ["draw1"], "check": ["grand_total_matches_modeled_years"], "passed": [True], "detail": ["actual=58380 expected=58380 included_years=2019,2020,2021,2022,2023,2024"]}).to_csv(base / "hpc_constraint_validation_summary.csv", index=False)
     pd.DataFrame(
         {
             "chain": [f"chain_{idx:02d}" for idx in range(1, 9)],

@@ -83,8 +83,7 @@ def build_move_state(frame: pd.DataFrame, y: np.ndarray) -> MoveState:
     state_groups = {int(s): np.where(state_code == s)[0] for s in np.unique(state_code)}
     state_counties = {int(s): np.unique(county_code[idx]) for s, idx in state_groups.items()}
     county_year_to_row = {(int(c), int(t)): int(i) for i, (c, t) in enumerate(zip(county_code, year_code))}
-    period_status = frame.drop_duplicates("county_fips").sort_values("county_fips")["q001_period_status"].astype(str).to_numpy()
-    interval_counties = set(np.where(period_status == "suppressed_1_9")[0].tolist())
+    interval_counties = set(np.where(period_upper > period_lower)[0].tolist())
     years = np.unique(year_code)
     free_mask = upper > lower
     cycle_state_counties: list[tuple[int, np.ndarray]] = []

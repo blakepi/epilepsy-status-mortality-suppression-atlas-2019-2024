@@ -21,6 +21,9 @@ from bayes_constrained.exact_validation import (  # noqa: E402
     exact_transition_matrix,
     proposal_events,
 )
+from bayes_constrained import constraints as constraints_module  # noqa: E402
+from bayes_constrained import data as data_module  # noqa: E402
+from bayes_constrained.constraints import validate_constraints  # noqa: E402
 from bayes_constrained.heatbath import (  # noqa: E402
     amplitude_log_weights,
     feasible_amplitudes,
@@ -94,6 +97,68 @@ def pandemic_frame() -> pd.DataFrame:
     )
 
 
+def pandemic_exclusion_source_frame() -> pd.DataFrame:
+    rows: list[dict[str, object]] = []
+    for county, annual_count, source_lower, source_upper in [
+        ("01001", 1, 8, 8),
+        ("01003", 2, 10, 12),
+    ]:
+        for year in ["2019", "2020", "2021", "2022", "2023", "2024"]:
+            rows.append(
+                {
+                    "county_fips": county,
+                    "county_name": county,
+                    "state_fips": "01",
+                    "state_name": "Toy",
+                    "year": year,
+                    "population": 1000.0,
+                    "q002_count_status": "exact",
+                    "q002_lower": annual_count,
+                    "q002_upper": annual_count,
+                    "q002_exact_count": annual_count,
+                    "q001_period_status": "exact",
+                    "q001_period_lower": source_lower,
+                    "q001_period_upper": source_upper,
+                    "q001_period_exact_count": source_lower,
+                    "q004_state_year_total": 3,
+                    "q003_national_year_total": 3,
+                    "primary_rurality": "metro_large",
+                    "svi_quartile": "Q1_lowest",
+                    "z_pct_age65": 0.0,
+                    "z_pct_male": 0.0,
+                }
+            )
+    frame = pd.DataFrame(rows, index=range(100, 112))
+    frame.attrs["grand_total"] = 18
+    frame.attrs["constraint_contract"] = "full_period"
+    return frame
+
+
+def age_covariate_frame() -> pd.DataFrame:
+    rows = []
+    for county, state, age65, unmatched in [
+        ("01001", "01", -1.0, False),
+        ("01003", "01", 0.0, False),
+        ("02001", "02", 1.0, True),
+    ]:
+        for year in ["2019", "2022"]:
+            rows.append(
+                {
+                    "county_fips": county,
+                    "state_fips": state,
+                    "year": year,
+                    "population": 1000.0,
+                    "primary_rurality": "metro_large",
+                    "svi_quartile": "Q1_lowest",
+                    "z_pct_age65": age65,
+                    "z_pct_male": 0.0,
+                    "unmatched_covariate_flag": unmatched,
+                    "analysis_in_primary_covariate_set": not unmatched,
+                }
+            )
+    return pd.DataFrame(rows)
+
+
 def interval_transfer_frame() -> pd.DataFrame:
     frame = structural_six_cycle_frame().copy()
     frame["q001_period_status"] = "suppressed_1_9"
@@ -146,6 +211,162 @@ def toy_theta(frame: pd.DataFrame) -> Theta:
         log_sigma_year=np.log(0.2),
         log_kappa=np.log(3.0),
     )
+
+
+def test_pandemic_exclusion_replaces_incompatible_period_total_without_mutation() -> None:
+    source = pandemic_exclusion_source_frame()
+    before = source.copy(deep=True)
+    before.attrs = source.attrs.copy()
+
+    excluded = data_module.make_pandemic_exclusion_frame(source)
+
+    pd.testing.assert_frame_equal(source, before)
+    assert source.attrs == before.attrs
+    assert excluded.index.equals(pd.RangeIndex(len(excluded)))
+    assert excluded["year"].drop_duplicates().tolist() == [
+        "2019",
+        "2022",
+        "2023",
+        "2024",
+    ]
+    expected_retained = source.loc[
+        source["year"].isin(["2019", "2022", "2023", "2024"]),
+        [
+            "county_fips",
+            "year",
+            "q002_count_status",
+            "q002_lower",
+            "q002_upper",
+            "q002_exact_count",
+            "q003_national_year_total",
+            "q004_state_year_total",
+        ],
+    ].reset_index(drop=True)
+    pd.testing.assert_frame_equal(
+        excluded[expected_retained.columns], expected_retained
+    )
+    county = excluded.drop_duplicates("county_fips").set_index("county_fips")
+    assert county["source_full_period_q001_lower"].to_dict() == {
+        "01001": 8,
+        "01003": 10,
+    }
+    assert county["source_full_period_q001_upper"].to_dict() == {
+        "01001": 8,
+        "01003": 12,
+    }
+    assert county["q001_period_lower"].to_dict() == {"01001": 4, "01003": 8}
+    assert county["q001_period_upper"].to_dict() == {"01001": 4, "01003": 8}
+    assert excluded["q001_period_exact_count"].isna().all()
+    assert set(excluded["q001_period_status"]) == {
+        "not_applied_full_period_year_subset"
+    }
+    assert excluded.attrs["grand_total"] == 12
+    assert excluded.attrs["q001_constraint_policy"] == (
+        "full_period_q001_not_applied"
+    )
+    assert constraints_module.constraint_contract(excluded) == (
+        "selected_years_no_period_total"
+    )
+
+    excluded.loc[0, "q002_lower"] = 999
+    assert source.loc[100, "q002_lower"] == 1
+
+
+def test_pandemic_exclusion_keeps_retained_equalities_active() -> None:
+    excluded = data_module.make_pandemic_exclusion_frame(
+        pandemic_exclusion_source_frame()
+    )
+    y = excluded["q002_lower"].to_numpy(dtype=int)
+    valid = validate_constraints(y, excluded)
+    assert valid.passed
+    assert "grand_total_equals_58380" not in valid.checks
+    assert valid.checks["grand_total_matches_modeled_years"]
+    assert valid.details["grand_total_matches_modeled_years"] == {
+        "actual": 12,
+        "expected": 12,
+        "included_years": ["2019", "2022", "2023", "2024"],
+    }
+
+    corrupted = excluded.copy(deep=True)
+    corrupted.attrs = excluded.attrs.copy()
+    corrupted.loc[
+        (corrupted["state_fips"] == "01") & (corrupted["year"] == "2022"),
+        "q004_state_year_total",
+    ] = 4
+    assert not validate_constraints(y, corrupted).checks[
+        "state_year_totals_equal_q004"
+    ]
+
+
+def test_interval_counties_derive_from_period_bound_width_not_status() -> None:
+    frame = two_by_two_frame()
+    frame.loc[frame["county_fips"] == "01001", "q001_period_status"] = (
+        "suppressed_1_9"
+    )
+    frame.loc[frame["county_fips"] == "01001", "q001_period_lower"] = 3
+    frame.loc[frame["county_fips"] == "01001", "q001_period_upper"] = 3
+    frame.loc[frame["county_fips"] == "01003", "q001_period_status"] = (
+        "not_applied_full_period_year_subset"
+    )
+    frame.loc[frame["county_fips"] == "01003", "q001_period_lower"] = 2
+    frame.loc[frame["county_fips"] == "01003", "q001_period_upper"] = 4
+
+    move = build_move_state(frame, np.asarray([1, 2, 2, 1]))
+
+    assert move.interval_counties == {1}
+    assert move.interval_path_support is not None
+
+
+def test_age17_augmentation_preserves_panel_and_existing_imputation_flags(
+    tmp_path: Path,
+) -> None:
+    source = age_covariate_frame()
+    before = source.copy(deep=True)
+    archive = tmp_path / "svi.csv"
+    pd.DataFrame(
+        {"FIPS": ["01001", "01003"], "EP_AGE17": [20.0, 30.0]}
+    ).to_csv(archive, index=False)
+
+    augmented = data_module.augment_age17_covariate(source, archive)
+
+    pd.testing.assert_frame_equal(source, before)
+    assert len(augmented) == len(source)
+    assert set(augmented["county_fips"]) == set(source["county_fips"])
+    pd.testing.assert_series_equal(
+        augmented["z_pct_age65"], source["z_pct_age65"], check_names=True
+    )
+    pd.testing.assert_series_equal(
+        augmented["unmatched_covariate_flag"],
+        source["unmatched_covariate_flag"],
+        check_names=True,
+    )
+    county = augmented.drop_duplicates("county_fips").set_index("county_fips")
+    assert county["pct_age17"].to_dict() == {
+        "01001": 20.0,
+        "01003": 30.0,
+        "02001": 25.0,
+    }
+    assert county["age17_imputed_flag"].to_dict() == {
+        "01001": False,
+        "01003": False,
+        "02001": True,
+    }
+    assert augmented["z_pct_age17"].mean() == pytest.approx(0.0, abs=1e-12)
+    assert augmented["z_pct_age17"].std() == pytest.approx(1.0, abs=1e-12)
+
+    design = make_design(augmented, model="age_structure_age17")
+    assert "z_pct_age65" in design.columns
+    assert "z_pct_age17" in design.columns
+    assert "z_pct_age17" not in make_design(augmented).columns
+
+
+def test_age17_augmentation_rejects_duplicate_archive_fips(tmp_path: Path) -> None:
+    archive = tmp_path / "duplicate-svi.csv"
+    pd.DataFrame(
+        {"FIPS": ["01001", "01001"], "EP_AGE17": [20.0, 21.0]}
+    ).to_csv(archive, index=False)
+    with pytest.raises(pd.errors.MergeError, match="many-to-one"):
+        data_module.augment_age17_covariate(age_covariate_frame(), archive)
 
 
 def save_toy_checkpoint(

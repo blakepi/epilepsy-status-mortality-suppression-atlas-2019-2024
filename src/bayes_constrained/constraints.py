@@ -12,6 +12,16 @@ from .data import GRAND_TOTAL
 from .paths import BAYES_DATA, OUTPUT_DIR, rel
 
 
+CONSTRAINT_CONTRACTS = {"full_period", "selected_years_no_period_total"}
+
+
+def constraint_contract(frame: pd.DataFrame) -> str:
+    contract = str(frame.attrs.get("constraint_contract", "full_period"))
+    if contract not in CONSTRAINT_CONTRACTS:
+        raise ValueError(f"Unknown constraint contract: {contract}")
+    return contract
+
+
 @dataclass
 class ConstraintValidation:
     passed: bool
@@ -46,6 +56,7 @@ def frame_arrays(frame: pd.DataFrame) -> dict[str, np.ndarray]:
 def validate_constraints(y: np.ndarray, frame: pd.DataFrame, *, expected_rows: int | None = None) -> ConstraintValidation:
     y = np.asarray(y)
     arr = frame_arrays(frame)
+    constraint_contract(frame)
     grand_total = int(frame.attrs.get("grand_total", GRAND_TOTAL))
     if expected_rows is None:
         expected_rows = len(frame)
@@ -92,8 +103,13 @@ def validate_constraints(y: np.ndarray, frame: pd.DataFrame, *, expected_rows: i
     national_ok = national_year_sum.astype(int).eq(national_target.astype(int))
     checks["national_year_totals_equal_q003"] = bool(national_ok.all())
     details["national_year_totals_equal_q003"] = f"violations={int((~national_ok).sum())}"
-    checks["grand_total_equals_58380"] = int(y_int.sum()) == grand_total
-    details["grand_total_equals_58380"] = int(y_int.sum())
+    included_years = sorted(frame["year"].astype(str).unique())
+    checks["grand_total_matches_modeled_years"] = int(y_int.sum()) == grand_total
+    details["grand_total_matches_modeled_years"] = {
+        "actual": int(y_int.sum()),
+        "expected": grand_total,
+        "included_years": included_years,
+    }
     checks["no_counties_silently_dropped"] = frame["county_fips"].nunique() == len(period)
     details["no_counties_silently_dropped"] = f"counties={frame['county_fips'].nunique()}"
 
@@ -110,6 +126,7 @@ def assert_constraints(y: np.ndarray, frame: pd.DataFrame, *, label: str = "") -
 
 def _constraint_matrix(frame: pd.DataFrame) -> tuple[sparse.csr_matrix, np.ndarray, np.ndarray]:
     n = len(frame)
+    constraint_contract(frame)
     grand_total = int(frame.attrs.get("grand_total", GRAND_TOTAL))
     rows = []
     cols = []

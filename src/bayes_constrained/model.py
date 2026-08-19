@@ -324,6 +324,11 @@ def make_design(
         frame["z_pct_age65"],
         errors="coerce",
     ).fillna(0.0)
+    if model == "age_structure_age17":
+        x["z_pct_age17"] = pd.to_numeric(
+            frame["z_pct_age17"],
+            errors="coerce",
+        ).fillna(0.0)
     x["z_pct_male"] = pd.to_numeric(
         frame["z_pct_male"],
         errors="coerce",
@@ -514,6 +519,7 @@ def term_to_label(term: str) -> str:
         "svi_quartile_Q3": "SVI Q3 vs Q1",
         "svi_quartile_Q4_highest": "SVI Q4 vs Q1",
         "z_pct_age65": "pct_age65 coefficient",
+        "z_pct_age17": "pct_age17 coefficient",
         "z_pct_male": "pct_male coefficient",
         "rucc_binary_RUCC_4_9": "RUCC 4-9 vs RUCC 1-3",
     }.get(term, term)
