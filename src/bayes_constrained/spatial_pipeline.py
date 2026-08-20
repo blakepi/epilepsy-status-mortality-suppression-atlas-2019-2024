@@ -136,6 +136,17 @@ INPUT_MANIFEST_EXACT_FIELDS = {
     "model_frame_semantic_sha256", "graph_contract_sha256",
     "graph_artifact_sha256",
 }
+PRE_GATE_EXACT_FIELDS = {
+    "schema_id", "run_id", "model_id", "extension_epoch", "iterations_per_chain",
+    "draws_per_chain", "chunks_per_chain", "chains", "preparation_identity",
+    "launch_envelope_sha256", "final_source_manifest_sha256",
+    "benchmark_report_sha256", "chain_fingerprints", "parameter_schema_rows",
+    "county_rows", "diagnostic_rows", "arviz_version", "threshold_summary",
+    "count_constraint_failures", "spatial_constraint_failures",
+    "retained_assertion_ledger_sha256", "comparison_rows", "candidate_sha256",
+    "artifact_sha256", "builder", "bounded_test_mode", "production_shape",
+    "submission_authorized",
+}
 CHAIN_STATUS_EXACT_FIELDS = {
     "schema_id", "run_id", "model_id", "preparation_identity",
     "launch_envelope_sha256", "final_source_manifest_sha256", "chain_id",
@@ -181,6 +192,38 @@ RELEASE_EXACT_FIELDS = {
     "artifact_inventory_sha256", "planned_outputs", "excludes",
     "submission_authorized",
 }
+VERIFICATION_GROUP_EXACT_FIELDS = {
+    "source_checks": {
+        "passed", "prepared_manifest_sha256", "input_manifest_sha256",
+        "launch_envelope_sha256", "final_source_manifest_sha256",
+    },
+    "graph_checks": {
+        "passed", "nodes", "components", "all_component_scales_recomputed",
+        "largest_component_recomputed",
+    },
+    "chain_checks": {
+        "passed", "chains", "iterations_per_chain", "draws_per_chain",
+        "chunks_per_chain", "historical_latent_y_stored",
+        "independent_historical_y_reconstruction_possible", "claim_boundary",
+        "retained_assertion_ledger_sha256",
+        "prepared_checkpoint_targets_recomputed",
+        "terminal_checkpoint_targets_recomputed",
+        "custody_checkpoint_targets_recomputed",
+    },
+    "diagnostic_checks": {
+        "passed", "rows", "arviz_version", "thresholds_inclusive",
+        "convergence_passed",
+    },
+    "comparison_checks": {"passed", "rows", "candidate_sha256", "byte_identical"},
+    "benchmark_checks": {"passed", "report_sha256", "iterations", "paired_chunk_draws"},
+    "protected_tree_checks": {
+        "passed", "raw_source_hashes_reverified", "manifest_sha256", "files",
+    },
+}
+VERIFICATION_CLAIM_BOUNDARY = (
+    "The exact schedule and in-loop constraint assertions are verified; "
+    "historical latent y cannot be independently reconstructed."
+)
 
 
 @dataclass(frozen=True)
@@ -1760,6 +1803,361 @@ def _validated_frozen_hash_mapping(
     return normalized
 
 
+def _require_frozen_artifact(
+    snapshot: Mapping[str, str], *, relative: str, expected_hash: str, label: str
+) -> None:
+    if snapshot.get(relative) != expected_hash:
+        raise ValueError(f"{label} is absent from or differs in the verifier snapshot")
+
+
+def _validated_prior_ledger_mapping(value: object, *, label: str) -> dict[str, str]:
+    if not isinstance(value, Mapping) or set(value) != {"1", "2", "3", "4"}:
+        raise ValueError(f"{label} must contain exactly chains 1..4")
+    normalized = {
+        key: _require_sha256(value[key], label=f"{label} chain {key}")
+        for key in ("1", "2", "3", "4")
+    }
+    if dict(value) != normalized:
+        raise ValueError(f"{label} must be canonically ordered")
+    return normalized
+
+
+def _validate_prior_prepared_contract(
+    root: Path, *, preparation_identity: str
+) -> dict[str, Any]:
+    prepared_root = root / "prepared"
+    manifest_path = prepared_root / "prepared_run_manifest.json"
+    manifest, manifest_hash = _read_extension_json_sidecar(
+        manifest_path, label="Prior prepared run manifest"
+    )
+    if set(manifest) != PREPARED_MANIFEST_EXACT_FIELDS:
+        raise ValueError("Prior prepared run manifest exact schema mismatch")
+    if (
+        manifest.get("schema_id") != "sr_v2_spatial_prepared_run/v1"
+        or manifest.get("run_id") != RUN_ID
+        or manifest.get("model_id") != MODEL_ID
+        or manifest.get("preparation_identity") != preparation_identity
+        or manifest.get("status") != "prepared_not_run"
+        or manifest.get("production_eligible") is not True
+        or manifest.get("submission_authorized") is not False
+        or manifest.get("input_manifest") != "input_manifest.json"
+        or manifest.get("protected_tree_manifest")
+        != "provenance/protected_tree_manifest.json"
+    ):
+        raise ValueError("Prior prepared run identity/status contract mismatch")
+    launch_hash = _require_sha256(
+        manifest.get("launch_envelope_sha256"), label="prepared launch envelope"
+    )
+    source_hash = _require_sha256(
+        manifest.get("final_source_manifest_sha256"),
+        label="prepared final source manifest",
+    )
+    input_path = prepared_root / "input_manifest.json"
+    input_manifest, input_hash = _read_extension_json_sidecar(
+        input_path, label="Prior prepared input manifest"
+    )
+    if (
+        set(input_manifest) != INPUT_MANIFEST_EXACT_FIELDS
+        or input_manifest.get("schema_id") != "sr_v2_spatial_input_manifest/v1"
+        or input_manifest.get("run_id") != RUN_ID
+        or input_manifest.get("launch_envelope_sha256") != launch_hash
+        or input_manifest.get("final_source_manifest_sha256") != source_hash
+        or input_hash != manifest.get("input_manifest_sha256")
+    ):
+        raise ValueError("Prior prepared input-manifest identity contract mismatch")
+    protected_path = prepared_root / "provenance/protected_tree_manifest.json"
+    protected, protected_hash = _read_extension_json_sidecar(
+        protected_path, label="Prior protected-tree manifest"
+    )
+    if (
+        set(protected) != {"schema_id", "roots", "files"}
+        or protected.get("schema_id")
+        != "sr_v2_spatial_protected_tree_manifest/v1"
+        or protected.get("roots") != list(PROTECTED_TREES)
+        or protected_hash != manifest.get("protected_tree_manifest_sha256")
+    ):
+        raise ValueError("Prior protected-tree manifest identity/schema mismatch")
+    protected_files = _validated_frozen_hash_mapping(
+        protected.get("files"), label="prior protected-tree files"
+    )
+    return {
+        "manifest": manifest,
+        "manifest_hash": manifest_hash,
+        "input_manifest": input_manifest,
+        "input_hash": input_hash,
+        "protected_hash": protected_hash,
+        "protected_file_count": len(protected_files),
+        "launch_hash": launch_hash,
+        "source_hash": source_hash,
+    }
+
+
+def _validate_prior_pre_gate_contract(
+    root: Path,
+    *,
+    prior_epoch: int,
+    preparation_identity: str,
+    launch_hash: str,
+    source_hash: str,
+) -> dict[str, Any]:
+    path = root / f"epochs/epoch_{prior_epoch}/merge/pre_gate_manifest.json"
+    pre_gate, pre_gate_hash = _read_extension_json_sidecar(
+        path, label="Prior spatial pre-gate manifest"
+    )
+    if set(pre_gate) != PRE_GATE_EXACT_FIELDS:
+        raise ValueError("Prior spatial pre-gate exact schema mismatch")
+    expected = EPOCH_CONTRACT[prior_epoch]
+    exact_values = {
+        field: _extension_exact_integer(
+            pre_gate.get(field), label=f"prior pre-gate {field}", minimum=0
+        )
+        for field in (
+            "extension_epoch", "iterations_per_chain", "draws_per_chain",
+            "chunks_per_chain", "chains", "parameter_schema_rows", "county_rows",
+            "diagnostic_rows", "count_constraint_failures",
+            "spatial_constraint_failures",
+        )
+    }
+    fingerprints = pre_gate.get("chain_fingerprints")
+    if not isinstance(fingerprints, list) or len(fingerprints) != 4:
+        raise ValueError("Prior pre-gate must contain four chain fingerprints")
+    normalized_fingerprints = [
+        _require_sha256(value, label="prior pre-gate chain fingerprint")
+        for value in fingerprints
+    ]
+    ledger_hashes = _validated_prior_ledger_mapping(
+        pre_gate.get("retained_assertion_ledger_sha256"),
+        label="prior pre-gate retained ledgers",
+    )
+    benchmark_hash = _require_sha256(
+        pre_gate.get("benchmark_report_sha256"), label="prior benchmark report"
+    )
+    candidate_hash = _require_sha256(
+        pre_gate.get("candidate_sha256"), label="prior comparison candidate"
+    )
+    if (
+        pre_gate.get("schema_id") != "sr_v2_spatial_pre_gate_manifest/v1"
+        or pre_gate.get("run_id") != RUN_ID
+        or pre_gate.get("model_id") != MODEL_ID
+        or exact_values
+        != {
+            "extension_epoch": prior_epoch,
+            "iterations_per_chain": expected["iterations"],
+            "draws_per_chain": expected["draws"],
+            "chunks_per_chain": expected["chunks"],
+            "chains": 4,
+            "parameter_schema_rows": 71,
+            "county_rows": 3_142,
+            "diagnostic_rows": 9_483,
+            "count_constraint_failures": 0,
+            "spatial_constraint_failures": 0,
+        }
+        or len(set(normalized_fingerprints)) != 4
+        or pre_gate.get("preparation_identity") != preparation_identity
+        or pre_gate.get("launch_envelope_sha256") != launch_hash
+        or pre_gate.get("final_source_manifest_sha256") != source_hash
+        or pre_gate.get("arviz_version") != "1.2.0"
+        or not isinstance(pre_gate.get("threshold_summary"), Mapping)
+        or pre_gate["threshold_summary"].get("passed") is not False
+        or pre_gate.get("comparison_rows") != list(COMPARISON_ROWS)
+        or pre_gate.get("builder") != "verified_raw_chunk_merge"
+        or pre_gate.get("bounded_test_mode") is not False
+        or pre_gate.get("production_shape") is not True
+        or pre_gate.get("submission_authorized") is not False
+    ):
+        raise ValueError("Prior spatial pre-gate identity/cardinality mismatch")
+    benchmark_path = root / "benchmark/benchmark_report.json"
+    _benchmark, benchmark_file_hash = _read_extension_json_sidecar(
+        benchmark_path, label="Prior benchmark report"
+    )
+    candidate_path = root / (
+        f"epochs/epoch_{prior_epoch}/merge/primary_vs_spatial.candidate.csv"
+    )
+    if (
+        benchmark_file_hash != benchmark_hash
+        or not candidate_path.is_file()
+        or candidate_path.is_symlink()
+        or sha256_file(candidate_path) != candidate_hash
+    ):
+        raise ValueError("Prior benchmark/candidate raw-byte identity mismatch")
+    return {
+        "manifest": pre_gate,
+        "hash": pre_gate_hash,
+        "benchmark_hash": benchmark_hash,
+        "candidate_hash": candidate_hash,
+        "ledger_hashes": ledger_hashes,
+    }
+
+
+def _validate_prior_verification_groups(
+    root: Path,
+    *,
+    prior_epoch: int,
+    verification: Mapping[str, Any],
+    snapshot: Mapping[str, str],
+    prepared: Mapping[str, Any],
+    pre_gate: Mapping[str, Any],
+) -> None:
+    for group_name, exact_fields in VERIFICATION_GROUP_EXACT_FIELDS.items():
+        group = verification.get(group_name)
+        if (
+            not isinstance(group, Mapping)
+            or set(group) != exact_fields
+            or group.get("passed") is not True
+        ):
+            raise ValueError(
+                f"Prior independent verification group failed/schema mismatch: {group_name}"
+            )
+    source_checks = verification["source_checks"]
+    source_hashes = {
+        field: _require_sha256(source_checks.get(field), label=f"source_checks {field}")
+        for field in (
+            "prepared_manifest_sha256", "input_manifest_sha256",
+            "launch_envelope_sha256", "final_source_manifest_sha256",
+        )
+    }
+    if source_hashes != {
+        "prepared_manifest_sha256": prepared["manifest_hash"],
+        "input_manifest_sha256": prepared["input_hash"],
+        "launch_envelope_sha256": prepared["launch_hash"],
+        "final_source_manifest_sha256": prepared["source_hash"],
+    }:
+        raise ValueError("Prior independent verification source identity mismatch")
+    _require_frozen_artifact(
+        snapshot,
+        relative="prepared/prepared_run_manifest.json",
+        expected_hash=prepared["manifest_hash"],
+        label="Prior prepared manifest",
+    )
+    _require_frozen_artifact(
+        snapshot,
+        relative="prepared/input_manifest.json",
+        expected_hash=prepared["input_hash"],
+        label="Prior input manifest",
+    )
+    _require_frozen_artifact(
+        snapshot,
+        relative="prepared/provenance/protected_tree_manifest.json",
+        expected_hash=prepared["protected_hash"],
+        label="Prior protected-tree manifest",
+    )
+    graph = verification["graph_checks"]
+    graph_values = {
+        field: _extension_exact_integer(
+            graph.get(field), label=f"graph_checks {field}", minimum=1
+        )
+        for field in (
+            "nodes", "components", "all_component_scales_recomputed",
+            "largest_component_recomputed",
+        )
+    }
+    if graph_values != {
+        "nodes": 3_142,
+        "components": 18,
+        "all_component_scales_recomputed": 18,
+        "largest_component_recomputed": 3_099,
+    }:
+        raise ValueError("Prior independent verification graph cardinality mismatch")
+    chain = verification["chain_checks"]
+    chain_values = {
+        field: _extension_exact_integer(
+            chain.get(field), label=f"chain_checks {field}", minimum=0
+        )
+        for field in (
+            "chains", "iterations_per_chain", "draws_per_chain", "chunks_per_chain",
+            "prepared_checkpoint_targets_recomputed",
+            "terminal_checkpoint_targets_recomputed",
+            "custody_checkpoint_targets_recomputed",
+        )
+    }
+    expected = EPOCH_CONTRACT[prior_epoch]
+    if (
+        chain_values["chains"] != 4
+        or chain_values["iterations_per_chain"] != expected["iterations"]
+        or chain_values["draws_per_chain"] != expected["draws"]
+        or chain_values["chunks_per_chain"] != expected["chunks"]
+        or chain_values["prepared_checkpoint_targets_recomputed"] != 4
+        or chain_values["terminal_checkpoint_targets_recomputed"] != 4
+        or chain_values["custody_checkpoint_targets_recomputed"] < 8
+        or chain.get("historical_latent_y_stored") is not False
+        or chain.get("independent_historical_y_reconstruction_possible") is not False
+        or chain.get("claim_boundary") != VERIFICATION_CLAIM_BOUNDARY
+        or _validated_prior_ledger_mapping(
+            chain.get("retained_assertion_ledger_sha256"),
+            label="prior verification retained ledgers",
+        )
+        != pre_gate["ledger_hashes"]
+    ):
+        raise ValueError("Prior independent verification chain cardinality mismatch")
+    diagnostics = verification["diagnostic_checks"]
+    if (
+        _extension_exact_integer(
+            diagnostics.get("rows"), label="diagnostic_checks rows", minimum=0
+        )
+        != 9_483
+        or diagnostics.get("arviz_version") != "1.2.0"
+        or diagnostics.get("thresholds_inclusive") is not True
+        or diagnostics.get("convergence_passed") is not False
+    ):
+        raise ValueError("Prior independent verification diagnostic contract mismatch")
+    comparison = verification["comparison_checks"]
+    candidate_hash = _require_sha256(
+        comparison.get("candidate_sha256"), label="comparison candidate"
+    )
+    candidate_relative = (
+        f"epochs/epoch_{prior_epoch}/merge/primary_vs_spatial.candidate.csv"
+    )
+    if (
+        comparison.get("rows") != list(COMPARISON_ROWS)
+        or comparison.get("byte_identical") is not True
+        or candidate_hash != pre_gate["candidate_hash"]
+    ):
+        raise ValueError("Prior independent verification comparison contract mismatch")
+    _require_frozen_artifact(
+        snapshot,
+        relative=candidate_relative,
+        expected_hash=candidate_hash,
+        label="Prior comparison candidate",
+    )
+    benchmark = verification["benchmark_checks"]
+    benchmark_hash = _require_sha256(
+        benchmark.get("report_sha256"), label="benchmark_checks report"
+    )
+    if (
+        benchmark_hash != pre_gate["benchmark_hash"]
+        or _extension_exact_integer(
+            benchmark.get("iterations"), label="benchmark iterations", minimum=1
+        )
+        != 2_000
+        or _extension_exact_integer(
+            benchmark.get("paired_chunk_draws"),
+            label="benchmark paired chunk draws",
+            minimum=1,
+        )
+        != 250
+    ):
+        raise ValueError("Prior independent verification benchmark contract mismatch")
+    _require_frozen_artifact(
+        snapshot,
+        relative="benchmark/benchmark_report.json",
+        expected_hash=benchmark_hash,
+        label="Prior benchmark report",
+    )
+    protected = verification["protected_tree_checks"]
+    protected_hash = _require_sha256(
+        protected.get("manifest_sha256"), label="protected-tree manifest"
+    )
+    if (
+        protected.get("raw_source_hashes_reverified") is not True
+        or protected_hash != prepared["protected_hash"]
+        or _extension_exact_integer(
+            protected.get("files"), label="protected-tree file count", minimum=1
+        )
+        != prepared["protected_file_count"]
+    ):
+        raise ValueError("Prior independent verification protected-tree contract mismatch")
+
+
 def _validate_prior_frozen_chain_subtrees(
     root: Path,
     *,
@@ -1771,6 +2169,60 @@ def _validate_prior_frozen_chain_subtrees(
     """Bind prelaunch chain bytes to the reviewed prior verifier/release maps."""
 
     prior_epoch = epoch - 1
+    status_launch_hashes: set[str] = set()
+    status_source_hashes: set[str] = set()
+    selected_ledgers: dict[str, str] = {}
+    for raw_chain_id in chain_ids:
+        checked_chain_id = _extension_exact_integer(
+            raw_chain_id, label="frozen subtree chain_id", minimum=1, maximum=4
+        )
+        pointer, _pointer_hash = _read_extension_json_sidecar(
+            root / f"chains/chain_{checked_chain_id:02d}/chain_status.json",
+            label=f"Prior chain {checked_chain_id} status pointer",
+        )
+        if pointer.get("preparation_identity") != preparation_identity:
+            raise ValueError("Prior chain status preparation identity mismatch")
+        status_launch_hashes.add(
+            _require_sha256(
+                pointer.get("launch_envelope_sha256"),
+                label=f"prior chain {checked_chain_id} launch envelope",
+            )
+        )
+        status_source_hashes.add(
+            _require_sha256(
+                pointer.get("final_source_manifest_sha256"),
+                label=f"prior chain {checked_chain_id} final source manifest",
+            )
+        )
+        retained = pointer.get("retained_assertion_evidence")
+        if not isinstance(retained, Mapping):
+            raise ValueError("Prior chain retained-evidence summary is missing")
+        selected_ledgers[str(checked_chain_id)] = _require_sha256(
+            retained.get("ledger_sha256"),
+            label=f"prior chain {checked_chain_id} retained ledger",
+        )
+    if len(status_launch_hashes) != 1 or len(status_source_hashes) != 1:
+        raise ValueError("Selected prior chains do not share source identities")
+    prepared = _validate_prior_prepared_contract(
+        root, preparation_identity=preparation_identity
+    )
+    if (
+        status_launch_hashes != {prepared["launch_hash"]}
+        or status_source_hashes != {prepared["source_hash"]}
+    ):
+        raise ValueError("Prior chain/prepared source identity mismatch")
+    pre_gate = _validate_prior_pre_gate_contract(
+        root,
+        prior_epoch=prior_epoch,
+        preparation_identity=preparation_identity,
+        launch_hash=prepared["launch_hash"],
+        source_hash=prepared["source_hash"],
+    )
+    if pre_gate["hash"] != payload.get("prior_pre_gate_manifest_sha256"):
+        raise ValueError("Prior pre-gate hash differs from reviewed authorization")
+    for chain_key, ledger_hash in selected_ledgers.items():
+        if pre_gate["ledger_hashes"].get(chain_key) != ledger_hash:
+            raise ValueError("Prior chain ledger differs from pre-gate evidence")
     verification_path = root / (
         f"epochs/epoch_{prior_epoch}/verification/"
         "independent_spatial_sensitivity_verification.json"
@@ -1792,6 +2244,18 @@ def _validate_prior_frozen_chain_subtrees(
         label="prior verification artifact snapshot",
     )
     snapshot_hash = canonical_sha256(snapshot)
+    verification_launch_hash = _require_sha256(
+        verification.get("launch_envelope_sha256"),
+        label="prior verification launch envelope",
+    )
+    verification_source_hash = _require_sha256(
+        verification.get("final_source_manifest_sha256"),
+        label="prior verification final source manifest",
+    )
+    verification_benchmark_hash = _require_sha256(
+        verification.get("benchmark_report_sha256"),
+        label="prior verification benchmark report",
+    )
     if (
         verification_hash != payload.get("prior_independent_verification_sha256")
         or verification.get("schema_id")
@@ -1806,13 +2270,29 @@ def _validate_prior_frozen_chain_subtrees(
         )
         != prior_epoch
         or verification.get("preparation_identity") != preparation_identity
-        or verification.get("pre_gate_manifest_sha256")
-        != payload.get("prior_pre_gate_manifest_sha256")
+        or verification_launch_hash != prepared["launch_hash"]
+        or verification_source_hash != prepared["source_hash"]
+        or verification_benchmark_hash != pre_gate["benchmark_hash"]
+        or verification.get("pre_gate_manifest_sha256") != pre_gate["hash"]
         or verification.get("artifact_snapshot_sha256") != snapshot_hash
         or verification.get("passed") is not True
         or verification.get("submission_authorized") is not False
     ):
         raise ValueError("Prior independent verification identity/snapshot mismatch")
+    _require_frozen_artifact(
+        snapshot,
+        relative=f"epochs/epoch_{prior_epoch}/merge/pre_gate_manifest.json",
+        expected_hash=pre_gate["hash"],
+        label="Prior pre-gate manifest",
+    )
+    _validate_prior_verification_groups(
+        root,
+        prior_epoch=prior_epoch,
+        verification=verification,
+        snapshot=snapshot,
+        prepared=prepared,
+        pre_gate=pre_gate,
+    )
     if set(release) != RELEASE_EXACT_FIELDS:
         raise ValueError("Prior spatial release exact schema mismatch")
     release_snapshot = _validated_frozen_hash_mapping(
@@ -1822,6 +2302,25 @@ def _validate_prior_frozen_chain_subtrees(
     release_artifacts = _validated_frozen_hash_mapping(
         release.get("artifacts"), label="prior release artifact inventory"
     )
+    verification_relative = verification_path.relative_to(root).as_posix()
+    verification_sidecar = verification_path.with_name(
+        verification_path.name + ".sha256"
+    )
+    expected_release_artifacts = dict(snapshot)
+    expected_release_artifacts[verification_relative] = verification_hash
+    expected_release_artifacts[
+        verification_sidecar.relative_to(root).as_posix()
+    ] = sha256_file(verification_sidecar)
+    expected_release_artifacts = dict(sorted(expected_release_artifacts.items()))
+    candidate_relative = (
+        f"epochs/epoch_{prior_epoch}/merge/primary_vs_spatial.candidate.csv"
+    )
+    planned_outputs = {
+        "primary_vs_spatial.csv": {
+            "source": candidate_relative,
+            "sha256": pre_gate["candidate_hash"],
+        }
+    }
     if (
         release_hash != payload.get("prior_release_manifest_sha256")
         or release.get("schema_id")
@@ -1836,16 +2335,25 @@ def _validate_prior_frozen_chain_subtrees(
         )
         != prior_epoch
         or release.get("preparation_identity") != preparation_identity
-        or release.get("pre_gate_manifest_sha256")
-        != payload.get("prior_pre_gate_manifest_sha256")
+        or release.get("launch_envelope_sha256") != prepared["launch_hash"]
+        or release.get("final_source_manifest_sha256") != prepared["source_hash"]
+        or release.get("benchmark_report_sha256") != pre_gate["benchmark_hash"]
+        or release.get("pre_gate_manifest_sha256") != pre_gate["hash"]
         or release.get("independent_verification_sha256") != verification_hash
+        or release.get("verification_convergence_passed") is not False
         or release_snapshot != snapshot
         or release.get("verification_artifact_snapshot_sha256") != snapshot_hash
+        or release_artifacts != expected_release_artifacts
         or release.get("artifact_inventory_sha256")
         != canonical_sha256(release_artifacts)
+        or release.get("planned_outputs") != planned_outputs
+        or release.get("excludes")
+        != ["primary_vs_spatial.csv", "spatial_sensitivity_gate.json"]
         or release.get("submission_authorized") is not False
     ):
-        raise ValueError("Prior release/verifier snapshot identity mismatch")
+        raise ValueError(
+            "Prior release/verifier identity, convergence, coverage, or planned-output mismatch"
+        )
     for raw_chain_id in chain_ids:
         chain_id = _extension_exact_integer(
             raw_chain_id, label="frozen subtree chain_id", minimum=1, maximum=4

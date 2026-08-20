@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 import ast
+import base64
 import importlib.util
 import io
 import json
@@ -9,6 +10,7 @@ from pathlib import Path
 import sys
 import hashlib
 from types import SimpleNamespace
+from typing import Callable
 
 import numpy as np
 import pandas as pd
@@ -917,6 +919,227 @@ def test_extension_authorization_uses_exact_prior_epoch_across_two_wave_array(
         authorization["authorization_sha256"] = canonical_sha256(unsigned)
         _write_json_sidecar(authorization_path, authorization)
 
+    def reviewed_case(name: str) -> Path:
+        destination = tmp_path / name
+        shutil.copytree(prewave, destination)
+        return destination
+
+    def assert_rejected_by_both(case: Path, *, match: str) -> None:
+        with pytest.raises(ValueError, match=match):
+            validate_extension_authorization(case, to_extension_epoch=1)
+        with pytest.raises(ValueError, match=match):
+            validate_chain_extension_authorization(
+                case, chain_id=3, to_extension_epoch=1
+            )
+
+    def mutate_verification(
+        name: str,
+        mutation: Callable[[dict[str, object]], None],
+        *,
+        match: str = "verification|schema|cardinality|contract",
+    ) -> None:
+        case = reviewed_case(name)
+        path = case / (
+            "epochs/epoch_0/verification/"
+            "independent_spatial_sensitivity_verification.json"
+        )
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        mutation(payload)
+        _write_json_sidecar(path, payload)
+        resign_prior_evidence(case)
+        assert_rejected_by_both(case, match=match)
+
+    def mutate_release(
+        name: str,
+        mutation: Callable[[dict[str, object]], None],
+        *,
+        match: str = "release|coverage|inventory|planned|contract",
+    ) -> None:
+        case = reviewed_case(name)
+        path = case / (
+            "epochs/epoch_0/release/"
+            "spatial_sensitivity_release_manifest.json"
+        )
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        mutation(payload)
+        _write_json_sidecar(path, payload)
+        resign_prior_evidence(case)
+        assert_rejected_by_both(case, match=match)
+
+    # A reviewed extension cannot rely on top-level `passed: true` alone.
+    # Every script-109 verification group has an exact nested schema and
+    # production cardinality, and the release must completely cover that
+    # snapshot and bind the one exact candidate output.
+    missing_nested = reviewed_case("prior-verifier-missing-nested")
+    missing_verification_path = missing_nested / (
+        "epochs/epoch_0/verification/"
+        "independent_spatial_sensitivity_verification.json"
+    )
+    missing_verification = json.loads(
+        missing_verification_path.read_text(encoding="utf-8")
+    )
+    missing_verification["source_checks"].pop("input_manifest_sha256")
+    _write_json_sidecar(missing_verification_path, missing_verification)
+    resign_prior_evidence(missing_nested)
+    assert_rejected_by_both(missing_nested, match="verification|source|schema")
+
+    wrong_cardinality = reviewed_case("prior-verifier-wrong-cardinality")
+    wrong_cardinality_path = wrong_cardinality / (
+        "epochs/epoch_0/verification/"
+        "independent_spatial_sensitivity_verification.json"
+    )
+    wrong_verification = json.loads(
+        wrong_cardinality_path.read_text(encoding="utf-8")
+    )
+    wrong_verification["chain_checks"]["draws_per_chain"] = 4_499
+    wrong_verification["diagnostic_checks"]["rows"] = 9_482
+    _write_json_sidecar(wrong_cardinality_path, wrong_verification)
+    resign_prior_evidence(wrong_cardinality)
+    assert_rejected_by_both(
+        wrong_cardinality, match="verification|chain|diagnostic|cardinality"
+    )
+
+    sparse_release = reviewed_case("prior-release-sparse-inventory")
+    sparse_release_path = sparse_release / (
+        "epochs/epoch_0/release/spatial_sensitivity_release_manifest.json"
+    )
+    sparse_payload = json.loads(sparse_release_path.read_text(encoding="utf-8"))
+    sparse_payload["artifacts"].pop("prepared/prepared_run_manifest.json")
+    sparse_payload["artifact_inventory_sha256"] = canonical_sha256(
+        sparse_payload["artifacts"]
+    )
+    _write_json_sidecar(sparse_release_path, sparse_payload)
+    resign_prior_evidence(sparse_release)
+    assert_rejected_by_both(sparse_release, match="release|coverage|inventory")
+
+    wrong_planned = reviewed_case("prior-release-wrong-planned-candidate")
+    wrong_planned_path = wrong_planned / (
+        "epochs/epoch_0/release/spatial_sensitivity_release_manifest.json"
+    )
+    wrong_planned_payload = json.loads(
+        wrong_planned_path.read_text(encoding="utf-8")
+    )
+    wrong_planned_payload["planned_outputs"]["primary_vs_spatial.csv"][
+        "sha256"
+    ] = "9" * 64
+    _write_json_sidecar(wrong_planned_path, wrong_planned_payload)
+    resign_prior_evidence(wrong_planned)
+    assert_rejected_by_both(
+        wrong_planned, match="release|planned|candidate|comparison"
+    )
+
+    # Each remaining nested verifier group is independently fail-closed; a
+    # top-level PASS and freshly reviewed outer hashes cannot mask a sparse
+    # inner certificate.
+    for group, field in {
+        "graph_checks": "components",
+        "chain_checks": "chunks_per_chain",
+        "diagnostic_checks": "arviz_version",
+        "comparison_checks": "byte_identical",
+        "benchmark_checks": "paired_chunk_draws",
+        "protected_tree_checks": "raw_source_hashes_reverified",
+    }.items():
+        mutate_verification(
+            f"prior-verifier-missing-{group}",
+            lambda payload, group=group, field=field: payload[group].pop(field),
+        )
+
+    # Exercise every fixed production cardinality family separately so a
+    # validation-order shortcut cannot make an untested group look covered.
+    for name, group, field, value in (
+        ("graph-nodes", "graph_checks", "nodes", 3_141),
+        ("chain-draws", "chain_checks", "draws_per_chain", 4_499),
+        ("chain-chunks", "chain_checks", "chunks_per_chain", 17),
+        ("diagnostic-rows", "diagnostic_checks", "rows", 9_482),
+        ("comparison-rows", "comparison_checks", "rows", ["z_pct_male"]),
+        ("benchmark-iterations", "benchmark_checks", "iterations", 1_999),
+        ("protected-files", "protected_tree_checks", "files", 2),
+    ):
+        mutate_verification(
+            f"prior-verifier-wrong-{name}",
+            lambda payload, group=group, field=field, value=value: payload[
+                group
+            ].__setitem__(field, value),
+        )
+
+    # Python's bool/int equality must not let canonical JSON `true` stand in
+    # for a reviewed numeric identity or cardinality at either trust layer.
+    mutate_verification(
+        "prior-verifier-bool-graph-nodes",
+        lambda payload: payload["graph_checks"].__setitem__("nodes", True),
+        match="verification|graph|integer|cardinality",
+    )
+    mutate_release(
+        "prior-release-bool-extension-epoch",
+        lambda payload: payload.__setitem__("extension_epoch", False),
+        match="release|integer|identity|contract",
+    )
+
+    # Convergence must remain false in both authenticated objects.  These are
+    # extension authorities, not a route for rewriting a prior PASS decision.
+    convergence = reviewed_case("prior-verifier-release-convergence-true")
+    convergence_verification_path = convergence / (
+        "epochs/epoch_0/verification/"
+        "independent_spatial_sensitivity_verification.json"
+    )
+    convergence_verification = json.loads(
+        convergence_verification_path.read_text(encoding="utf-8")
+    )
+    convergence_verification["diagnostic_checks"]["convergence_passed"] = True
+    _write_json_sidecar(convergence_verification_path, convergence_verification)
+    convergence_release_path = convergence / (
+        "epochs/epoch_0/release/spatial_sensitivity_release_manifest.json"
+    )
+    convergence_release = json.loads(
+        convergence_release_path.read_text(encoding="utf-8")
+    )
+    convergence_release["verification_convergence_passed"] = True
+    _write_json_sidecar(convergence_release_path, convergence_release)
+    resign_prior_evidence(convergence)
+    assert_rejected_by_both(
+        convergence, match="verification|diagnostic|convergence|release"
+    )
+
+    mutate_release(
+        "prior-release-wrong-planned-source",
+        lambda payload: payload["planned_outputs"]["primary_vs_spatial.csv"].__setitem__(
+            "source", "epochs/epoch_0/merge/not-the-reviewed-candidate.csv"
+        ),
+    )
+    mutate_release(
+        "prior-release-extra-planned-output",
+        lambda payload: payload["planned_outputs"].__setitem__(
+            "unreviewed.csv", {"source": "unreviewed.csv", "sha256": "9" * 64}
+        ),
+    )
+    mutate_release(
+        "prior-release-reordered-excludes",
+        lambda payload: payload.__setitem__(
+            "excludes", ["spatial_sensitivity_gate.json", "primary_vs_spatial.csv"]
+        ),
+    )
+
+    def add_phantom_artifact(payload: dict[str, object]) -> None:
+        artifacts = payload["artifacts"]
+        artifacts["prepared/phantom-reviewed-artifact.bin"] = "9" * 64
+        payload["artifact_inventory_sha256"] = canonical_sha256(artifacts)
+
+    mutate_release("prior-release-extra-artifact", add_phantom_artifact)
+
+    def remove_verifier_sidecar(payload: dict[str, object]) -> None:
+        artifacts = payload["artifacts"]
+        sidecar = next(
+            relative
+            for relative in artifacts
+            if relative.endswith(
+                "independent_spatial_sensitivity_verification.json.sha256"
+            )
+        )
+        artifacts.pop(sidecar)
+        payload["artifact_inventory_sha256"] = canonical_sha256(artifacts)
+
+    mutate_release("prior-release-missing-verifier-sidecar", remove_verifier_sidecar)
+
     # A reviewed gate freezes the prior terminal RNG bytes.  Coherently
     # rewriting the checkpoint, sidecar, status inventory, immutable status,
     # and pointer after that gate must not create a new extension authority.
@@ -1308,7 +1531,8 @@ def test_extension_authorization_uses_exact_prior_epoch_across_two_wave_array(
         )
 
     future_case = copied("future-epoch")
-    _publish_extension_test_status(future_case, chain_id=3, epoch=1)
+    for chain_id in (3, 4):
+        _publish_extension_test_status(future_case, chain_id=chain_id, epoch=1)
     _publish_extension_test_authorization(future_case, to_epoch=2)
     _publish_extension_test_status(future_case, chain_id=3, epoch=2)
     with pytest.raises(ValueError, match="future|epoch"):
@@ -2475,6 +2699,171 @@ _EXTENSION_TEST_CONTRACT = {
     1: {"iterations": 270_000, "draws": 7_500, "chunks": 30},
     2: {"iterations": 360_000, "draws": 10_500, "chunks": 42},
 }
+_EXTENSION_TEST_PARAMETER_SCHEMA = [
+    f"fixture_parameter_{index:02d}" for index in range(71)
+]
+_EXTENSION_TEST_COUNTERS = (
+    "transfer",
+    "interval_transfer",
+    "interval_path",
+    "swap_2x2",
+    "cycle_swap",
+    "blocked_refresh",
+    "beta",
+    "state",
+    "year",
+    "log_sigma_state",
+    "log_sigma_year",
+    "log_kappa",
+    "spatial_hyperparameters",
+    "mala",
+)
+
+
+def _extension_test_source_hashes(run_root: Path) -> tuple[str, str]:
+    provenance = run_root / "prepared/provenance"
+    launch = provenance / "launch_envelope.json"
+    final_source = provenance / "final_source_manifest.json"
+    if not launch.exists():
+        _write_json_sidecar(
+            launch,
+            {
+                "schema_id": "sr_v2_robustness_launch_envelope/v1",
+                "status": "reviewed_final",
+                "fixture_scope": "extension-authority-contract",
+            },
+        )
+    if not final_source.exists():
+        _write_json_sidecar(
+            final_source,
+            {
+                "schema_id": "sr_v2_robustness_final_source_manifest/v1",
+                "status": "reviewed_final",
+                "fixture_scope": "extension-authority-contract",
+            },
+        )
+    return (
+        hashlib.sha256(launch.read_bytes()).hexdigest(),
+        hashlib.sha256(final_source.read_bytes()).hexdigest(),
+    )
+
+
+def _extension_test_array_payload(values: np.ndarray, dtype: str) -> dict[str, object]:
+    array = np.ascontiguousarray(values, dtype=np.dtype(dtype))
+    return {
+        "dtype": array.dtype.str,
+        "shape": list(array.shape),
+        "data_base64": base64.b64encode(array.tobytes(order="C")).decode("ascii"),
+    }
+
+
+def _extension_test_checkpoint_payload(
+    *,
+    chain_id: int,
+    epoch: int,
+    attempt: int,
+    target_fingerprint: str,
+    chain_fingerprint: str,
+    seeds: dict[str, int],
+    iteration: int,
+    saved_draws: int,
+    committed_chunks: list[dict[str, object]],
+) -> dict[str, object]:
+    proposed = {name: 0 for name in _EXTENSION_TEST_COUNTERS}
+    proposed["transfer"] = 350 * iteration
+    proposed["blocked_refresh"] = (iteration // 25) * 12
+    for name in (
+        "beta", "state", "year", "log_sigma_state", "log_sigma_year",
+        "log_kappa", "spatial_hyperparameters",
+    ):
+        proposed[name] = iteration
+    proposed["mala"] = iteration // 5
+    accepted = {name: 0 for name in _EXTENSION_TEST_COUNTERS}
+    empty_i8 = _extension_test_array_payload(np.empty(0, dtype="<i8"), "<i8")
+    empty_f8 = _extension_test_array_payload(np.empty(0, dtype="<f8"), "<f8")
+    return {
+        "schema_version": 2,
+        "run_id": "sr-v2-spatial-sensitivity-20260818-v1",
+        "model_id": "sr-v2-primary-nb2-bym2-v1",
+        "target_fingerprint": target_fingerprint,
+        "chain_fingerprint": chain_fingerprint,
+        "extension_epoch": epoch,
+        "job_attempt": attempt,
+        "chain_id": chain_id,
+        "seeds": dict(seeds),
+        "current_state": {
+            "y": _extension_test_array_payload(
+                np.zeros(9_483, dtype="<i8"), "<i8"
+            ),
+            "beta": _extension_test_array_payload(
+                np.zeros(8, dtype="<f8"), "<f8"
+            ),
+            "state_effect": _extension_test_array_payload(
+                np.zeros(51, dtype="<f8"), "<f8"
+            ),
+            "year_effect": _extension_test_array_payload(
+                np.zeros(3, dtype="<f8"), "<f8"
+            ),
+            "log_sigma_state_hex": "0x0.0p+0",
+            "log_sigma_year_hex": "0x0.0p+0",
+            "log_kappa_hex": "0x0.0p+0",
+            "spatial_structured": _extension_test_array_payload(
+                np.zeros(3_142, dtype="<f8"), "<f8"
+            ),
+            "spatial_unstructured": _extension_test_array_payload(
+                np.zeros(3_142, dtype="<f8"), "<f8"
+            ),
+            "log_sigma_county_hex": "0x0.0p+0",
+            "logit_phi_structured_hex": "0x0.0p+0",
+        },
+        "rng_state": {
+            "bit_generator": "PCG64",
+            "state": {"state": chain_id, "inc": 2 * chain_id + 1},
+            "has_uint32": 0,
+            "uinteger": 0,
+        },
+        "current_target": "0x0.0p+0",
+        "iteration": iteration,
+        "saved_draws": saved_draws,
+        "accepted": accepted,
+        "proposed": proposed,
+        "committed_chunks": committed_chunks,
+        "pending_buffers": {
+            "scalar": {
+                "columns": [
+                    "chain_id", "draw_id", "extension_epoch", "parameter", "value"
+                ],
+                "row_count": 0,
+                "chain_id": empty_i8,
+                "draw_id": empty_i8,
+                "extension_epoch": empty_i8,
+                "parameter": [],
+                "value": empty_f8,
+            },
+            "structured": _extension_test_array_payload(
+                np.empty((0, 3_142), dtype="<f8"), "<f8"
+            ),
+            "unstructured": _extension_test_array_payload(
+                np.empty((0, 3_142), dtype="<f8"), "<f8"
+            ),
+        },
+        "adaptation_state": {
+            "multiplier_hex": "0x1.0000000000000p+0",
+            "epsilon_structured_hex": "0x1.0000000000000p-8",
+            "epsilon_unstructured_hex": "0x1.0000000000000p-8",
+            "attempted": iteration // 5,
+            "accepted": 0,
+            "window_attempted": 0,
+            "window_accepted": 0,
+            "windows_completed": (iteration // 5) // 50,
+            "adaptation_frozen": iteration >= 180_000,
+        },
+        "next_draw_id": saved_draws + 1,
+        "output_positions": {
+            "scalar_rows": saved_draws * len(_EXTENSION_TEST_PARAMETER_SCHEMA),
+            "spatial_draws": saved_draws,
+        },
+    }
 
 
 def _extension_test_inventory(
@@ -2505,9 +2894,10 @@ def _publish_extension_test_status(
     attempt: int = 1,
     publish_pointer: bool = True,
 ) -> dict[str, object]:
-    from bayes_constrained.spatial_pipeline import canonical_sha256
+    from bayes_constrained.spatial_pipeline import canonical_json_bytes, canonical_sha256
 
     contract = _EXTENSION_TEST_CONTRACT[epoch]
+    launch_envelope_hash, final_source_hash = _extension_test_source_hashes(run_root)
     chain_root = run_root / f"chains/chain_{chain_id:02d}"
     status_path = (
         chain_root
@@ -2588,7 +2978,7 @@ def _publish_extension_test_status(
                 "graph_contract_sha256": "e" * 64,
                 "county_order_sha256": "f" * 64,
                 "county_count": 3_142,
-                "parameter_schema": ["fixture_parameter"],
+                "parameter_schema": list(_EXTENSION_TEST_PARAMETER_SCHEMA),
             }
         )
     (chunk_root / "spatial_chunk_manifest.json").write_bytes(
@@ -2611,19 +3001,17 @@ def _publish_extension_test_status(
             f"iter_{contract['iterations']:09d}.json"
         )
     )
-    checkpoint_payload = {
-        "schema_version": 2,
-        "run_id": "sr-v2-spatial-sensitivity-20260818-v1",
-        "model_id": "sr-v2-primary-nb2-bym2-v1",
-        "chain_id": chain_id,
-        "extension_epoch": epoch,
-        "job_attempt": attempt,
-        "target_fingerprint": target_fingerprint,
-        "chain_fingerprint": chain_fingerprint,
-        "iteration": contract["iterations"],
-        "saved_draws": contract["draws"],
-        "committed_chunks": committed_chunks,
-    }
+    checkpoint_payload = _extension_test_checkpoint_payload(
+        chain_id=chain_id,
+        epoch=epoch,
+        attempt=attempt,
+        target_fingerprint=target_fingerprint,
+        chain_fingerprint=chain_fingerprint,
+        seeds=seeds,
+        iteration=contract["iterations"],
+        saved_draws=contract["draws"],
+        committed_chunks=committed_chunks,
+    )
     _write_json_sidecar(checkpoint, checkpoint_payload)
     if source_status is None:
         source_checkpoint_path = (
@@ -2632,12 +3020,17 @@ def _publish_extension_test_status(
         )
         _write_json_sidecar(
             source_checkpoint_path,
-            {
-                **checkpoint_payload,
-                "iteration": 0,
-                "saved_draws": 0,
-                "committed_chunks": [],
-            },
+            _extension_test_checkpoint_payload(
+                chain_id=chain_id,
+                epoch=0,
+                attempt=attempt,
+                target_fingerprint=target_fingerprint,
+                chain_fingerprint=chain_fingerprint,
+                seeds=seeds,
+                iteration=0,
+                saved_draws=0,
+                committed_chunks=[],
+            ),
         )
         source_checkpoint_hash = hashlib.sha256(
             source_checkpoint_path.read_bytes()
@@ -2667,15 +3060,17 @@ def _publish_extension_test_status(
         )
         _write_json_sidecar(
             rebound_checkpoint,
-            {
-                **checkpoint_payload,
-                "job_attempt": 1,
-                "iteration": source_contract["iterations"],
-                "saved_draws": source_contract["draws"],
-                "committed_chunks": committed_chunks[
-                    : source_contract["chunks"]
-                ],
-            },
+            _extension_test_checkpoint_payload(
+                chain_id=chain_id,
+                epoch=epoch,
+                attempt=1,
+                target_fingerprint=target_fingerprint,
+                chain_fingerprint=chain_fingerprint,
+                seeds=seeds,
+                iteration=source_contract["iterations"],
+                saved_draws=source_contract["draws"],
+                committed_chunks=committed_chunks[: source_contract["chunks"]],
+            ),
         )
         rebound_path = rebound_checkpoint.relative_to(chain_root).as_posix()
         rebound_hash = hashlib.sha256(rebound_checkpoint.read_bytes()).hexdigest()
@@ -2708,7 +3103,35 @@ def _publish_extension_test_status(
     evidence_root = chain_root / f"evidence/epoch_{epoch}/attempt_{attempt}"
     evidence_root.mkdir(parents=True, exist_ok=True)
     ledger = evidence_root / "retained_assertions.jsonl"
-    ledger.write_bytes(b"{}\n" * retained)
+    latent_hash = hashlib.sha256(
+        np.zeros(9_483, dtype="<i8").tobytes(order="C")
+    ).hexdigest()
+    structured_hash = hashlib.sha256(
+        np.zeros(3_142, dtype="<f8").tobytes(order="C")
+    ).hexdigest()
+    ledger_rows: list[bytes] = []
+    for draw_id in range(start_draws + 1, contract["draws"] + 1):
+        unsigned = {
+            "schema_id": "sr_v2_spatial_retained_assertion/v1",
+            "chain_id": chain_id,
+            "draw_id": draw_id,
+            "cumulative_iteration": 45_000 + 30 * draw_id,
+            "extension_epoch": epoch,
+            "chunk_id": (draw_id - 1) // 250 + 1,
+            "capture_order": "after_latent_target_base6_hyper_and_scheduled_mala",
+            "count_constraints_asserted": True,
+            "spatial_constraints_asserted": True,
+            "latent_y_sha256": latent_hash,
+            "structured_effect_sha256": structured_hash,
+        }
+        record = {
+            **unsigned,
+            "assertion_sha256": hashlib.sha256(
+                canonical_json_bytes(unsigned)
+            ).hexdigest(),
+        }
+        ledger_rows.append(canonical_json_bytes(record) + b"\n")
+    ledger.write_bytes(b"".join(ledger_rows))
     ledger_hash = hashlib.sha256(ledger.read_bytes()).hexdigest()
     evidence = {
         "schema_id": "sr_v2_spatial_attempt_evidence/v1",
@@ -2747,8 +3170,8 @@ def _publish_extension_test_status(
         "run_id": "sr-v2-spatial-sensitivity-20260818-v1",
         "model_id": "sr-v2-primary-nb2-bym2-v1",
         "preparation_identity": "b" * 64,
-        "launch_envelope_sha256": "c" * 64,
-        "final_source_manifest_sha256": "d" * 64,
+        "launch_envelope_sha256": launch_envelope_hash,
+        "final_source_manifest_sha256": final_source_hash,
         "chain_id": chain_id,
         "array_index": chain_id,
         "extension_epoch": epoch,
@@ -2791,9 +3214,222 @@ def _publish_extension_test_status(
 
 
 def _publish_extension_test_authorization(run_root: Path, *, to_epoch: int) -> None:
-    from bayes_constrained.spatial_pipeline import canonical_sha256
+    from bayes_constrained.spatial_pipeline import (
+        COMPARISON_ROWS,
+        EPOCH_CONTRACT,
+        PROTECTED_TREES,
+        canonical_sha256,
+    )
 
     prior_epoch = to_epoch - 1
+    contract = EPOCH_CONTRACT[prior_epoch]
+    launch_envelope_hash, final_source_hash = _extension_test_source_hashes(run_root)
+    prepared_root = run_root / "prepared"
+    for protected_root in PROTECTED_TREES:
+        (run_root / protected_root).mkdir(parents=True, exist_ok=True)
+    protected_authority = (
+        run_root
+        / PROTECTED_TREES[0]
+        / "fixture-extension-authority.bin"
+    )
+    protected_authority.write_bytes(b"reviewed extension authority fixture\n")
+    protected_authority_relative = protected_authority.relative_to(run_root).as_posix()
+    protected_authority_hash = hashlib.sha256(
+        protected_authority.read_bytes()
+    ).hexdigest()
+    source_authorities = {
+        protected_authority_relative: protected_authority_hash,
+    }
+    graph_contract_path = prepared_root / "graph/graph_contract.json"
+    graph_contract = {
+        "schema_id": "sr_v2_spatial_graph_contract/v1",
+        "run_id": "sr-v2-spatial-sensitivity-20260818-v1",
+        "nodes": 3_142,
+        "undirected_edges": 0,
+        "components": 18,
+        "nonisolated_nodes": 3_124,
+        "county_order_sha256": "f" * 64,
+        "edge_list_sha256": "0" * 64,
+        "component_scales": [],
+        "graph_contract_sha256": "e" * 64,
+    }
+    _write_json_sidecar(graph_contract_path, graph_contract)
+    graph_artifacts = {
+        "graph/graph_contract.json": hashlib.sha256(
+            graph_contract_path.read_bytes()
+        ).hexdigest(),
+        "graph/graph_contract.json.sha256": hashlib.sha256(
+            graph_contract_path.with_name(
+                graph_contract_path.name + ".sha256"
+            ).read_bytes()
+        ).hexdigest(),
+    }
+    model_frame_path = prepared_root / "inputs/model_frame.parquet"
+    model_frame_path.parent.mkdir(parents=True, exist_ok=True)
+    model_frame_path.write_bytes(b"PAR1 bounded production-shape fixture PAR1")
+    model_frame_hash = hashlib.sha256(model_frame_path.read_bytes()).hexdigest()
+    input_manifest_path = prepared_root / "input_manifest.json"
+    input_manifest = {
+        "schema_id": "sr_v2_spatial_input_manifest/v1",
+        "run_id": "sr-v2-spatial-sensitivity-20260818-v1",
+        "operational_config_sha256": "1" * 64,
+        "source_authorities": source_authorities,
+        "launch_envelope_sha256": launch_envelope_hash,
+        "final_source_manifest_sha256": final_source_hash,
+        "launch_commit": "2" * 40,
+        "bundle_sha256": "3" * 64,
+        "joint_regression_evidence_sha256": "4" * 64,
+        "source_model_frame_sha256": "5" * 64,
+        "prepared_model_frame_sha256": model_frame_hash,
+        "model_frame_semantic_sha256": "7" * 64,
+        "graph_contract_sha256": "e" * 64,
+        "graph_artifact_sha256": graph_artifacts,
+    }
+    _write_json_sidecar(input_manifest_path, input_manifest)
+    input_manifest_hash = hashlib.sha256(input_manifest_path.read_bytes()).hexdigest()
+    protected_path = prepared_root / "provenance/protected_tree_manifest.json"
+    protected_manifest = {
+        "schema_id": "sr_v2_spatial_protected_tree_manifest/v1",
+        "roots": list(PROTECTED_TREES),
+        "files": {protected_authority_relative: protected_authority_hash},
+    }
+    _write_json_sidecar(protected_path, protected_manifest)
+    protected_hash = hashlib.sha256(protected_path.read_bytes()).hexdigest()
+    prepared_chain_mapping: list[dict[str, object]] = []
+    for chain_id in range(1, 5):
+        status = json.loads(
+            (
+                run_root
+                / f"chains/chain_{chain_id:02d}/"
+                f"attempts/epoch_{prior_epoch}/attempt_1/status.json"
+            ).read_text(encoding="utf-8")
+        )
+        allocation_relative = (
+            f"initializations/initial_allocation_chain_{chain_id:02d}.parquet"
+        )
+        allocation_path = prepared_root / allocation_relative
+        allocation_path.parent.mkdir(parents=True, exist_ok=True)
+        allocation_path.write_bytes(
+            b"PAR1 bounded allocation fixture " + str(chain_id).encode("ascii") + b" PAR1"
+        )
+        checkpoint_relative = (
+            f"initial_checkpoints/chain_{chain_id:02d}/"
+            "checkpoint_epoch_0_attempt_1_iter_000000000.json"
+        )
+        checkpoint_path = prepared_root / checkpoint_relative
+        source_checkpoint = run_root / f"chains/chain_{chain_id:02d}/" / (
+            "checkpoints/checkpoint_epoch_0_attempt_1_iter_000000000.json"
+        )
+        _write_json_sidecar(
+            checkpoint_path,
+            json.loads(source_checkpoint.read_text(encoding="utf-8")),
+        )
+        prepared_chain_mapping.append(
+            {
+                "array_index": chain_id,
+                "chain_id": chain_id,
+                **status["seeds"],
+                "target_identity": status["identity"]["target"],
+                "target_fingerprint": status["target_fingerprint"],
+                "chain_fingerprint": status["chain_fingerprint"],
+                "initial_allocation": allocation_relative,
+                "initial_allocation_sha256": hashlib.sha256(
+                    allocation_path.read_bytes()
+                ).hexdigest(),
+                "initial_checkpoint": checkpoint_relative,
+                "initial_checkpoint_sha256": hashlib.sha256(
+                    checkpoint_path.read_bytes()
+                ).hexdigest(),
+            }
+        )
+    prepared_inventory = {
+        path.relative_to(prepared_root).as_posix(): hashlib.sha256(
+            path.read_bytes()
+        ).hexdigest()
+        for path in sorted(prepared_root.rglob("*"))
+        if path.is_file()
+    }
+    prepared_manifest_path = prepared_root / "prepared_run_manifest.json"
+    prepared_manifest = {
+        "schema_id": "sr_v2_spatial_prepared_run/v1",
+        "run_id": "sr-v2-spatial-sensitivity-20260818-v1",
+        "model_id": "sr-v2-primary-nb2-bym2-v1",
+        "operational_config_sha256": "1" * 64,
+        "launch_envelope_sha256": launch_envelope_hash,
+        "final_source_manifest_sha256": final_source_hash,
+        "launch_commit": "2" * 40,
+        "bundle_sha256": "3" * 64,
+        "joint_regression_evidence_sha256": "4" * 64,
+        "preparation_identity": "b" * 64,
+        "generated_utc": "2026-08-19T00:00:00+00:00",
+        "status": "prepared_not_run",
+        "production_eligible": True,
+        "builder_provenance": {
+            "frame_loader": "default_load_model_frame",
+            "allocation_solver": "default_solve_feasible_allocation",
+            "graph_preparer": "default_graph_artifacts",
+            "envelope_loader": "default_reviewed_launch_envelope",
+        },
+        "input_manifest": "input_manifest.json",
+        "input_manifest_sha256": input_manifest_hash,
+        "source_authorities": source_authorities,
+        "graph_contract": graph_contract,
+        "graph_contract_sha256": "e" * 64,
+        "model_frame": "inputs/model_frame.parquet",
+        "model_frame_sha256": model_frame_hash,
+        "model_frame_semantic_sha256": "7" * 64,
+        "parameter_schema": list(_EXTENSION_TEST_PARAMETER_SCHEMA),
+        "protected_tree_manifest": "provenance/protected_tree_manifest.json",
+        "protected_tree_manifest_sha256": protected_hash,
+        "chain_mapping": prepared_chain_mapping,
+        "prepared_artifact_sha256": prepared_inventory,
+        "interpretation_boundary": "contract-complete extension authority fixture",
+        "submission_authorized": False,
+    }
+    _write_json_sidecar(prepared_manifest_path, prepared_manifest)
+    prepared_manifest_hash = hashlib.sha256(
+        prepared_manifest_path.read_bytes()
+    ).hexdigest()
+    benchmark_path = run_root / "benchmark/benchmark_report.json"
+    benchmark_target = json.loads(
+        (
+            run_root
+            / f"chains/chain_01/attempts/epoch_{prior_epoch}/attempt_1/status.json"
+        ).read_text(encoding="utf-8")
+    )["target_fingerprint"]
+    _write_json_sidecar(
+        benchmark_path,
+        {
+            "schema_id": "sr_v2_spatial_benchmark/v1",
+            "run_id": "sr-v2-spatial-sensitivity-20260818-v1",
+            "preparation_identity": "b" * 64,
+            "target_fingerprint": benchmark_target,
+            "launch_envelope_sha256": launch_envelope_hash,
+            "final_source_manifest_sha256": final_source_hash,
+            "builder": "exact_prepared_public_chain",
+            "array_index": 1,
+            "iterations": 2_000,
+            "elapsed_seconds": 100.0,
+            "iterations_per_second": 20.0,
+            "projection_overhead_factor": 1.2,
+            "projected_hours": 3.0,
+            "projected_hours_limit_inclusive": 65.0,
+            "peak_rss_gib": 1.0,
+            "peak_rss_gib_limit_inclusive": 56.0,
+            "paired_chunk_draws": 250,
+            "paired_chunk_scalar_rows": 17_750,
+            "paired_chunk_bytes": 1_048_576,
+            "paired_chunk_elapsed_seconds": 1.0,
+            "paired_chunk_mib_per_second": 1.0,
+            "paired_chunk_record_sha256": "a" * 64,
+            "paired_chunk_builder": "actual_commit_spatial_draw_chunk",
+            "paired_chunk_scientific_data": False,
+            "passed": True,
+            "scientific_draws_published": False,
+            "submission_authorized": False,
+        },
+    )
+    benchmark_hash = hashlib.sha256(benchmark_path.read_bytes()).hexdigest()
     pre_gate = (
         run_root / f"epochs/epoch_{prior_epoch}/merge/pre_gate_manifest.json"
     )
@@ -2806,7 +3442,61 @@ def _publish_extension_test_authorization(run_root: Path, *, to_epoch: int) -> N
         "spatial_sensitivity_release_manifest.json"
     )
     gate = run_root / f"epochs/epoch_{prior_epoch}/gate/gate_decision.json"
-    _write_json_sidecar(pre_gate, {"fixture": pre_gate.name})
+    candidate = pre_gate.parent / "primary_vs_spatial.candidate.csv"
+    candidate.parent.mkdir(parents=True, exist_ok=True)
+    candidate.write_bytes(b"parameter,fixture\ncontract-complete,1\n")
+    candidate_hash = hashlib.sha256(candidate.read_bytes()).hexdigest()
+    chain_statuses = [
+        json.loads(
+            (
+                run_root
+                / f"chains/chain_{chain_id:02d}/attempts/epoch_{prior_epoch}/"
+                "attempt_1/status.json"
+            ).read_text(encoding="utf-8")
+        )
+        for chain_id in range(1, 5)
+    ]
+    ledger_hashes = {
+        str(status["chain_id"]): status["retained_assertion_evidence"][
+            "ledger_sha256"
+        ]
+        for status in chain_statuses
+    }
+    pre_gate_payload = {
+        "schema_id": "sr_v2_spatial_pre_gate_manifest/v1",
+        "run_id": "sr-v2-spatial-sensitivity-20260818-v1",
+        "model_id": "sr-v2-primary-nb2-bym2-v1",
+        "extension_epoch": prior_epoch,
+        "iterations_per_chain": contract["iterations"],
+        "draws_per_chain": contract["draws"],
+        "chunks_per_chain": contract["chunks"],
+        "chains": 4,
+        "preparation_identity": "b" * 64,
+        "launch_envelope_sha256": launch_envelope_hash,
+        "final_source_manifest_sha256": final_source_hash,
+        "benchmark_report_sha256": benchmark_hash,
+        "chain_fingerprints": sorted(
+            str(status["chain_fingerprint"]) for status in chain_statuses
+        ),
+        "parameter_schema_rows": 71,
+        "county_rows": 3_142,
+        "diagnostic_rows": 9_483,
+        "arviz_version": "1.2.0",
+        "threshold_summary": {"passed": False},
+        "count_constraint_failures": 0,
+        "spatial_constraint_failures": 0,
+        "retained_assertion_ledger_sha256": ledger_hashes,
+        "comparison_rows": list(COMPARISON_ROWS),
+        "candidate_sha256": candidate_hash,
+        "artifact_sha256": {
+            "primary_vs_spatial.candidate.csv": candidate_hash,
+        },
+        "builder": "verified_raw_chunk_merge",
+        "bounded_test_mode": False,
+        "production_shape": True,
+        "submission_authorized": False,
+    }
+    _write_json_sidecar(pre_gate, pre_gate_payload)
     pre_gate_hash = hashlib.sha256(pre_gate.read_bytes()).hexdigest()
 
     def inventory(*, excluded: set[str]) -> dict[str, str]:
@@ -2844,18 +3534,67 @@ def _publish_extension_test_authorization(run_root: Path, *, to_epoch: int) -> N
         "model_id": "sr-v2-primary-nb2-bym2-v1",
         "extension_epoch": prior_epoch,
         "preparation_identity": "b" * 64,
-        "launch_envelope_sha256": "c" * 64,
-        "final_source_manifest_sha256": "d" * 64,
-        "benchmark_report_sha256": "a" * 64,
+        "launch_envelope_sha256": launch_envelope_hash,
+        "final_source_manifest_sha256": final_source_hash,
+        "benchmark_report_sha256": benchmark_hash,
         "pre_gate_manifest_sha256": pre_gate_hash,
         "passed": True,
-        "source_checks": {"passed": True},
-        "graph_checks": {"passed": True},
-        "chain_checks": {"passed": True},
-        "diagnostic_checks": {"passed": True, "convergence_passed": False},
-        "comparison_checks": {"passed": True},
-        "benchmark_checks": {"passed": True},
-        "protected_tree_checks": {"passed": True},
+        "source_checks": {
+            "passed": True,
+            "prepared_manifest_sha256": prepared_manifest_hash,
+            "input_manifest_sha256": input_manifest_hash,
+            "launch_envelope_sha256": launch_envelope_hash,
+            "final_source_manifest_sha256": final_source_hash,
+        },
+        "graph_checks": {
+            "passed": True,
+            "nodes": 3_142,
+            "components": 18,
+            "all_component_scales_recomputed": 18,
+            "largest_component_recomputed": 3_099,
+        },
+        "chain_checks": {
+            "passed": True,
+            "chains": 4,
+            "iterations_per_chain": contract["iterations"],
+            "draws_per_chain": contract["draws"],
+            "chunks_per_chain": contract["chunks"],
+            "historical_latent_y_stored": False,
+            "independent_historical_y_reconstruction_possible": False,
+            "claim_boundary": (
+                "The exact schedule and in-loop constraint assertions are verified; "
+                "historical latent y cannot be independently reconstructed."
+            ),
+            "retained_assertion_ledger_sha256": ledger_hashes,
+            "prepared_checkpoint_targets_recomputed": 4,
+            "terminal_checkpoint_targets_recomputed": 4,
+            "custody_checkpoint_targets_recomputed": 8,
+        },
+        "diagnostic_checks": {
+            "passed": True,
+            "rows": 9_483,
+            "arviz_version": "1.2.0",
+            "thresholds_inclusive": True,
+            "convergence_passed": False,
+        },
+        "comparison_checks": {
+            "passed": True,
+            "rows": list(COMPARISON_ROWS),
+            "candidate_sha256": candidate_hash,
+            "byte_identical": True,
+        },
+        "benchmark_checks": {
+            "passed": True,
+            "report_sha256": benchmark_hash,
+            "iterations": 2_000,
+            "paired_chunk_draws": 250,
+        },
+        "protected_tree_checks": {
+            "passed": True,
+            "raw_source_hashes_reverified": True,
+            "manifest_sha256": protected_hash,
+            "files": len(protected_manifest["files"]),
+        },
         "artifact_snapshot": snapshot,
         "artifact_snapshot_sha256": snapshot_hash,
         "submission_authorized": False,
@@ -2880,9 +3619,9 @@ def _publish_extension_test_authorization(run_root: Path, *, to_epoch: int) -> N
         "model_id": "sr-v2-primary-nb2-bym2-v1",
         "extension_epoch": prior_epoch,
         "preparation_identity": "b" * 64,
-        "launch_envelope_sha256": "c" * 64,
-        "final_source_manifest_sha256": "d" * 64,
-        "benchmark_report_sha256": "a" * 64,
+        "launch_envelope_sha256": launch_envelope_hash,
+        "final_source_manifest_sha256": final_source_hash,
+        "benchmark_report_sha256": benchmark_hash,
         "pre_gate_manifest_sha256": pre_gate_hash,
         "independent_verification_sha256": verification_hash,
         "verification_convergence_passed": False,
@@ -2896,13 +3635,47 @@ def _publish_extension_test_authorization(run_root: Path, *, to_epoch: int) -> N
                     f"epochs/epoch_{prior_epoch}/merge/"
                     "primary_vs_spatial.candidate.csv"
                 ),
-                "sha256": "9" * 64,
+                "sha256": candidate_hash,
             }
         },
         "excludes": ["primary_vs_spatial.csv", "spatial_sensitivity_gate.json"],
         "submission_authorized": False,
     }
     _write_json_sidecar(release, release_payload)
+    isolated = _load_script(
+        "109_gate_sr_v2_spatial_sensitivity.py",
+        "round4_prior_contract_"
+        + hashlib.sha256(str(run_root).encode("utf-8")).hexdigest()[:12],
+    )
+    certified_benchmark = isolated._verify_benchmark(run_root, prepared_manifest)
+    assert certified_benchmark["sha256"] == benchmark_hash
+    certified_pre_gate, _certified_merge_root = isolated._load_pre_gate(
+        run_root, prior_epoch
+    )
+    assert certified_pre_gate == pre_gate_payload
+    certified_verification = isolated._validate_passed_verification(
+        verification_payload,
+        extension_epoch=prior_epoch,
+        prepared=prepared_manifest,
+        benchmark_hash=benchmark_hash,
+        pre_gate_hash=pre_gate_hash,
+    )
+    certified_snapshot = isolated._validate_verification_snapshot(
+        run_root, prior_epoch, certified_verification
+    )
+    isolated._validate_release(
+        release_payload,
+        run_root=run_root,
+        extension_epoch=prior_epoch,
+        prepared=prepared_manifest,
+        benchmark_hash=benchmark_hash,
+        pre_gate_hash=pre_gate_hash,
+        verification_hash=verification_hash,
+        verification_snapshot=certified_snapshot,
+        verification_snapshot_hash=snapshot_hash,
+        candidate_relative=candidate.relative_to(run_root).as_posix(),
+        candidate_hash=candidate_hash,
+    )
     release_hash = hashlib.sha256(release.read_bytes()).hexdigest()
     _write_json_sidecar(
         gate,
