@@ -1,0 +1,186 @@
+{
+ "divergence_threshold_irr": 1000.0,
+ "interpretation_boundary": "The 20-replicate program authorizes descriptive reporting of bias, RMSE, interval coverage, convergence, and exact binomial Monte Carlo intervals. It does not authorize a claim that coverage has been estimated precisely or proven equal to the nominal 95% level.",
+ "precise_nominal_coverage_claim_authorized": false,
+ "replicates": 20,
+ "rows": [
+  {
+   "contrast": "primary_rurality_metro_other",
+   "coverage_exact_95_lower": 0.7512672372279722,
+   "coverage_exact_95_upper": 0.9987349105020502,
+   "coverage_fraction": 0.95,
+   "coverage_successes": 19,
+   "label": "Metropolitan, other",
+   "panel": "a",
+   "replicates": 20
+  },
+  {
+   "contrast": "primary_rurality_nonmetro_adjacent",
+   "coverage_exact_95_lower": 0.6830172859809177,
+   "coverage_exact_95_upper": 0.9876514728297052,
+   "coverage_fraction": 0.9,
+   "coverage_successes": 18,
+   "label": "Nonmetro, adjacent",
+   "panel": "a",
+   "replicates": 20
+  },
+  {
+   "contrast": "primary_rurality_nonmetro_nonadjacent",
+   "coverage_exact_95_lower": 0.8315665290169146,
+   "coverage_exact_95_upper": 1.0,
+   "coverage_fraction": 1.0,
+   "coverage_successes": 20,
+   "label": "Nonmetro, nonadjacent",
+   "panel": "a",
+   "replicates": 20
+  },
+  {
+   "contrast": "svi_quartile_Q2",
+   "coverage_exact_95_lower": 0.6830172859809177,
+   "coverage_exact_95_upper": 0.9876514728297052,
+   "coverage_fraction": 0.9,
+   "coverage_successes": 18,
+   "label": "SVI quartile 2",
+   "panel": "a",
+   "replicates": 20
+  },
+  {
+   "contrast": "svi_quartile_Q3",
+   "coverage_exact_95_lower": 0.8315665290169146,
+   "coverage_exact_95_upper": 1.0,
+   "coverage_fraction": 1.0,
+   "coverage_successes": 20,
+   "label": "SVI quartile 3",
+   "panel": "a",
+   "replicates": 20
+  },
+  {
+   "contrast": "svi_quartile_Q4_highest",
+   "coverage_exact_95_lower": 0.7512672372279722,
+   "coverage_exact_95_upper": 0.9987349105020502,
+   "coverage_fraction": 0.95,
+   "coverage_successes": 19,
+   "label": "SVI quartile 4, highest",
+   "panel": "a",
+   "replicates": 20
+  },
+  {
+   "contrast": "pooled",
+   "coverage_exact_95_lower": 0.8943461454812877,
+   "coverage_exact_95_upper": 0.9814324132173309,
+   "coverage_fraction": 0.95,
+   "coverage_successes": 114,
+   "label": "All contrasts pooled",
+   "panel": "a",
+   "replicates": 120
+  },
+  {
+   "coverage_exact_95_lower": 0.8943461454812877,
+   "coverage_exact_95_upper": 0.9814324132173309,
+   "coverage_fraction": 0.95,
+   "coverage_successes": 114,
+   "estimates_exceeding_1000": 0,
+   "group": "This study",
+   "label": "Constrained Bayesian",
+   "median_relative_bias_percent": -1.5343629328019082,
+   "method": "constrained_bayesian",
+   "panel": "b",
+   "replicates": 120
+  },
+  {
+   "coverage_exact_95_lower": 0.872863251760787,
+   "coverage_exact_95_upper": 0.9707808156862036,
+   "coverage_fraction": 0.9333333333333333,
+   "coverage_successes": 112,
+   "estimates_exceeding_1000": 0,
+   "group": "Benchmark",
+   "label": "Oracle, true counts",
+   "median_relative_bias_percent": -2.9222867137972672,
+   "method": "oracle_complete_counts",
+   "panel": "b",
+   "replicates": 120
+  },
+  {
+   "coverage_exact_95_lower": 0.9168512785714898,
+   "coverage_exact_95_upper": 0.9908444944431632,
+   "coverage_fraction": 0.9666666666666667,
+   "coverage_successes": 116,
+   "estimates_exceeding_1000": 0,
+   "group": "Benchmark",
+   "label": "Population-favoring",
+   "median_relative_bias_percent": -0.8343313919943431,
+   "method": "population_favoring_feasible_allocation",
+   "panel": "b",
+   "replicates": 120
+  },
+  {
+   "coverage_exact_95_lower": 0.40736926744019714,
+   "coverage_exact_95_upper": 0.5926307325598028,
+   "coverage_fraction": 0.5,
+   "coverage_successes": 60,
+   "estimates_exceeding_1000": 7,
+   "group": "Naive handling",
+   "label": "Visible cells only",
+   "median_relative_bias_percent": -80.8962223767004,
+   "method": "visible_exact_and_zero_only",
+   "panel": "b",
+   "replicates": 120
+  },
+  {
+   "coverage_exact_95_lower": 0.39925858253840957,
+   "coverage_exact_95_upper": 0.5844957086346798,
+   "coverage_fraction": 0.49166666666666664,
+   "coverage_successes": 59,
+   "estimates_exceeding_1000": 0,
+   "group": "Naive handling",
+   "label": "Suppressed = 1",
+   "median_relative_bias_percent": -7.048292910011739,
+   "method": "suppressed_equals_1",
+   "panel": "b",
+   "replicates": 120
+  },
+  {
+   "coverage_exact_95_lower": 0.19008907278209275,
+   "coverage_exact_95_upper": 0.3551140125070188,
+   "coverage_fraction": 0.26666666666666666,
+   "coverage_successes": 32,
+   "estimates_exceeding_1000": 0,
+   "group": "Naive handling",
+   "label": "Suppressed = 5",
+   "median_relative_bias_percent": 30.253202231662527,
+   "method": "suppressed_equals_5",
+   "panel": "b",
+   "replicates": 120
+  },
+  {
+   "coverage_exact_95_lower": 0.13959154480841612,
+   "coverage_exact_95_upper": 0.29199127812056624,
+   "coverage_fraction": 0.20833333333333334,
+   "coverage_successes": 25,
+   "estimates_exceeding_1000": 0,
+   "group": "Naive handling",
+   "label": "Suppressed = 9",
+   "median_relative_bias_percent": 45.41491141000783,
+   "method": "suppressed_equals_9",
+   "panel": "b",
+   "replicates": 120
+  }
+ ],
+ "schema_id": "sr_v2_figure_calibration_performance/v1",
+ "sources": {
+  "calibration_program_summary": "calibration_program/calibration_program_summary.json",
+  "coefficient_calibration_summary": "calibration_program/coefficient_calibration_summary.csv",
+  "comparator_calibration_summary": "calibration_program/comparator_calibration_summary.csv",
+  "comparator_results": "calibration_program/comparator_results.csv",
+  "primary_recovery": "calibration_program/primary_recovery.csv"
+ },
+ "suppressed_cell_pooled_rmse": 1.0058468326437904,
+ "suppressed_cell_weighted_coverage_95": 0.9937744985012682,
+ "suppressed_cells_total": 4337,
+ "truth_scenarios": [
+  "baseline_rate_3_4_kappa_10",
+  "baseline_rate_3_4_kappa_4",
+  "higher_rate_5_0_kappa_10",
+  "lower_rate_2_4_kappa_10"
+ ]
+}

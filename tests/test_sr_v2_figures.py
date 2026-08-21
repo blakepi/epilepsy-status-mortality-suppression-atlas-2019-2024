@@ -1,8 +1,9 @@
-"""Contract tests for the corrected primary-association figure.
+"""Contract tests for the Scientific Reports v2 main figures.
 
 A figure is a claim about the data, so the same rule applies to it as to the
 manuscript text: every plotted number must come from a frozen artifact, and
-nothing may be drawn before the production gate has passed.
+nothing may be drawn before the relevant gate has passed.  Each test recomputes
+the plotted values from the source files rather than trusting the sidecar.
 """
 
 from __future__ import annotations
@@ -107,3 +108,120 @@ def test_sidecar_names_its_sources_and_keeps_the_interpretation_boundary(built) 
     boundary = sidecar["interpretation_boundary"].lower()
     assert "not observed or recovered" in boundary
     assert sidecar["counties"] == 3142
+
+
+# --------------------------------------------------------------------------
+# Calibration and method-performance figure
+# --------------------------------------------------------------------------
+
+CALIBRATION = ROOT / "scripts" / "113_figure_sr_v2_calibration.py"
+PROGRAM = ROOT / "outputs/scientific_reports_v2/calibration_program"
+
+
+def load_calibration():
+    spec = importlib.util.spec_from_file_location("sr_v2_calibration_figure", CALIBRATION)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+@pytest.fixture(scope="module")
+def calibration_built(tmp_path_factory: pytest.TempPathFactory):
+    module = load_calibration()
+    module.DESTINATION = tmp_path_factory.mktemp("calibration")
+    assert module.main([]) == 0
+    stem = "figure_calibration_performance"
+    sidecar = json.loads((module.DESTINATION / f"{stem}.json").read_text(encoding="utf-8"))
+    return module, sidecar, stem
+
+
+def test_calibration_figure_refuses_before_the_program_gate_passes(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    module = load_calibration()
+    (tmp_path / "calibration_program_summary.json").write_text(
+        json.dumps({"computational_gate_pass": False}), encoding="utf-8"
+    )
+    monkeypatch.setattr(module, "PROGRAM", tmp_path)
+    with pytest.raises(SystemExit):
+        module.require_passed_program()
+
+
+def test_calibration_figure_writes_vector_and_raster(calibration_built) -> None:
+    module, _sidecar, stem = calibration_built
+    for suffix in (".pdf", ".png"):
+        path = module.DESTINATION / f"{stem}{suffix}"
+        assert path.is_file() and path.stat().st_size > 0, path
+
+
+def test_every_method_coverage_recomputes_from_the_frozen_program(calibration_built) -> None:
+    """Each pooled coverage must be the sum of its per-parameter successes."""
+
+    _module, sidecar, _stem = calibration_built
+    comparators = pd.read_csv(PROGRAM / "comparator_calibration_summary.csv")
+    program = json.loads(
+        (PROGRAM / "calibration_program_summary.json").read_text(encoding="utf-8")
+    )
+    panel = {row["method"]: row for row in sidecar["rows"] if row["panel"] == "b"}
+    assert len(panel) == 7
+
+    primary = panel.pop("constrained_bayesian")
+    assert primary["coverage_successes"] == program["coefficient_interval_coverage_successes"]
+    assert primary["replicates"] == program["coefficient_interval_coverage_trials"]
+
+    for method, row in panel.items():
+        block = comparators.loc[comparators["handling_scenario"] == method]
+        assert not block.empty, method
+        assert row["coverage_successes"] == int(block["coverage_successes"].sum())
+        assert row["replicates"] == int(block["replicates"].sum())
+        assert row["coverage_fraction"] == pytest.approx(
+            row["coverage_successes"] / row["replicates"]
+        )
+
+
+def test_bias_column_is_a_median_so_divergent_fits_cannot_dominate(calibration_built) -> None:
+    """One comparator's mean bias is ~1e118; the plotted summary must be robust."""
+
+    _module, sidecar, _stem = calibration_built
+    results = pd.read_csv(PROGRAM / "comparator_results.csv")
+    visible = [row for row in sidecar["rows"]
+               if row.get("method") == "visible_exact_and_zero_only"][0]
+    raw = results.loc[results["scenario"] == "visible_exact_and_zero_only"]
+    expected = ((raw["irr"] - raw["truth_irr"]) / raw["truth_irr"] * 100.0).median()
+    assert visible["median_relative_bias_percent"] == pytest.approx(float(expected))
+    assert abs(visible["median_relative_bias_percent"]) < 500
+    assert visible["estimates_exceeding_1000"] == int((raw["irr"] > 1000).sum()) == 7
+
+
+def test_only_the_divergent_comparator_is_flagged(calibration_built) -> None:
+    _module, sidecar, _stem = calibration_built
+    flagged = {row["method"] for row in sidecar["rows"]
+               if row["panel"] == "b" and row["estimates_exceeding_1000"]}
+    assert flagged == {"visible_exact_and_zero_only"}
+
+
+def test_panel_a_contrast_coverage_matches_the_frozen_summary(calibration_built) -> None:
+    _module, sidecar, _stem = calibration_built
+    frozen = pd.read_csv(PROGRAM / "coefficient_calibration_summary.csv").set_index("parameter")
+    panel = [row for row in sidecar["rows"] if row["panel"] == "a"]
+    assert len(panel) == 7
+    for row in panel:
+        if row["contrast"] == "pooled":
+            continue
+        record = frozen.loc[row["contrast"]]
+        assert row["coverage_successes"] == int(record["coverage_successes"])
+        assert row["coverage_fraction"] == pytest.approx(float(record["coverage_fraction"]))
+        assert row["coverage_exact_95_lower"] == pytest.approx(
+            float(record["coverage_exact_95_lower"])
+        )
+
+
+def test_calibration_sidecar_carries_the_no_precise_claim_boundary(calibration_built) -> None:
+    """The registry forbids claiming coverage equals nominal; the figure records that."""
+
+    _module, sidecar, _stem = calibration_built
+    assert sidecar["precise_nominal_coverage_claim_authorized"] is False
+    assert "does not authorize" in sidecar["interpretation_boundary"]
+    assert sidecar["replicates"] == 20
+    assert sidecar["suppressed_cells_total"] == 4337
