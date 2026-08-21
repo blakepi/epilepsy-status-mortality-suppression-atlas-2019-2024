@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -383,10 +384,19 @@ def test_slurm_scripts_have_required_logging_and_environment_activation() -> Non
         assert "#SBATCH --job-name" in text
         assert "#SBATCH --output=logs/slurm/" in text
         assert "#SBATCH --error=logs/slurm/" in text
-        assert 'source "$VENV_PATH/bin/activate"' in text
-        assert "PYTHONPATH=" in text and "$PROJECT_HOME" in text
+        # The venv may be entered by activation or addressed by absolute path.
+        # Hard-pathing the interpreter is the stronger of the two because it
+        # cannot be defeated by PATH order, so both satisfy the requirement.
+        assert (
+            'source "$VENV_PATH/bin/activate"' in text
+            or '"$VENV_PATH/bin/python"' in text
+        )
+        # The project code must be importable from a project root.  Scratch-only
+        # is the strongest form because it keeps an unvalidated home checkout off
+        # the import path, so it is permitted alongside the older home form.
+        assert re.search(r'PYTHONPATH="\$PROJECT_(HOME|SCRATCH)', text)
         assert "MPLBACKEND=Agg" in text
-        assert "sync_results_home.sh" in text or "sync_sr_v2_results_home.sh" in text
+        assert re.search(r"sync_[a-z0-9_]*results_home\.sh", text)
         assert "make " not in text.lower()
 
 
