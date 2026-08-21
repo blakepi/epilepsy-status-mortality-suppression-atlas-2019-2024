@@ -1,16 +1,33 @@
 from __future__ import annotations
 
+import atexit
+import builtins
+from contextlib import contextmanager
 import csv
+import ctypes
 import ast
 import base64
 import importlib.util
 import io
 import json
-from pathlib import Path
+import math
+import mmap
+import os
+from pathlib import Path, PurePosixPath
+import re
+import shlex
+import shutil
+import signal
+import socket
+import stat
+import subprocess
 import sys
 import hashlib
+import textwrap
+import tempfile
+import time
 from types import SimpleNamespace
-from typing import Callable
+from typing import Callable, Iterator, Mapping
 
 import numpy as np
 import pandas as pd
@@ -5395,3 +5412,1758 @@ def test_isolated_schedule_rejects_rehashed_bool_aliases_in_all_nested_integers(
         )
     )
     assert gate["status"] == "HOLD" and gate["passed"] is False
+
+
+def _preopened_validator_fixture(tmp_path: Path) -> SimpleNamespace:
+    """Build one small but contract-complete public-validator authority tree."""
+
+    from bayes_constrained.spatial_bym2 import spatial_model_frame_sha256
+    from bayes_constrained.spatial_pipeline import (
+        EXPECTED_SOURCE_AUTHORITIES,
+        MODEL_ID,
+        OUTPUT_ROOT,
+        PROTECTED_TREES,
+        RUN_ID,
+        SPATIAL_FINAL_SOURCE_FILES,
+        canonical_sha256,
+    )
+
+    def canonical_fixture_relative(
+        value: object, *, label: str, component: bool = False
+    ) -> PurePosixPath:
+        assert isinstance(value, str) and value
+        assert "\\" not in value and not any(
+            ord(character) < 32 or ord(character) == 127 for character in value
+        ), f"unsafe {label}"
+        candidate = PurePosixPath(value)
+        assert not candidate.is_absolute() and candidate.as_posix() == value
+        assert all(part not in ("", ".", "..") for part in candidate.parts)
+        if component:
+            assert len(candidate.parts) == 1, f"{label} must be one component"
+        return candidate
+
+    def contained_fixture_path(base: Path, relative: object, *, label: str) -> Path:
+        canonical = canonical_fixture_relative(relative, label=label)
+        resolved_base = base.resolve()
+        candidate = (resolved_base / Path(canonical)).resolve()
+        assert candidate.is_relative_to(resolved_base), f"{label} escaped fixture root"
+        return candidate
+
+    native_parent = tmp_path.resolve()
+    root = contained_fixture_path(
+        native_parent, "descriptor-repository", label="fixture repository"
+    )
+    output_relative = canonical_fixture_relative(OUTPUT_ROOT, label="OUTPUT_ROOT")
+    run_component = canonical_fixture_relative(RUN_ID, label="RUN_ID", component=True)
+    output_base = contained_fixture_path(
+        root, output_relative.as_posix(), label="OUTPUT_ROOT"
+    )
+    run_root = contained_fixture_path(
+        output_base, run_component.as_posix(), label="RUN_ID"
+    )
+    prepared = contained_fixture_path(run_root, "prepared", label="prepared root")
+
+    def copy_repository_file(relative: str) -> Path:
+        canonical = canonical_fixture_relative(relative, label="repository source")
+        source = contained_fixture_path(
+            ROOT, canonical.as_posix(), label="repository source"
+        )
+        assert source.is_file(), f"missing descriptor fixture source: {relative}"
+        destination = contained_fixture_path(
+            root, canonical.as_posix(), label="fixture repository source"
+        )
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        # Copies, rather than hard links, keep every project-relative authority
+        # on a unique inode and make mutation cases incapable of touching ROOT.
+        shutil.copyfile(source, destination)
+        return destination
+
+    source_union = set(SPATIAL_FINAL_SOURCE_FILES)
+    source_union.update(
+        {
+            "config/sr_v2_heavy_sensitivity_execution.yaml",
+            "scripts/104_validate_sr_v2_heavy_sensitivity_infrastructure.py",
+        }
+    )
+    repository_relatives = set(EXPECTED_SOURCE_AUTHORITIES) | source_union
+    for relative in sorted(repository_relatives):
+        canonical_fixture_relative(relative, label="source authority")
+    for relative_root in PROTECTED_TREES:
+        canonical_fixture_relative(relative_root, label="protected root")
+    for relative in sorted(repository_relatives):
+        copy_repository_file(relative)
+
+    for relative, expected in EXPECTED_SOURCE_AUTHORITIES.items():
+        actual = hashlib.sha256(
+            contained_fixture_path(
+                root, relative, label="frozen source authority"
+            ).read_bytes()
+        ).hexdigest()
+        assert actual == expected, f"frozen fixture authority drifted: {relative}"
+
+    joint_relative = "reports/task3_preopened_joint_regression.json"
+    joint_path = contained_fixture_path(
+        root, joint_relative, label="joint regression evidence"
+    )
+    joint_path.parent.mkdir(parents=True, exist_ok=True)
+    joint_path.write_bytes(b'{"passed":true,"scope":"descriptor-fixture"}\n')
+    joint_sha256 = hashlib.sha256(joint_path.read_bytes()).hexdigest()
+
+    sources = {
+        relative: hashlib.sha256(
+            contained_fixture_path(
+                root, relative, label="reviewed union source"
+            ).read_bytes()
+        ).hexdigest()
+        for relative in sorted(source_union)
+    }
+    source_manifest: dict[str, object] = {
+        "schema_id": "sr_v2_robustness_final_source_manifest/v1",
+        "status": "reviewed_final",
+        "joint_regression_passed": True,
+        "source_hash_mode": "raw_bytes",
+        "sources": sources,
+        "joint_regression_evidence": joint_relative,
+        "joint_regression_evidence_sha256": joint_sha256,
+    }
+    source_manifest_sha256 = canonical_sha256(source_manifest)
+    launch_commit = "2" * 40
+    bundle_sha256 = "3" * 64
+    envelope: dict[str, object] = {
+        "schema_id": "sr_v2_robustness_launch_envelope/v1",
+        "status": "reviewed_final",
+        "clean_worktree": True,
+        "launch_commit": launch_commit,
+        "bundle_sha256": bundle_sha256,
+        "source_manifest": source_manifest,
+        "source_manifest_sha256": source_manifest_sha256,
+    }
+
+    config_relative = "config/sr_v2_spatial_sensitivity_execution.yaml"
+    config_path = contained_fixture_path(root, config_relative, label="config")
+    config_sha256 = hashlib.sha256(config_path.read_bytes()).hexdigest()
+    prepared_config = contained_fixture_path(
+        prepared, config_relative, label="prepared config"
+    )
+    prepared_config.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(config_path, prepared_config)
+
+    source_frame_relative = "data/processed/bayes_constrained/model_frame.parquet"
+    source_frame_path = contained_fixture_path(
+        root, source_frame_relative, label="source model frame"
+    )
+    prepared_frame_relative = "inputs/model_frame.parquet"
+    prepared_frame_path = contained_fixture_path(
+        prepared, prepared_frame_relative, label="prepared model frame"
+    )
+    prepared_frame_path.parent.mkdir(parents=True, exist_ok=True)
+    source_frame = pd.read_parquet(source_frame_path)
+    source_semantic_sha256 = spatial_model_frame_sha256(source_frame)
+    source_frame.to_parquet(
+        prepared_frame_path,
+        index=False,
+        compression=None,
+        row_group_size=257,
+    )
+    source_frame_sha256 = hashlib.sha256(source_frame_path.read_bytes()).hexdigest()
+    prepared_frame_sha256 = hashlib.sha256(prepared_frame_path.read_bytes()).hexdigest()
+    prepared_semantic_sha256 = spatial_model_frame_sha256(
+        pd.read_parquet(prepared_frame_path)
+    )
+    assert source_frame_sha256 != prepared_frame_sha256
+    assert source_semantic_sha256 == prepared_semantic_sha256
+    semantic_sha256 = source_semantic_sha256
+
+    graph_path = contained_fixture_path(
+        prepared, "graph/graph_contract.json", label="graph contract"
+    )
+    graph_contract: dict[str, object] = {
+        "schema_id": "sr_v2_spatial_graph_contract/v1",
+        "run_id": RUN_ID,
+        "fixture": "preopened-descriptor-authority",
+    }
+    _write_json_sidecar(graph_path, graph_contract)
+    graph_artifacts = {
+        path.relative_to(prepared).as_posix(): hashlib.sha256(path.read_bytes()).hexdigest()
+        for path in (
+            graph_path,
+            graph_path.with_name(graph_path.name + ".sha256"),
+        )
+    }
+    graph_contract_sha256 = hashlib.sha256(graph_path.read_bytes()).hexdigest()
+
+    alias_paths = tuple(
+        contained_fixture_path(
+            prepared, f"fixture/alias-{suffix}.bin", label="alias fixture artifact"
+        )
+        for suffix in ("a", "b")
+    )
+    for alias_path in alias_paths:
+        alias_path.parent.mkdir(parents=True, exist_ok=True)
+        alias_path.write_bytes(b"identical descriptor alias sentinel\n")
+
+    source_manifest_path = contained_fixture_path(
+        prepared,
+        "provenance/final_source_manifest.json",
+        label="copied final source manifest",
+    )
+    _write_json_sidecar(source_manifest_path, source_manifest)
+    envelope_path = contained_fixture_path(
+        prepared, "provenance/launch_envelope.json", label="copied launch envelope"
+    )
+    _write_json_sidecar(envelope_path, envelope)
+    launch_envelope_sha256 = hashlib.sha256(envelope_path.read_bytes()).hexdigest()
+
+    protected_only = contained_fixture_path(
+        root,
+        f"{PROTECTED_TREES[0]}/descriptor_protected_only.bin",
+        label="protected-only authority",
+    )
+    protected_only.parent.mkdir(parents=True, exist_ok=True)
+    protected_only.write_bytes(b"protected-only descriptor authority\n")
+    protected_files: dict[str, str] = {}
+    for relative_root in PROTECTED_TREES:
+        tree = contained_fixture_path(root, relative_root, label="protected root")
+        assert tree.is_dir()
+        for path in sorted(tree.rglob("*")):
+            if path.is_file():
+                protected_files[path.relative_to(root).as_posix()] = hashlib.sha256(
+                    path.read_bytes()
+                ).hexdigest()
+    protected_manifest: dict[str, object] = {
+        "schema_id": "sr_v2_spatial_protected_tree_manifest/v1",
+        "roots": list(PROTECTED_TREES),
+        "files": protected_files,
+    }
+    protected_path = contained_fixture_path(
+        prepared,
+        "provenance/protected_tree_manifest.json",
+        label="protected-tree manifest",
+    )
+    _write_json_sidecar(protected_path, protected_manifest)
+    protected_sha256 = hashlib.sha256(protected_path.read_bytes()).hexdigest()
+
+    input_manifest: dict[str, object] = {
+        "schema_id": "sr_v2_spatial_input_manifest/v1",
+        "run_id": RUN_ID,
+        "operational_config_sha256": config_sha256,
+        "source_authorities": dict(EXPECTED_SOURCE_AUTHORITIES),
+        "launch_envelope_sha256": launch_envelope_sha256,
+        "final_source_manifest_sha256": source_manifest_sha256,
+        "launch_commit": launch_commit,
+        "bundle_sha256": bundle_sha256,
+        "joint_regression_evidence_sha256": joint_sha256,
+        "source_model_frame_sha256": source_frame_sha256,
+        "prepared_model_frame_sha256": prepared_frame_sha256,
+        "model_frame_semantic_sha256": semantic_sha256,
+        "graph_contract_sha256": graph_contract_sha256,
+        "graph_artifact_sha256": graph_artifacts,
+    }
+    input_manifest_path = contained_fixture_path(
+        prepared, "input_manifest.json", label="input manifest"
+    )
+    _write_json_sidecar(input_manifest_path, input_manifest)
+    input_manifest_sha256 = hashlib.sha256(input_manifest_path.read_bytes()).hexdigest()
+
+    prepared_artifacts = {
+        path.relative_to(prepared).as_posix(): hashlib.sha256(path.read_bytes()).hexdigest()
+        for path in sorted(prepared.rglob("*"))
+        if path.is_file()
+    }
+    prepared_manifest: dict[str, object] = {
+        "schema_id": "sr_v2_spatial_prepared_run/v1",
+        "run_id": RUN_ID,
+        "model_id": MODEL_ID,
+        "operational_config_sha256": config_sha256,
+        "launch_envelope_sha256": launch_envelope_sha256,
+        "final_source_manifest_sha256": source_manifest_sha256,
+        "launch_commit": launch_commit,
+        "bundle_sha256": bundle_sha256,
+        "joint_regression_evidence_sha256": joint_sha256,
+        "preparation_identity": "9" * 64,
+        "generated_utc": "2026-08-20T00:00:00+00:00",
+        "status": "prepared_not_run",
+        "production_eligible": True,
+        "builder_provenance": {
+            "frame_loader": "default_load_model_frame",
+            "allocation_solver": "default_solve_feasible_allocation",
+            "graph_preparer": "default_graph_artifacts",
+            "envelope_loader": "default_reviewed_launch_envelope",
+        },
+        "input_manifest": "input_manifest.json",
+        "input_manifest_sha256": input_manifest_sha256,
+        "source_authorities": dict(EXPECTED_SOURCE_AUTHORITIES),
+        "graph_contract": graph_contract,
+        "graph_contract_sha256": graph_contract_sha256,
+        "model_frame": prepared_frame_relative,
+        "model_frame_sha256": prepared_frame_sha256,
+        "model_frame_semantic_sha256": semantic_sha256,
+        "parameter_schema": [],
+        "protected_tree_manifest": "provenance/protected_tree_manifest.json",
+        "protected_tree_manifest_sha256": protected_sha256,
+        "chain_mapping": [{"array_index": index} for index in range(1, 5)],
+        "prepared_artifact_sha256": prepared_artifacts,
+        "interpretation_boundary": "descriptor-bound validator fixture",
+        "submission_authorized": False,
+    }
+    prepared_manifest_path = contained_fixture_path(
+        prepared, "prepared_run_manifest.json", label="prepared run manifest"
+    )
+    _write_json_sidecar(prepared_manifest_path, prepared_manifest)
+
+    required_paths: dict[str, Path] = {}
+
+    def include(path: Path) -> None:
+        relative = path.relative_to(root).as_posix()
+        assert relative and not relative.startswith("/") and "\\" not in relative
+        assert PurePosixPath(relative).as_posix() == relative
+        existing = required_paths.setdefault(relative, path)
+        assert existing == path
+
+    include(config_path)
+    for relative in EXPECTED_SOURCE_AUTHORITIES:
+        include(contained_fixture_path(root, relative, label="source authority"))
+    for relative in sources:
+        include(contained_fixture_path(root, relative, label="reviewed union source"))
+    for relative in protected_files:
+        include(contained_fixture_path(root, relative, label="protected file"))
+    include(joint_path)
+    for path in sorted(prepared.rglob("*")):
+        if path.is_file():
+            include(path)
+
+    return SimpleNamespace(
+        root=root,
+        output_base=output_base,
+        prepared=prepared,
+        config_path=config_path,
+        source_frame_path=source_frame_path,
+        prepared_frame_path=prepared_frame_path,
+        source_frame_key=source_frame_path.relative_to(root).as_posix(),
+        prepared_frame_key=prepared_frame_path.relative_to(root).as_posix(),
+        alias_keys=tuple(path.relative_to(root).as_posix() for path in alias_paths),
+        required_paths=required_paths,
+    )
+
+
+@contextmanager
+def _open_prepared_descriptor_map(
+    required_paths: Mapping[str, Path],
+) -> Iterator[dict[str, int]]:
+    descriptors: dict[str, int] = {}
+    binary = getattr(os, "O_BINARY", 0)
+    try:
+        for relative, path in sorted(required_paths.items()):
+            descriptors[relative] = os.open(path, os.O_RDONLY | binary)
+        yield descriptors
+    finally:
+        for descriptor in descriptors.values():
+            try:
+                os.close(descriptor)
+            except OSError:
+                pass
+
+
+@contextmanager
+def _assert_validator_owned_duplicates_closed(
+    monkeypatch: pytest.MonkeyPatch,
+    spatial_pipeline: object,
+) -> Iterator[None]:
+    """Track bound-mode descriptor duplicates without owning caller descriptors."""
+
+    real_dup = os.dup
+    real_dup2 = os.dup2
+    real_close = os.close
+    owned: dict[int, tuple[int, int, int]] = {}
+    try:
+        fcntl_module = __import__("fcntl")
+    except ImportError:
+        fcntl_module = None
+        real_fcntl = None
+        duplicate_commands: frozenset[int] = frozenset()
+    else:
+        real_fcntl = fcntl_module.fcntl
+        duplicate_commands = frozenset(
+            command
+            for command in (
+                getattr(fcntl_module, "F_DUPFD", None),
+                getattr(fcntl_module, "F_DUPFD_CLOEXEC", None),
+            )
+            if isinstance(command, int)
+        )
+
+    def token(descriptor: int) -> tuple[int, int, int]:
+        metadata = os.fstat(descriptor)
+        return (
+            metadata.st_dev,
+            metadata.st_ino,
+            metadata.st_mode,
+        )
+
+    def tracked_dup(descriptor: int) -> int:
+        duplicate = real_dup(descriptor)
+        owned[duplicate] = token(duplicate)
+        return duplicate
+
+    def tracked_dup2(
+        descriptor: int, target: int, inheritable: bool = True
+    ) -> int:
+        duplicate = real_dup2(descriptor, target, inheritable=inheritable)
+        if descriptor != target:
+            owned[duplicate] = token(duplicate)
+        return duplicate
+
+    def tracked_fcntl(descriptor: int, command: int, argument: object = 0) -> object:
+        assert real_fcntl is not None
+        result = real_fcntl(descriptor, command, argument)
+        if command in duplicate_commands:
+            assert isinstance(result, int)
+            owned[result] = token(result)
+        return result
+
+    def tracked_close(descriptor: int) -> None:
+        real_close(descriptor)
+        owned.pop(descriptor, None)
+
+    with monkeypatch.context() as ledger:
+        ledger.setattr(spatial_pipeline.os, "dup", tracked_dup)
+        ledger.setattr(spatial_pipeline.os, "dup2", tracked_dup2)
+        ledger.setattr(spatial_pipeline.os, "close", tracked_close)
+        if fcntl_module is not None:
+            ledger.setattr(fcntl_module, "fcntl", tracked_fcntl)
+        try:
+            yield
+        finally:
+            # A file object's C-level close need not call os.close. Treat a
+            # closed or numerically reused descriptor as released, but retain
+            # and report every still-live validator-created duplicate.
+            leaked: list[int] = []
+            for descriptor, original in tuple(owned.items()):
+                try:
+                    current = token(descriptor)
+                except OSError:
+                    continue
+                if current == original:
+                    leaked.append(descriptor)
+            for descriptor in leaked:
+                try:
+                    real_close(descriptor)
+                except OSError:
+                    pass
+            assert not leaked, f"validator leaked duplicated descriptors: {leaked}"
+
+
+def _descriptor_fixture_tree(root: Path) -> dict[str, tuple[object, ...]]:
+    """Capture names, types, modes, stable metadata, and regular-file bytes."""
+
+    def identity(metadata: os.stat_result) -> tuple[int, int, int]:
+        return (
+            metadata.st_dev,
+            metadata.st_ino,
+            stat.S_IFMT(metadata.st_mode),
+        )
+
+    result: dict[str, tuple[object, ...]] = {}
+    for path in (root, *sorted(root.rglob("*"))):
+        before = os.lstat(path)
+        relative = "." if path == root else path.relative_to(root).as_posix()
+        digest: str | None = None
+        symlink_target: str | None = None
+        if stat.S_ISREG(before.st_mode):
+            descriptor = os.open(
+                path,
+                os.O_RDONLY
+                | getattr(os, "O_BINARY", 0)
+                | getattr(os, "O_NOFOLLOW", 0),
+            )
+            try:
+                opened = os.fstat(descriptor)
+                assert identity(opened) == identity(before)
+                hasher = hashlib.sha256()
+                while True:
+                    chunk = os.read(descriptor, 1024 * 1024)
+                    if not chunk:
+                        break
+                    hasher.update(chunk)
+                digest = hasher.hexdigest()
+                post_read = os.fstat(descriptor)
+                assert identity(post_read) == identity(opened)
+            finally:
+                os.close(descriptor)
+        elif stat.S_ISLNK(before.st_mode):
+            symlink_target = os.readlink(path)
+        xattrs: tuple[tuple[str, bytes], ...] | tuple[str, ...]
+        if hasattr(os, "listxattr") and hasattr(os, "getxattr"):
+            try:
+                xattrs = tuple(
+                    (name, os.getxattr(path, name, follow_symlinks=False))
+                    for name in sorted(os.listxattr(path, follow_symlinks=False))
+                )
+            except OSError as error:
+                xattrs = (f"unavailable:{error.errno}",)
+        else:
+            xattrs = ("unsupported",)
+        metadata = os.lstat(path)
+        assert identity(metadata) == identity(before)
+        common = (
+            metadata.st_dev,
+            metadata.st_ino,
+            metadata.st_mode,
+            metadata.st_nlink,
+            getattr(metadata, "st_uid", None),
+            getattr(metadata, "st_gid", None),
+            metadata.st_size,
+            metadata.st_mtime_ns,
+            metadata.st_ctime_ns,
+            xattrs,
+        )
+        if stat.S_ISREG(metadata.st_mode):
+            assert digest is not None
+            payload: tuple[object, ...] = (
+                "regular",
+                *common,
+                digest,
+            )
+        elif stat.S_ISDIR(metadata.st_mode):
+            payload = ("directory", *common)
+        elif stat.S_ISLNK(metadata.st_mode):
+            assert symlink_target is not None
+            payload = ("symlink", *common, symlink_target)
+        else:
+            payload = ("special", *common, metadata.st_rdev)
+        result[relative] = payload
+    return result
+
+
+def _rename_preopened_fixture_root(source: Path, destination: Path) -> None:
+    if os.name != "nt":
+        assert source.parent == destination.parent
+        source_metadata = os.lstat(source)
+        assert stat.S_ISDIR(source_metadata.st_mode)
+        source_token = (source_metadata.st_dev, source_metadata.st_ino)
+        try:
+            os.lstat(destination)
+        except FileNotFoundError:
+            pass
+        else:
+            raise AssertionError("descriptor fixture rename destination already exists")
+        os.rename(source, destination)
+        destination_metadata = os.lstat(destination)
+        assert stat.S_ISDIR(destination_metadata.st_mode)
+        assert (destination_metadata.st_dev, destination_metadata.st_ino) == source_token
+        return
+    source_linux = _task4_wsl_path(source)
+    destination_linux = _task4_wsl_path(destination)
+    registered_roots = [
+        root
+        for root in _TASK4_WSL_NATIVE_TEMPS
+        if source_linux.startswith(root + "/")
+        and destination_linux.startswith(root + "/")
+    ]
+    assert len(registered_roots) == 1
+    registered = PurePosixPath(registered_roots[0])
+    source_relative = PurePosixPath(source_linux).relative_to(registered)
+    destination_relative = PurePosixPath(destination_linux).relative_to(registered)
+    for relative in (source_relative, destination_relative):
+        assert relative.parts and all(part not in ("", ".", "..") for part in relative.parts)
+        assert relative.as_posix() and "\\" not in relative.as_posix()
+    assert source_relative.parent == destination_relative.parent
+    source_metadata = os.lstat(source)
+    assert stat.S_ISDIR(source_metadata.st_mode)
+    source_token = (source_metadata.st_dev, source_metadata.st_ino)
+    try:
+        os.lstat(destination)
+    except FileNotFoundError:
+        pass
+    else:
+        raise AssertionError("descriptor fixture rename destination already exists")
+    source_state = subprocess.run(
+        _task4_wsl_exec_argv("/usr/bin/test", "-d", source_linux),
+        capture_output=True,
+        check=False,
+    )
+    source_symlink = subprocess.run(
+        _task4_wsl_exec_argv("/usr/bin/test", "-L", source_linux),
+        capture_output=True,
+        check=False,
+    )
+    destination_exists = subprocess.run(
+        _task4_wsl_exec_argv("/usr/bin/test", "-e", destination_linux),
+        capture_output=True,
+        check=False,
+    )
+    destination_symlink = subprocess.run(
+        _task4_wsl_exec_argv("/usr/bin/test", "-L", destination_linux),
+        capture_output=True,
+        check=False,
+    )
+    assert source_state.returncode == 0 and source_symlink.returncode != 0
+    assert destination_exists.returncode != 0 and destination_symlink.returncode != 0
+    result = subprocess.run(
+        _task4_wsl_exec_argv(
+            "/usr/bin/mv",
+            "--no-clobber",
+            "--no-target-directory",
+            "--",
+            source_linux,
+            destination_linux,
+        ),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    source_after = subprocess.run(
+        _task4_wsl_exec_argv("/usr/bin/test", "-e", source_linux),
+        capture_output=True,
+        check=False,
+    )
+    source_link_after = subprocess.run(
+        _task4_wsl_exec_argv("/usr/bin/test", "-L", source_linux),
+        capture_output=True,
+        check=False,
+    )
+    destination_after = subprocess.run(
+        _task4_wsl_exec_argv("/usr/bin/test", "-d", destination_linux),
+        capture_output=True,
+        check=False,
+    )
+    destination_link_after = subprocess.run(
+        _task4_wsl_exec_argv("/usr/bin/test", "-L", destination_linux),
+        capture_output=True,
+        check=False,
+    )
+    assert source_after.returncode != 0 and source_link_after.returncode != 0
+    assert destination_after.returncode == 0 and destination_link_after.returncode != 0
+    destination_metadata = os.lstat(destination)
+    assert stat.S_ISDIR(destination_metadata.st_mode)
+    assert (destination_metadata.st_dev, destination_metadata.st_ino) == source_token
+
+
+def test_preopened_prepared_validator_matches_legacy_without_path_reads_or_fd_offsets(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from bayes_constrained import spatial_pipeline
+
+    fixture = _preopened_validator_fixture(tmp_path)
+    legacy_before = _descriptor_fixture_tree(fixture.root)
+    assert _descriptor_fixture_tree(fixture.root) == legacy_before
+    legacy = spatial_pipeline.validate_prepared_source_envelope(
+        fixture.root,
+        config_path=fixture.config_path,
+        output_base_override=fixture.output_base,
+    )
+    assert _descriptor_fixture_tree(fixture.root) == legacy_before
+    expected_parquet_payloads = (
+        fixture.source_frame_path.read_bytes(),
+        fixture.prepared_frame_path.read_bytes(),
+    )
+    assert expected_parquet_payloads[0] != expected_parquet_payloads[1]
+    observed_parquet_sources: list[bytes] = []
+    real_read_parquet = spatial_pipeline.pd.read_parquet
+
+    def read_preopened_parquet(source: object, *args: object, **kwargs: object):
+        assert isinstance(source, io.BytesIO), "bound mode reopened a parquet path"
+        observed_parquet_sources.append(source.getvalue())
+        return real_read_parquet(source, *args, **kwargs)
+
+    monkeypatch.setattr(spatial_pipeline.pd, "read_parquet", read_preopened_parquet)
+    with _open_prepared_descriptor_map(fixture.required_paths) as descriptor_map:
+        def descriptor_bytes(descriptor: int) -> bytes:
+            original = os.lseek(descriptor, 0, os.SEEK_CUR)
+            try:
+                os.lseek(descriptor, 0, os.SEEK_SET)
+                chunks: list[bytes] = []
+                while True:
+                    chunk = os.read(descriptor, 1024 * 1024)
+                    if not chunk:
+                        return b"".join(chunks)
+                    chunks.append(chunk)
+            finally:
+                os.lseek(descriptor, original, os.SEEK_SET)
+
+        mapped_parquet_payloads = (
+            descriptor_bytes(descriptor_map[fixture.source_frame_key]),
+            descriptor_bytes(descriptor_map[fixture.prepared_frame_key]),
+        )
+        assert mapped_parquet_payloads == expected_parquet_payloads
+        offsets: dict[int, int] = {}
+        for descriptor in descriptor_map.values():
+            offsets[descriptor] = os.lseek(descriptor, 1, os.SEEK_SET)
+
+        moved_root = fixture.root.with_name(fixture.root.name + "-moved")
+        rename_exercised = os.name != "nt"
+        if rename_exercised:
+            _rename_preopened_fixture_root(fixture.root, moved_root)
+            observed_root = moved_root
+        else:
+            observed_root = fixture.root
+        observed_before = _descriptor_fixture_tree(observed_root)
+
+        def forbid_path_access(*_args: object, **_kwargs: object) -> object:
+            raise AssertionError(
+                "descriptor-bound validation attempted pathname I/O or any write"
+            )
+
+        try:
+            with monkeypatch.context() as bound:
+                for attribute in (
+                    "open",
+                    "read_bytes",
+                    "read_text",
+                    "write_bytes",
+                    "write_text",
+                    "resolve",
+                    "rglob",
+                    "glob",
+                    "iterdir",
+                    "exists",
+                    "is_file",
+                    "is_dir",
+                    "stat",
+                    "lstat",
+                    "mkdir",
+                    "touch",
+                    "chmod",
+                    "unlink",
+                    "rename",
+                    "replace",
+                ):
+                    bound.setattr(Path, attribute, forbid_path_access)
+                bound.setattr(builtins, "open", forbid_path_access)
+                bound.setattr(io, "open", forbid_path_access)
+                for attribute in (
+                    "open",
+                    "stat",
+                    "lstat",
+                    "listdir",
+                    "scandir",
+                    "walk",
+                    "readlink",
+                    "listxattr",
+                    "getxattr",
+                    "access",
+                    "chdir",
+                    "mkdir",
+                    "makedirs",
+                    "unlink",
+                    "remove",
+                    "rename",
+                    "replace",
+                    "rmdir",
+                    "link",
+                    "symlink",
+                    "mkfifo",
+                    "mknod",
+                    "chmod",
+                    "fchmod",
+                    "chown",
+                    "fchown",
+                    "utime",
+                    "truncate",
+                    "ftruncate",
+                    "write",
+                    "writev",
+                    "pwrite",
+                    "pwritev",
+                    "setxattr",
+                    "removexattr",
+                    "system",
+                    "popen",
+                    "execl",
+                    "execle",
+                    "execlp",
+                    "execlpe",
+                    "execv",
+                    "execve",
+                    "execvp",
+                    "execvpe",
+                    "spawnl",
+                    "spawnle",
+                    "spawnlp",
+                    "spawnlpe",
+                    "spawnv",
+                    "spawnve",
+                    "spawnvp",
+                    "spawnvpe",
+                ):
+                    if hasattr(os, attribute):
+                        bound.setattr(os, attribute, forbid_path_access)
+                for attribute in (
+                    "NamedTemporaryFile",
+                    "TemporaryDirectory",
+                    "TemporaryFile",
+                    "SpooledTemporaryFile",
+                    "mkdtemp",
+                    "mkstemp",
+                ):
+                    bound.setattr(tempfile, attribute, forbid_path_access)
+                for attribute in (
+                    "copy",
+                    "copy2",
+                    "copyfile",
+                    "copytree",
+                    "copymode",
+                    "copystat",
+                    "move",
+                    "rmtree",
+                ):
+                    bound.setattr(shutil, attribute, forbid_path_access)
+                bound.setattr(subprocess, "run", forbid_path_access)
+                bound.setattr(subprocess, "Popen", forbid_path_access)
+                bound.setattr(mmap, "mmap", forbid_path_access)
+                bound.setattr(ctypes, "CDLL", forbid_path_access)
+                bound.setattr(ctypes, "PyDLL", forbid_path_access)
+                with _assert_validator_owned_duplicates_closed(
+                    monkeypatch, spatial_pipeline
+                ):
+                    validated = spatial_pipeline.validate_prepared_source_envelope(
+                        fixture.root,
+                        config_path=fixture.config_path,
+                        output_base_override=fixture.output_base,
+                        preopened_files=descriptor_map,
+                    )
+            observed_after = _descriptor_fixture_tree(observed_root)
+        finally:
+            if rename_exercised:
+                _rename_preopened_fixture_root(moved_root, fixture.root)
+
+        assert rename_exercised == (os.name != "nt")
+        assert validated == legacy
+        assert observed_after == observed_before
+        assert tuple(observed_parquet_sources) == mapped_parquet_payloads
+        assert {
+            descriptor: os.lseek(descriptor, 0, os.SEEK_CUR)
+            for descriptor in descriptor_map.values()
+        } == offsets
+    assert not list(fixture.root.rglob("__pycache__"))
+
+
+def test_preopened_prepared_validator_rejects_nonexact_aliased_and_mutated_descriptors(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from bayes_constrained import spatial_pipeline
+
+    fixture = _preopened_validator_fixture(tmp_path)
+    invalid_before = _descriptor_fixture_tree(fixture.root)
+    real_read_parquet = spatial_pipeline.pd.read_parquet
+
+    def reject_before_semantics(*_args: object, **_kwargs: object) -> object:
+        raise AssertionError("unsafe descriptor set reached semantic parquet validation")
+
+    def close_fd(descriptor: int) -> None:
+        try:
+            os.close(descriptor)
+        except OSError:
+            pass
+
+    def descriptor_state(descriptor_map: Mapping[str, int]) -> dict[str, tuple[object, ...]]:
+        state: dict[str, tuple[object, ...]] = {}
+        for relative, descriptor in descriptor_map.items():
+            metadata = os.fstat(descriptor)
+            state[relative] = (
+                descriptor,
+                metadata.st_dev,
+                metadata.st_ino,
+                metadata.st_mode,
+                metadata.st_nlink,
+                metadata.st_size,
+                metadata.st_mtime_ns,
+                metadata.st_ctime_ns,
+                os.lseek(descriptor, 0, os.SEEK_CUR),
+            )
+        return state
+
+    CandidateBuilder = Callable[
+        [dict[str, int]], tuple[dict[str, object], Callable[[], None]]
+    ]
+
+    def run_invalid_case(
+        label: str,
+        builder: CandidateBuilder,
+        *,
+        output_base_override: Path | None = None,
+    ) -> None:
+        with _open_prepared_descriptor_map(fixture.required_paths) as descriptor_map:
+            for descriptor in descriptor_map.values():
+                os.lseek(descriptor, 1, os.SEEK_SET)
+            caller_before = descriptor_state(descriptor_map)
+            candidate, cleanup = builder(descriptor_map)
+            try:
+                with pytest.raises(
+                    ValueError,
+                    match="descriptor|preopened|canonical|exact|regular|read|output|root",
+                ):
+                    with _assert_validator_owned_duplicates_closed(
+                        monkeypatch, spatial_pipeline
+                    ):
+                        spatial_pipeline.validate_prepared_source_envelope(
+                            fixture.root,
+                            config_path=fixture.config_path,
+                            output_base_override=(
+                                fixture.output_base
+                                if output_base_override is None
+                                else output_base_override
+                            ),
+                            preopened_files=candidate,
+                        )
+            finally:
+                try:
+                    assert descriptor_state(descriptor_map) == caller_before, label
+                finally:
+                    cleanup()
+
+    monkeypatch.setattr(spatial_pipeline.pd, "read_parquet", reject_before_semantics)
+
+    def missing_builder(descriptor_map: dict[str, int]):
+        candidate: dict[str, object] = dict(descriptor_map)
+        candidate.pop(sorted(candidate)[0])
+        return candidate, lambda: None
+
+    run_invalid_case("missing", missing_builder)
+
+    external_extra = tmp_path / "descriptor-unlisted-external.bin"
+    external_extra.write_bytes(b"unique unlisted descriptor inode\n")
+
+    def extra_builder(descriptor_map: dict[str, int]):
+        descriptor = os.open(
+            external_extra, os.O_RDONLY | getattr(os, "O_BINARY", 0)
+        )
+        existing_inodes = {
+            (os.fstat(value).st_dev, os.fstat(value).st_ino)
+            for value in descriptor_map.values()
+        }
+        extra_identity = os.fstat(descriptor)
+        assert (extra_identity.st_dev, extra_identity.st_ino) not in existing_inodes
+        return (
+            {**descriptor_map, "reports/unlisted-extra.bin": descriptor},
+            lambda: close_fd(descriptor),
+        )
+
+    run_invalid_case("extra", extra_builder)
+
+    for label, transform in (
+        ("dot", lambda value: f"./{value}"),
+        ("double-slash", lambda value: value.replace("/", "//", 1)),
+        ("parent", lambda value: f"reports/../{value}"),
+        ("absolute", lambda value: f"/{value}"),
+        ("backslash", lambda value: value.replace("/", "\\", 1)),
+        ("control", lambda value: value + "\r"),
+    ):
+        def noncanonical_builder(
+            descriptor_map: dict[str, int],
+            transform: Callable[[str], str] = transform,
+        ):
+            first = sorted(descriptor_map)[0]
+            candidate: dict[str, object] = dict(descriptor_map)
+            candidate[transform(first)] = candidate.pop(first)
+            return candidate, lambda: None
+
+        run_invalid_case(label, noncanonical_builder)
+
+    def same_fd_builder(descriptor_map: dict[str, int]):
+        first, second = fixture.alias_keys
+        assert fixture.required_paths[first].read_bytes() == fixture.required_paths[
+            second
+        ].read_bytes()
+        candidate: dict[str, object] = dict(descriptor_map)
+        candidate[second] = descriptor_map[first]
+        return candidate, lambda: None
+
+    run_invalid_case("same-fd", same_fd_builder)
+
+    def same_inode_builder(descriptor_map: dict[str, int]):
+        first, second = fixture.alias_keys
+        alias = os.dup(descriptor_map[first])
+        candidate: dict[str, object] = dict(descriptor_map)
+        candidate[second] = alias
+        return candidate, lambda: close_fd(alias)
+
+    run_invalid_case("same-inode", same_inode_builder)
+
+    def closed_builder(descriptor_map: dict[str, int]):
+        first = sorted(descriptor_map)[0]
+        closed = os.dup(descriptor_map[first])
+        os.close(closed)
+        with pytest.raises(OSError):
+            os.fstat(closed)
+        candidate: dict[str, object] = dict(descriptor_map)
+        candidate[first] = closed
+        # This returns immediately to the validator: no later test resource is
+        # opened that could recycle the closed numeric descriptor.
+        return candidate, lambda: None
+
+    run_invalid_case("closed", closed_builder)
+
+    def boolean_builder(descriptor_map: dict[str, int]):
+        first = sorted(descriptor_map)[0]
+        candidate: dict[str, object] = dict(descriptor_map)
+        candidate[first] = True
+        return candidate, lambda: None
+
+    run_invalid_case("boolean", boolean_builder)
+
+    def identity_builder(descriptor_map: dict[str, int]):
+        return dict(descriptor_map), lambda: None
+
+    run_invalid_case(
+        "external-output-base",
+        identity_builder,
+        output_base_override=tmp_path / "outside-project-output",
+    )
+
+    def unreadable_builder(descriptor_map: dict[str, int]):
+        first = fixture.alias_keys[0]
+        descriptor = os.open(
+            fixture.required_paths[first],
+            os.O_WRONLY | getattr(os, "O_BINARY", 0),
+        )
+        candidate: dict[str, object] = dict(descriptor_map)
+        candidate[first] = descriptor
+        return candidate, lambda: close_fd(descriptor)
+
+    run_invalid_case("unreadable-regular", unreadable_builder)
+
+    if hasattr(os, "O_PATH"):
+        def path_only_builder(descriptor_map: dict[str, int]):
+            first = fixture.alias_keys[0]
+            descriptor = os.open(
+                fixture.required_paths[first],
+                os.O_PATH | getattr(os, "O_CLOEXEC", 0),
+            )
+            candidate: dict[str, object] = dict(descriptor_map)
+            candidate[first] = descriptor
+            return candidate, lambda: close_fd(descriptor)
+
+        run_invalid_case("O_PATH-regular", path_only_builder)
+
+        symlink = tmp_path / "descriptor-authority.symlink"
+        os.symlink(fixture.required_paths[fixture.alias_keys[0]], symlink)
+
+        def symlink_descriptor_builder(descriptor_map: dict[str, int]):
+            first = fixture.alias_keys[0]
+            descriptor = os.open(
+                symlink,
+                os.O_PATH
+                | getattr(os, "O_NOFOLLOW", 0)
+                | getattr(os, "O_CLOEXEC", 0),
+            )
+            candidate: dict[str, object] = dict(descriptor_map)
+            candidate[first] = descriptor
+            return candidate, lambda: close_fd(descriptor)
+
+        run_invalid_case("symlink-descriptor", symlink_descriptor_builder)
+
+    def pipe_builder(descriptor_map: dict[str, int]):
+        first = sorted(descriptor_map)[0]
+        read_end, write_end = os.pipe()
+        os.set_blocking(read_end, False)
+        os.set_blocking(write_end, False)
+        candidate: dict[str, object] = dict(descriptor_map)
+        candidate[first] = read_end
+        return candidate, lambda: (close_fd(read_end), close_fd(write_end))
+
+    run_invalid_case("pipe", pipe_builder)
+
+    def socket_builder(descriptor_map: dict[str, int]):
+        first = sorted(descriptor_map)[0]
+        left, right = socket.socketpair()
+        left.setblocking(False)
+        right.setblocking(False)
+        candidate: dict[str, object] = dict(descriptor_map)
+        candidate[first] = left.fileno()
+        return candidate, lambda: (left.close(), right.close())
+
+    run_invalid_case("socket", socket_builder)
+
+    def directory_builder(descriptor_map: dict[str, int]):
+        first = sorted(descriptor_map)[0]
+        descriptor = os.open(
+            fixture.root,
+            os.O_RDONLY
+            | getattr(os, "O_BINARY", 0)
+            | getattr(os, "O_DIRECTORY", 0),
+        )
+        candidate: dict[str, object] = dict(descriptor_map)
+        candidate[first] = descriptor
+        return candidate, lambda: close_fd(descriptor)
+
+    try:
+        directory_probe = os.open(
+            fixture.root,
+            os.O_RDONLY
+            | getattr(os, "O_BINARY", 0)
+            | getattr(os, "O_DIRECTORY", 0),
+        )
+    except OSError:
+        directory_supported = False
+    else:
+        directory_supported = True
+        os.close(directory_probe)
+    if directory_supported:
+        run_invalid_case("directory", directory_builder)
+
+    if hasattr(os, "mkfifo"):
+        fifo = tmp_path / "descriptor-authority.fifo"
+        os.mkfifo(fifo)
+
+        def fifo_builder(descriptor_map: dict[str, int]):
+            first = sorted(descriptor_map)[0]
+            descriptor = os.open(fifo, os.O_RDONLY | os.O_NONBLOCK)
+            candidate: dict[str, object] = dict(descriptor_map)
+            candidate[first] = descriptor
+            return candidate, lambda: close_fd(descriptor)
+
+        run_invalid_case("fifo", fifo_builder)
+
+    assert _descriptor_fixture_tree(fixture.root) == invalid_before
+
+    monkeypatch.setattr(spatial_pipeline.pd, "read_parquet", real_read_parquet)
+    fixture = _preopened_validator_fixture(tmp_path / "mutated")
+    writer = os.open(
+        fixture.source_frame_path,
+        os.O_RDWR | getattr(os, "O_BINARY", 0),
+    )
+    try:
+        with _open_prepared_descriptor_map(fixture.required_paths) as descriptor_map:
+            for descriptor in descriptor_map.values():
+                os.lseek(descriptor, 1, os.SEEK_SET)
+            caller_before = descriptor_state(descriptor_map)
+            changed = False
+
+            def mutate_after_semantic_read(
+                source: object, *args: object, **kwargs: object
+            ):
+                nonlocal changed
+                assert isinstance(source, io.BytesIO)
+                frame = real_read_parquet(source, *args, **kwargs)
+                if not changed:
+                    os.lseek(writer, 0, os.SEEK_SET)
+                    first_byte = os.read(writer, 1)
+                    replacement = b"Q" if first_byte != b"Q" else b"R"
+                    os.lseek(writer, 0, os.SEEK_SET)
+                    os.write(writer, replacement)
+                    os.fsync(writer)
+                    changed = True
+                return frame
+
+            monkeypatch.setattr(
+                spatial_pipeline.pd, "read_parquet", mutate_after_semantic_read
+            )
+            try:
+                with pytest.raises(
+                    ValueError,
+                    match="descriptor|changed|mutation|identity|token",
+                ):
+                    with _assert_validator_owned_duplicates_closed(
+                        monkeypatch, spatial_pipeline
+                    ):
+                        spatial_pipeline.validate_prepared_source_envelope(
+                            fixture.root,
+                            config_path=fixture.config_path,
+                            output_base_override=fixture.output_base,
+                            preopened_files=descriptor_map,
+                        )
+                assert changed
+            finally:
+                caller_after = descriptor_state(descriptor_map)
+                for relative, before in caller_before.items():
+                    after = caller_after[relative]
+                    if relative == fixture.source_frame_key:
+                        assert after[:6] == before[:6]
+                        assert after[8] == before[8]
+                        assert after[6:8] != before[6:8]
+                    else:
+                        assert after == before
+    finally:
+        os.close(writer)
+
+
+def test_preopened_reader_rejects_first_read_offset_interference_and_closing_aba(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The bound reader must authenticate one immutable, position-independent view."""
+
+    from bayes_constrained import spatial_pipeline
+
+    fixture = _preopened_validator_fixture(tmp_path)
+    target_path = fixture.source_frame_path
+    target_original = target_path.read_bytes()
+    target_identity = (
+        os.stat(target_path).st_dev,
+        os.stat(target_path).st_ino,
+    )
+    binary = getattr(os, "O_BINARY", 0)
+
+    def validate(descriptor_map: Mapping[str, int]) -> None:
+        with _assert_validator_owned_duplicates_closed(monkeypatch, spatial_pipeline):
+            spatial_pipeline.validate_prepared_source_envelope(
+                fixture.root,
+                config_path=fixture.config_path,
+                output_base_override=fixture.output_base,
+                preopened_files=descriptor_map,
+            )
+
+    def identity(descriptor: int) -> tuple[int, int]:
+        metadata = os.fstat(descriptor)
+        return metadata.st_dev, metadata.st_ino
+
+    with _open_prepared_descriptor_map(fixture.required_paths) as descriptor_map:
+        validate(descriptor_map)
+
+    positional_chunks = getattr(
+        spatial_pipeline, "_preopened_positional_chunks", None
+    )
+    assert callable(positional_chunks), (
+        "descriptor-bound validation requires the stable "
+        "_preopened_positional_chunks reader seam"
+    )
+
+    # The first authenticated read must not be allowed to bless the post-race
+    # token after hashing bytes that no longer exist in the retained inode.
+    writer = os.open(target_path, os.O_RDWR | binary)
+    try:
+        with _open_prepared_descriptor_map(fixture.required_paths) as descriptor_map:
+            raced = False
+
+            def chunks_then_corrupt(descriptor: int, size: int):
+                nonlocal raced
+                target = identity(descriptor) == target_identity
+                for chunk in positional_chunks(descriptor, size):
+                    yield chunk
+                    if target and chunk and not raced:
+                        raced = True
+                        os.lseek(writer, 0, os.SEEK_SET)
+                        replacement = b"Q" if target_original[:1] != b"Q" else b"R"
+                        os.write(writer, replacement)
+                        os.fsync(writer)
+
+            with monkeypatch.context() as raced_reader:
+                raced_reader.setattr(
+                    spatial_pipeline,
+                    "_preopened_positional_chunks",
+                    chunks_then_corrupt,
+                )
+                with pytest.raises(ValueError) as race_error:
+                    validate(descriptor_map)
+                race_message = str(race_error.value).lower()
+            assert raced, "first-consumption race hook never reached the target descriptor"
+            assert target_path.read_bytes()[:1] != target_original[:1]
+            assert fixture.source_frame_key in str(race_error.value)
+            assert "changed" in race_message or "digest" in race_message
+    finally:
+        os.lseek(writer, 0, os.SEEK_SET)
+        os.write(writer, target_original[:1])
+        os.fsync(writer)
+        os.close(writer)
+    assert target_path.read_bytes() == target_original
+
+    # A duplicate shares its open-file description.  Observe the caller's
+    # offset at the exact instant the validator reads its retained descriptor,
+    # rather than merely checking that the offset was restored on return.
+    with _open_prepared_descriptor_map(fixture.required_paths) as descriptor_map:
+        caller_fd = descriptor_map[fixture.source_frame_key]
+        caller_offset = os.lseek(caller_fd, 17, os.SEEK_SET)
+        real_lseek = os.lseek
+        shared_offset_changes: list[int] = []
+
+        def guard_shared_offset(
+            descriptor: int, offset: int, whence: int = os.SEEK_SET
+        ) -> int:
+            result = real_lseek(descriptor, offset, whence)
+            nonmutating_query = offset == 0 and whence == os.SEEK_CUR
+            if (
+                descriptor != caller_fd
+                and not nonmutating_query
+                and identity(descriptor) == target_identity
+            ):
+                shared_offset_changes.append(
+                    real_lseek(caller_fd, 0, os.SEEK_CUR)
+                )
+            return result
+
+        with monkeypatch.context() as offset_reader:
+            offset_reader.setattr(
+                spatial_pipeline.os,
+                "lseek",
+                guard_shared_offset,
+            )
+            validate(descriptor_map)
+        assert all(offset == caller_offset for offset in shared_offset_changes)
+        assert os.lseek(caller_fd, 0, os.SEEK_CUR) == caller_offset
+
+    # Closing authentication must rehash.  Masking the stat token models a
+    # metadata-preserving ABA-capable filesystem while a separate descriptor
+    # leaves same-size unauthorized live bytes after the cached capture.
+    writer = os.open(target_path, os.O_RDWR | binary)
+    try:
+        with _open_prepared_descriptor_map(fixture.required_paths) as descriptor_map:
+            real_fstat = os.fstat
+            frozen_metadata = real_fstat(descriptor_map[fixture.source_frame_key])
+            real_read_parquet = spatial_pipeline.pd.read_parquet
+            changed = False
+            post_change_target_passes: list[tuple[int, int, bool]] = []
+
+            def masked_fstat(descriptor: int) -> os.stat_result:
+                metadata = real_fstat(descriptor)
+                if (metadata.st_dev, metadata.st_ino) == target_identity:
+                    return frozen_metadata
+                return metadata
+
+            def count_positional_passes(descriptor: int, size: int):
+                target = identity(descriptor) == target_identity
+                started_after_change = target and changed
+                yielded = 0
+                completed = False
+                try:
+                    for chunk in positional_chunks(descriptor, size):
+                        yielded += len(chunk)
+                        yield chunk
+                    completed = True
+                finally:
+                    if started_after_change:
+                        post_change_target_passes.append(
+                            (size, yielded, completed)
+                        )
+
+            def mutate_after_cached_capture(
+                source: object, *args: object, **kwargs: object
+            ):
+                nonlocal changed
+                assert isinstance(source, io.BytesIO)
+                frame = real_read_parquet(source, *args, **kwargs)
+                if not changed:
+                    os.lseek(writer, 0, os.SEEK_SET)
+                    replacement = b"S" if target_original[:1] != b"S" else b"T"
+                    os.write(writer, replacement)
+                    os.fsync(writer)
+                    changed = True
+                return frame
+
+            with monkeypatch.context() as closing_aba:
+                closing_aba.setattr(spatial_pipeline.os, "fstat", masked_fstat)
+                closing_aba.setattr(
+                    spatial_pipeline,
+                    "_preopened_positional_chunks",
+                    count_positional_passes,
+                )
+                closing_aba.setattr(
+                    spatial_pipeline.pd, "read_parquet", mutate_after_cached_capture
+                )
+                with pytest.raises(ValueError) as closing_error:
+                    validate(descriptor_map)
+                closing_message = str(closing_error.value).lower()
+            assert changed, "closing-rehash mutation hook never ran"
+            assert target_path.read_bytes()[:1] != target_original[:1]
+            assert any(
+                requested == yielded == len(target_original) and completed
+                for requested, yielded, completed in post_change_target_passes
+            ), post_change_target_passes
+            assert fixture.source_frame_key in str(closing_error.value)
+            assert "closing" in closing_message and "digest" in closing_message
+    finally:
+        os.lseek(writer, 0, os.SEEK_SET)
+        os.write(writer, target_original[:1])
+        os.fsync(writer)
+        os.close(writer)
+    assert target_path.read_bytes() == target_original
+
+
+def test_preopened_bound_authority_rejects_category_dot_access_and_lexical_aliases(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Every logical authority category and display root stays independently exact."""
+
+    from bayes_constrained import spatial_pipeline
+
+    fixture = _preopened_validator_fixture(tmp_path)
+    protected_path = fixture.prepared / "provenance/protected_tree_manifest.json"
+    prepared_manifest_path = fixture.prepared / "prepared_run_manifest.json"
+    mutable_authorities = (
+        protected_path,
+        protected_path.with_name(protected_path.name + ".sha256"),
+        prepared_manifest_path,
+        prepared_manifest_path.with_name(prepared_manifest_path.name + ".sha256"),
+    )
+    original_authorities = {path: path.read_bytes() for path in mutable_authorities}
+    missed_rejections: list[str] = []
+
+    def restore_authorities() -> None:
+        for path, payload in original_authorities.items():
+            path.write_bytes(payload)
+
+    def rewrite_protected_files(transform: Callable[[dict[str, str]], None]) -> None:
+        protected = json.loads(protected_path.read_text(encoding="utf-8"))
+        files = dict(protected["files"])
+        transform(files)
+        protected["files"] = files
+        _write_json_sidecar(protected_path, protected)
+
+        prepared = json.loads(prepared_manifest_path.read_text(encoding="utf-8"))
+        protected_relative = protected_path.relative_to(fixture.prepared).as_posix()
+        sidecar = protected_path.with_name(protected_path.name + ".sha256")
+        sidecar_relative = sidecar.relative_to(fixture.prepared).as_posix()
+        protected_digest = hashlib.sha256(protected_path.read_bytes()).hexdigest()
+        prepared["protected_tree_manifest_sha256"] = protected_digest
+        inventory = dict(prepared["prepared_artifact_sha256"])
+        inventory[protected_relative] = protected_digest
+        inventory[sidecar_relative] = hashlib.sha256(sidecar.read_bytes()).hexdigest()
+        prepared["prepared_artifact_sha256"] = inventory
+        _write_json_sidecar(prepared_manifest_path, prepared)
+
+    def validate_bound(
+        *,
+        descriptor_transform: Callable[[dict[str, int]], Mapping[str, int]] | None = None,
+        root: Path | None = None,
+        config_path: Path | None = None,
+        output_base: Path | None = None,
+    ) -> None:
+        with _open_prepared_descriptor_map(fixture.required_paths) as descriptor_map:
+            candidate = (
+                descriptor_map
+                if descriptor_transform is None
+                else descriptor_transform(descriptor_map)
+            )
+            with _assert_validator_owned_duplicates_closed(
+                monkeypatch, spatial_pipeline
+            ):
+                spatial_pipeline.validate_prepared_source_envelope(
+                    fixture.root if root is None else root,
+                    config_path=(
+                        fixture.config_path if config_path is None else config_path
+                    ),
+                    output_base_override=(
+                        fixture.output_base if output_base is None else output_base
+                    ),
+                    preopened_files=candidate,
+                )
+
+    def expect_rejected(
+        label: str,
+        *message_fragments: str,
+        descriptor_transform: Callable[[dict[str, int]], Mapping[str, int]] | None = None,
+        root: Path | None = None,
+        config_path: Path | None = None,
+        output_base: Path | None = None,
+    ) -> None:
+        pattern = "(?is)" + "".join(
+            f"(?=.*(?:{fragment}))" for fragment in message_fragments
+        ) + ".*"
+        try:
+            with pytest.raises(ValueError, match=pattern):
+                validate_bound(
+                    descriptor_transform=descriptor_transform,
+                    root=root,
+                    config_path=config_path,
+                    output_base=output_base,
+                )
+        except (AssertionError, pytest.fail.Exception) as error:
+            missed_rejections.append(f"{label}: {error}")
+
+    validate_bound()
+
+    protected = json.loads(protected_path.read_text(encoding="utf-8"))["files"]
+    overlap = next(
+        key for key in protected if key in spatial_pipeline.EXPECTED_SOURCE_AUTHORITIES
+    )
+    rewrite_protected_files(lambda files: files.pop(overlap))
+    expect_rejected(
+        "protected omission masked by reviewed/source overlap",
+        "protected",
+        "closure",
+        re.escape(overlap),
+    )
+    restore_authorities()
+
+    outside = "config/sr_v2_spatial_sensitivity_execution.yaml"
+    assert not any(
+        outside == root or outside.startswith(root + "/")
+        for root in spatial_pipeline.PROTECTED_TREES
+    )
+    outside_digest = hashlib.sha256(fixture.required_paths[outside].read_bytes()).hexdigest()
+    rewrite_protected_files(lambda files: files.__setitem__(outside, outside_digest))
+    expect_rejected(
+        "outside-root path labeled as protected",
+        "protected",
+        "root",
+        re.escape(outside),
+    )
+    restore_authorities()
+
+    protected = json.loads(protected_path.read_text(encoding="utf-8"))["files"]
+    protected_only = next(
+        key for key in protected if key.endswith("/descriptor_protected_only.bin")
+    )
+    protected_only_digest = protected[protected_only]
+
+    def replace_with_bare_dot(files: dict[str, str]) -> None:
+        assert files.pop(protected_only) == protected_only_digest
+        files["."] = protected_only_digest
+
+    rewrite_protected_files(replace_with_bare_dot)
+
+    def dot_descriptor(descriptor_map: dict[str, int]) -> Mapping[str, int]:
+        candidate = dict(descriptor_map)
+        candidate["."] = candidate.pop(protected_only)
+        return candidate
+
+    expect_rejected(
+        "bare-dot authority key",
+        "canonical",
+        "path",
+        r"\.",
+        descriptor_transform=dot_descriptor,
+    )
+    restore_authorities()
+
+    alias_root = (
+        fixture.root.parent
+        / "descriptor-lexical-alias"
+        / ".."
+        / fixture.root.name
+    )
+    assert ".." in alias_root.parts and alias_root.is_absolute()
+    config_relative = fixture.config_path.relative_to(fixture.root)
+    output_relative = fixture.output_base.relative_to(fixture.root)
+    expect_rejected(
+        "absolute project root with lexical parent alias",
+        "canonical",
+        "root",
+        root=alias_root,
+        config_path=alias_root / config_relative,
+        output_base=alias_root / output_relative,
+    )
+
+    config_alias = (
+        fixture.root
+        / "config"
+        / "descriptor-lexical-alias"
+        / ".."
+        / fixture.config_path.name
+    )
+    assert ".." in config_alias.parts and config_alias.is_absolute()
+    expect_rejected(
+        "absolute config path with lexical parent alias",
+        "canonical",
+        "config",
+        config_path=config_alias,
+    )
+
+    if os.name == "nt":
+        target = fixture.alias_keys[0]
+        read_write = os.open(
+            fixture.required_paths[target], os.O_RDWR | getattr(os, "O_BINARY", 0)
+        )
+        reached_semantics = False
+
+        def semantic_boundary(*_args: object, **_kwargs: object) -> object:
+            nonlocal reached_semantics
+            reached_semantics = True
+            raise AssertionError("read-write descriptor reached semantic parquet validation")
+
+        def read_write_descriptor(
+            descriptor_map: dict[str, int],
+        ) -> Mapping[str, int]:
+            candidate = dict(descriptor_map)
+            candidate[target] = read_write
+            return candidate
+
+        try:
+            with monkeypatch.context() as access_mode:
+                access_mode.setattr(
+                    spatial_pipeline.pd, "read_parquet", semantic_boundary
+                )
+                try:
+                    expect_rejected(
+                        "native Windows readable-writable descriptor",
+                        r"read.only|access",
+                        re.escape(target),
+                        descriptor_transform=read_write_descriptor,
+                    )
+                except AssertionError as error:
+                    assert "read-write descriptor" in str(error)
+                    missed_rejections.append(
+                        "native Windows readable-writable descriptor: "
+                        "reached semantic parquet validation"
+                    )
+        finally:
+            os.close(read_write)
+        if reached_semantics and not any(
+            item.startswith("native Windows readable-writable descriptor")
+            for item in missed_rejections
+        ):
+            missed_rejections.append(
+                "native Windows readable-writable descriptor: reached semantics"
+            )
+
+    restore_authorities()
+    assert not missed_rejections, "; ".join(missed_rejections)
+
+
+def test_preopened_bound_mapping_rejects_duplicate_items_and_surfaces_close_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Hostile mappings and owned-descriptor cleanup fail closed without leaks."""
+
+    from bayes_constrained import spatial_pipeline
+
+    fixture = _preopened_validator_fixture(tmp_path)
+    external_path = tmp_path / "duplicate-items-external.bin"
+    external_path.write_bytes(b"distinct duplicate-items authority\n")
+    binary = getattr(os, "O_BINARY", 0)
+    missed_rejections: list[str] = []
+
+    with _open_prepared_descriptor_map(fixture.required_paths) as descriptor_map:
+        with _assert_validator_owned_duplicates_closed(monkeypatch, spatial_pipeline):
+            spatial_pipeline.validate_prepared_source_envelope(
+                fixture.root,
+                config_path=fixture.config_path,
+                output_base_override=fixture.output_base,
+                preopened_files=descriptor_map,
+            )
+
+    class DuplicateItemsMapping(Mapping[str, int]):
+        def __init__(
+            self, base: Mapping[str, int], target: str, injected: int
+        ) -> None:
+            self._base = dict(base)
+            self._target = target
+            self._injected = injected
+
+        def __getitem__(self, key: str) -> int:
+            return self._base[key]
+
+        def __iter__(self) -> Iterator[str]:
+            return iter(self._base)
+
+        def __len__(self) -> int:
+            return len(self._base)
+
+        def items(self):
+            for key, descriptor in self._base.items():
+                if key == self._target:
+                    yield key, self._injected
+                yield key, descriptor
+
+    with _open_prepared_descriptor_map(fixture.required_paths) as descriptor_map:
+        target = sorted(descriptor_map)[0]
+        external_fd = os.open(external_path, os.O_RDONLY | binary)
+        os.lseek(external_fd, 3, os.SEEK_SET)
+        external_before = (
+            os.fstat(external_fd).st_dev,
+            os.fstat(external_fd).st_ino,
+            os.lseek(external_fd, 0, os.SEEK_CUR),
+        )
+        try:
+            try:
+                with _assert_validator_owned_duplicates_closed(
+                    monkeypatch, spatial_pipeline
+                ):
+                    pattern = (
+                        "(?is)(?=.*duplicate)(?=.*canonical)"
+                        f"(?=.*{re.escape(target)}).*"
+                    )
+                    with pytest.raises(ValueError, match=pattern):
+                        spatial_pipeline.validate_prepared_source_envelope(
+                            fixture.root,
+                            config_path=fixture.config_path,
+                            output_base_override=fixture.output_base,
+                            preopened_files=DuplicateItemsMapping(
+                                descriptor_map, target, external_fd
+                            ),
+                        )
+            except (AssertionError, pytest.fail.Exception) as error:
+                missed_rejections.append(
+                    "duplicate canonical items and overwritten owned fd: "
+                    f"{error}"
+                )
+            external_after = (
+                os.fstat(external_fd).st_dev,
+                os.fstat(external_fd).st_ino,
+                os.lseek(external_fd, 0, os.SEEK_CUR),
+            )
+            assert external_after == external_before
+        finally:
+            os.close(external_fd)
+
+    with _open_prepared_descriptor_map(fixture.required_paths) as descriptor_map:
+        for descriptor in descriptor_map.values():
+            os.lseek(descriptor, 5, os.SEEK_SET)
+        caller_before = {
+            key: (
+                os.fstat(descriptor).st_dev,
+                os.fstat(descriptor).st_ino,
+                os.lseek(descriptor, 0, os.SEEK_CUR),
+            )
+            for key, descriptor in descriptor_map.items()
+        }
+        real_dup = os.dup
+        real_close = os.close
+        owned: set[int] = set()
+        injected = False
+
+        def tracked_dup(descriptor: int) -> int:
+            duplicate = real_dup(descriptor)
+            owned.add(duplicate)
+            return duplicate
+
+        def close_then_report_failure(descriptor: int) -> None:
+            nonlocal injected
+            if descriptor in owned:
+                real_close(descriptor)
+                owned.remove(descriptor)
+                if not injected:
+                    injected = True
+                    raise OSError("injected retained-descriptor close failure")
+                return
+            real_close(descriptor)
+
+        abandoned: set[int] = set()
+        try:
+            with monkeypatch.context() as close_failure:
+                close_failure.setattr(spatial_pipeline.os, "dup", tracked_dup)
+                close_failure.setattr(
+                    spatial_pipeline.os, "close", close_then_report_failure
+                )
+                try:
+                    with pytest.raises(
+                        (ValueError, OSError),
+                        match="(?is)(?=.*close)(?=.*injected retained-descriptor close failure).*",
+                    ):
+                        spatial_pipeline.validate_prepared_source_envelope(
+                            fixture.root,
+                            config_path=fixture.config_path,
+                            output_base_override=fixture.output_base,
+                            preopened_files=descriptor_map,
+                        )
+                except (AssertionError, pytest.fail.Exception) as error:
+                    missed_rejections.append(
+                        "owned descriptor close failure was swallowed or misclassified: "
+                        f"{error}"
+                    )
+        finally:
+            abandoned = set(owned)
+            for descriptor in tuple(owned):
+                try:
+                    real_close(descriptor)
+                except OSError:
+                    pass
+                owned.discard(descriptor)
+        assert injected, "retained-descriptor close failure hook never ran"
+        assert not abandoned, (
+            "validator abandoned retained descriptors after close failure: "
+            f"{sorted(abandoned)}"
+        )
+        assert not owned
+        caller_after = {
+            key: (
+                os.fstat(descriptor).st_dev,
+                os.fstat(descriptor).st_ino,
+                os.lseek(descriptor, 0, os.SEEK_CUR),
+            )
+            for key, descriptor in descriptor_map.items()
+        }
+        assert caller_after == caller_before
+
+    assert not missed_rejections, "; ".join(missed_rejections)
+

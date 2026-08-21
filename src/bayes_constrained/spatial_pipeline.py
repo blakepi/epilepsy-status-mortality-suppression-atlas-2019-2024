@@ -1,21 +1,34 @@
 from __future__ import annotations
 
 import csv
-from contextlib import contextmanager
+from contextlib import closing, contextmanager
 from dataclasses import dataclass
 import hashlib
 import io
 import json
 import math
 import os
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import re
+import stat
 import sys
-from typing import Any, Mapping, Sequence
+from typing import Any, Iterator, Mapping, Sequence
 
 import numpy as np
 import pandas as pd
 import yaml
+
+from .spatial_bym2 import spatial_model_frame_sha256
+
+try:
+    import fcntl as _fcntl
+except ImportError:  # pragma: no cover - Windows has no fcntl module.
+    _fcntl = None
+
+try:
+    import msvcrt as _msvcrt
+except ImportError:  # pragma: no cover - POSIX has no msvcrt module.
+    _msvcrt = None
 
 
 RUN_ID = "sr-v2-spatial-sensitivity-20260818-v1"
@@ -275,9 +288,9 @@ def sha256_file(path: str | Path) -> str:
     return digest.hexdigest()
 
 
-def load_spatial_execution_spec(path: str | Path) -> SpatialExecutionSpec:
-    config_path = Path(path).resolve()
-    raw = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+def _spatial_execution_spec_from_payload(
+    raw: object, *, config_path: Path
+) -> SpatialExecutionSpec:
     if not isinstance(raw, dict):
         raise ValueError("Spatial execution config must be a mapping")
     expected_top = {
@@ -392,6 +405,12 @@ def load_spatial_execution_spec(path: str | Path) -> SpatialExecutionSpec:
         epoch_contract={key: dict(value) for key, value in EPOCH_CONTRACT.items()},
         raw=raw,
     )
+
+
+def load_spatial_execution_spec(path: str | Path) -> SpatialExecutionSpec:
+    config_path = Path(path).resolve()
+    raw = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    return _spatial_execution_spec_from_payload(raw, config_path=config_path)
 
 
 def _atomic_bytes(path: Path, payload: bytes) -> None:
@@ -785,11 +804,774 @@ def load_reviewed_launch_envelope(
     }
 
 
+@dataclass
+class _RetainedPreopenedFile:
+    caller_fd: int
+    owned_fd: int
+    caller_offset: int
+    identity: tuple[int, int, int]
+    stable_token: tuple[int, int, int, int, int, int, int] | None = None
+    stable_digest: str | None = None
+
+
+def _canonical_preopened_key(value: object, *, label: str) -> str:
+    if not isinstance(value, str) or not value:
+        raise ValueError(f"{label} must be a nonempty project-relative string")
+    reject = ValueError(
+        f"{label} must be a canonical POSIX project-relative path: {value!r}"
+    )
+    if "\\" in value or any(ord(character) < 32 or ord(character) == 127 for character in value):
+        raise reject
+    candidate = PurePosixPath(value)
+    # ``PurePosixPath('.')`` and ``PurePosixPath('./.')`` carry no parts at all,
+    # so a bare-dot authority key survives a per-part filter.  Require at least
+    # one component and reject every relative or empty component explicitly.
+    if (
+        candidate.is_absolute()
+        or not candidate.parts
+        or candidate.as_posix() != value
+        or any(part in ("", ".", "..") for part in candidate.parts)
+    ):
+        raise reject
+    return value
+
+
+def _canonical_absolute_path(value: str | Path, *, label: str) -> Path:
+    """Require an absolute path with no lexical ``.``/``..`` alias components."""
+
+    path = Path(value)
+    if not path.is_absolute() or any(
+        part in ("", ".", "..") for part in path.parts[1:]
+    ):
+        raise ValueError(
+            f"descriptor-bound {label} must be a canonical absolute path: {path}"
+        )
+    return path
+
+
+def _preopened_identity(metadata: os.stat_result) -> tuple[int, int, int]:
+    return (
+        metadata.st_dev,
+        metadata.st_ino,
+        metadata.st_mode,
+    )
+
+
+def _preopened_token(
+    metadata: os.stat_result,
+) -> tuple[int, int, int, int, int, int, int]:
+    return (
+        metadata.st_dev,
+        metadata.st_ino,
+        metadata.st_mode,
+        metadata.st_nlink,
+        metadata.st_size,
+        metadata.st_mtime_ns,
+        metadata.st_ctime_ns,
+    )
+
+
+_PREOPENED_CHUNK_BYTES = 1024 * 1024
+
+# Win32 ACCESS_MASK bits that permit changing a file's contents or metadata.
+_WINDOWS_WRITE_ACCESS_MASK = (
+    0x00000002  # FILE_WRITE_DATA
+    | 0x00000004  # FILE_APPEND_DATA
+    | 0x00000010  # FILE_WRITE_EA
+    | 0x00000100  # FILE_WRITE_ATTRIBUTES
+    | 0x10000000  # GENERIC_ALL
+    | 0x40000000  # GENERIC_WRITE
+)
+_WINDOWS_NATIVE: dict[str, Any] = {}
+
+
+def _windows_native() -> dict[str, Any]:
+    """Bind the two Win32 entry points descriptor-bound reads require."""
+
+    if not _WINDOWS_NATIVE:
+        import ctypes
+        from ctypes import wintypes
+
+        class _IoStatusBlock(ctypes.Structure):
+            _fields_ = [
+                ("Pointer", ctypes.c_void_p),
+                ("Information", ctypes.c_size_t),
+            ]
+
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        reopen = kernel32.ReOpenFile
+        reopen.restype = wintypes.HANDLE
+        reopen.argtypes = [
+            wintypes.HANDLE,
+            wintypes.DWORD,
+            wintypes.DWORD,
+            wintypes.DWORD,
+        ]
+        query = ctypes.WinDLL("ntdll").NtQueryInformationFile
+        query.restype = ctypes.c_long
+        _WINDOWS_NATIVE.update(
+            ctypes=ctypes,
+            wintypes=wintypes,
+            reopen=reopen,
+            query=query,
+            status_block=_IoStatusBlock,
+            invalid_handle=ctypes.c_void_p(-1).value,
+        )
+    return _WINDOWS_NATIVE
+
+
+def _preopened_access_is_read_only(descriptor: int) -> bool:
+    """Report whether ``descriptor`` was granted read-only access to its file."""
+
+    if _fcntl is not None:
+        return (_fcntl.fcntl(descriptor, _fcntl.F_GETFL) & os.O_ACCMODE) == os.O_RDONLY
+    if _msvcrt is None:  # pragma: no cover - neither fcntl nor msvcrt exists.
+        raise OSError("descriptor access mode is unavailable on this platform")
+    native = _windows_native()
+    ctypes = native["ctypes"]
+    status_block = native["status_block"]()
+    access = native["wintypes"].DWORD(0)
+    status = native["query"](
+        native["wintypes"].HANDLE(_msvcrt.get_osfhandle(descriptor)),
+        ctypes.byref(status_block),
+        ctypes.byref(access),
+        ctypes.sizeof(access),
+        8,  # FileAccessInformation
+    )
+    if status != 0:
+        raise OSError(
+            "NtQueryInformationFile(FileAccessInformation) failed with status "
+            f"0x{status & 0xFFFFFFFF:08X}"
+        )
+    return not access.value & _WINDOWS_WRITE_ACCESS_MASK
+
+
+@contextmanager
+def _preopened_positional_view(descriptor: int) -> Iterator[Any]:
+    """Yield ``read_at(offset, size)`` that never moves ``descriptor``'s offset.
+
+    A duplicate shares its open-file description, so seeking one duplicate
+    moves the caller's offset too.  POSIX reads positionally; Windows has no
+    ``os.pread``, so ``ReOpenFile`` derives an independent file pointer over
+    the same open file object without ever consulting a pathname.
+    """
+
+    if hasattr(os, "pread"):
+
+        def posix_read_at(offset: int, size: int) -> bytes:
+            return os.pread(descriptor, size, offset)
+
+        yield posix_read_at
+        return
+    if _msvcrt is None:  # pragma: no cover - no positional primitive exists.
+        raise OSError("positional descriptor reads are unavailable on this platform")
+    native = _windows_native()
+    ctypes = native["ctypes"]
+    handle = native["reopen"](
+        native["wintypes"].HANDLE(_msvcrt.get_osfhandle(descriptor)),
+        0x80000000,  # GENERIC_READ
+        0x00000001 | 0x00000002 | 0x00000004,  # FILE_SHARE_READ/WRITE/DELETE
+        0,
+    )
+    if not handle or handle == native["invalid_handle"]:
+        raise OSError(f"ReOpenFile failed with error {ctypes.get_last_error()}")
+    try:
+        view_fd = _msvcrt.open_osfhandle(handle, os.O_RDONLY | getattr(os, "O_BINARY", 0))
+    except OSError:
+        ctypes.WinDLL("kernel32").CloseHandle(native["wintypes"].HANDLE(handle))
+        raise
+    try:
+        cursor = 0
+
+        def windows_read_at(offset: int, size: int) -> bytes:
+            nonlocal cursor
+            if offset != cursor:
+                cursor = os.lseek(view_fd, offset, os.SEEK_SET)
+            chunk = os.read(view_fd, size)
+            cursor += len(chunk)
+            return chunk
+
+        yield windows_read_at
+    finally:
+        os.close(view_fd)
+
+
+def _preopened_positional_chunks(descriptor: int, size: int) -> Iterator[bytes]:
+    """Yield exactly ``size`` bytes without disturbing ``descriptor``'s offset."""
+
+    if size < 0:
+        raise ValueError("preopened positional read size must be nonnegative")
+    with _preopened_positional_view(descriptor) as read_at:
+        offset = 0
+        while offset < size:
+            chunk = read_at(offset, min(_PREOPENED_CHUNK_BYTES, size - offset))
+            if not chunk:
+                raise OSError("preopened descriptor ended before its declared size")
+            yield chunk
+            offset += len(chunk)
+
+
+@contextmanager
+def _retained_preopened_files(
+    preopened_files: Mapping[str, int],
+):
+    if not isinstance(preopened_files, Mapping) or not preopened_files:
+        raise ValueError("preopened_files must be a nonempty exact descriptor mapping")
+    # Resolve every canonical key before any descriptor is duplicated.  A
+    # hostile mapping may yield one key twice from ``items()``; overwriting the
+    # retained entry would otherwise orphan the first owned duplicate.
+    items: list[tuple[str, object]] = []
+    declared: set[str] = set()
+    for raw_key, raw_fd in preopened_files.items():
+        key = _canonical_preopened_key(raw_key, label="preopened descriptor key")
+        if key in declared:
+            raise ValueError(
+                f"preopened descriptor mapping yields a duplicate canonical key: {key}"
+            )
+        declared.add(key)
+        items.append((key, raw_fd))
+
+    retained: dict[str, _RetainedPreopenedFile] = {}
+    owned_fds: list[int] = []
+    numeric_fds: set[int] = set()
+    inodes: set[tuple[int, int]] = set()
+    failed = False
+    try:
+        for key, raw_fd in items:
+            if type(raw_fd) is not int or raw_fd < 0:
+                raise ValueError(f"preopened descriptor for {key} must be an exact integer")
+            if raw_fd in numeric_fds:
+                raise ValueError("preopened descriptor mapping aliases the same descriptor")
+            numeric_fds.add(raw_fd)
+            try:
+                caller_metadata = os.fstat(raw_fd)
+                caller_offset = os.lseek(raw_fd, 0, os.SEEK_CUR)
+            except OSError as error:
+                raise ValueError(f"preopened descriptor for {key} is closed or unreadable") from error
+            if not stat.S_ISREG(caller_metadata.st_mode):
+                raise ValueError(f"preopened descriptor for {key} is not a regular file")
+            try:
+                read_only = _preopened_access_is_read_only(raw_fd)
+            except OSError as error:
+                raise ValueError(
+                    f"preopened descriptor for {key} has no readable access mode"
+                ) from error
+            if not read_only:
+                raise ValueError(f"preopened descriptor for {key} must be read-only")
+            inode = (caller_metadata.st_dev, caller_metadata.st_ino)
+            if inode in inodes:
+                raise ValueError("preopened descriptor mapping aliases one file inode")
+            inodes.add(inode)
+            try:
+                owned_fd = os.dup(raw_fd)
+            except OSError as error:
+                raise ValueError(f"preopened descriptor for {key} cannot be retained") from error
+            owned_fds.append(owned_fd)
+            try:
+                owned_metadata = os.fstat(owned_fd)
+            except OSError as error:
+                raise ValueError(f"preopened descriptor for {key} cannot be retained") from error
+            if _preopened_identity(owned_metadata) != _preopened_identity(caller_metadata):
+                raise ValueError(f"preopened descriptor identity changed for {key}")
+            retained[key] = _RetainedPreopenedFile(
+                caller_fd=raw_fd,
+                owned_fd=owned_fd,
+                caller_offset=caller_offset,
+                identity=_preopened_identity(owned_metadata),
+            )
+        yield retained
+    except BaseException:
+        failed = True
+        raise
+    finally:
+        close_errors: list[str] = []
+        for owned_fd in owned_fds:
+            try:
+                os.close(owned_fd)
+            except OSError as error:
+                close_errors.append(f"{owned_fd}: {error}")
+        if close_errors and not failed:
+            raise ValueError(
+                "preopened validation could not close retained descriptors: "
+                + "; ".join(close_errors)
+            )
+
+
+class _PreopenedReader:
+    def __init__(self, retained: Mapping[str, _RetainedPreopenedFile]) -> None:
+        self._retained = retained
+        self._cached: dict[str, bytes] = {}
+
+    @property
+    def keys(self) -> set[str]:
+        return set(self._retained)
+
+    def _entry(self, key: str) -> _RetainedPreopenedFile:
+        try:
+            return self._retained[key]
+        except KeyError as error:
+            raise ValueError(f"preopened descriptor mapping is missing {key}") from error
+
+    def _stream(
+        self, entry: _RetainedPreopenedFile, key: str, *, collect: bool
+    ) -> tuple[str, tuple[int, int, int, int, int, int, int], bytes | None]:
+        """Digest one whole authenticated pass without moving any file offset."""
+
+        try:
+            before = os.fstat(entry.owned_fd)
+            if _preopened_identity(before) != entry.identity:
+                raise ValueError(f"preopened descriptor identity changed for {key}")
+            digest = hashlib.sha256()
+            chunks: list[bytes] | None = [] if collect else None
+            with closing(
+                _preopened_positional_chunks(entry.owned_fd, before.st_size)
+            ) as passes:
+                for chunk in passes:
+                    digest.update(chunk)
+                    if chunks is not None:
+                        chunks.append(chunk)
+            after = os.fstat(entry.owned_fd)
+        except OSError as error:
+            raise ValueError(f"preopened descriptor for {key} is not readable") from error
+        if _preopened_identity(after) != entry.identity:
+            raise ValueError(f"preopened descriptor identity changed for {key}")
+        payload = b"".join(chunks) if chunks is not None else None
+        return digest.hexdigest(), _preopened_token(after), payload
+
+    def _consume(self, key: str, *, collect: bool) -> tuple[str, bytes | None]:
+        entry = self._entry(key)
+        digest, token, payload = self._stream(entry, key, collect=collect)
+        if entry.stable_digest is None:
+            entry.stable_digest = digest
+            entry.stable_token = token
+        elif entry.stable_digest != digest:
+            raise ValueError(f"preopened descriptor digest changed during validation: {key}")
+        elif entry.stable_token != token:
+            raise ValueError(f"preopened descriptor changed during validation: {key}")
+        return digest, payload
+
+    def bytes(self, key: str) -> bytes:
+        if key not in self._cached:
+            _digest, payload = self._consume(key, collect=True)
+            assert payload is not None
+            self._cached[key] = payload
+        return self._cached[key]
+
+    def sha256(self, key: str) -> str:
+        entry = self._entry(key)
+        if entry.stable_digest is not None:
+            return entry.stable_digest
+        digest, _payload = self._consume(key, collect=False)
+        return digest
+
+    def verify_final_tokens(self) -> None:
+        """Re-prove every retained file's authenticated bytes before returning.
+
+        A stat token survives a same-size in-place rewrite, and the first
+        authenticated pass can itself be raced, so the closing authentication
+        rehashes the retained descriptor instead of trusting cached metadata.
+        """
+
+        for key, entry in self._retained.items():
+            if entry.stable_digest is None or entry.stable_token is None:
+                raise ValueError(f"preopened descriptor was not authenticated: {key}")
+            try:
+                owned_offset = os.lseek(entry.owned_fd, 0, os.SEEK_CUR)
+                caller_offset = os.lseek(entry.caller_fd, 0, os.SEEK_CUR)
+                caller_metadata = os.fstat(entry.caller_fd)
+            except OSError as error:
+                raise ValueError(f"preopened descriptor changed during validation: {key}") from error
+            if owned_offset != entry.caller_offset or caller_offset != entry.caller_offset:
+                raise ValueError(f"preopened descriptor offset changed during validation: {key}")
+            closing_digest, closing_token, _payload = self._stream(
+                entry, key, collect=False
+            )
+            if closing_digest != entry.stable_digest:
+                raise ValueError(
+                    f"preopened descriptor closing digest changed during validation: {key}"
+                )
+            if (
+                closing_token != entry.stable_token
+                or _preopened_token(caller_metadata) != entry.stable_token
+            ):
+                raise ValueError(f"preopened descriptor changed during validation: {key}")
+
+
+def _preopened_json(payload: bytes, *, label: str) -> Any:
+    def reject_duplicates(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+        result: dict[str, Any] = {}
+        for key, value in pairs:
+            if key in result:
+                raise ValueError(f"{label} contains a duplicate JSON key: {key}")
+            result[key] = value
+        return result
+
+    try:
+        return json.loads(payload.decode("utf-8"), object_pairs_hook=reject_duplicates)
+    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise ValueError(f"{label} is not valid UTF-8 JSON") from error
+
+
+def _preopened_hash_mapping(value: object, *, label: str) -> dict[str, str]:
+    if not isinstance(value, Mapping) or not value:
+        raise ValueError(f"{label} must be a nonempty path/hash mapping")
+    result: dict[str, str] = {}
+    for raw_key, raw_digest in value.items():
+        key = _canonical_preopened_key(raw_key, label=f"{label} key")
+        digest = _require_sha256(raw_digest, label=f"{label} {key}")
+        if key in result:
+            raise ValueError(f"{label} contains a duplicate path")
+        result[key] = digest
+    return result
+
+
+def _preopened_pair(reader: _PreopenedReader, key: str, *, label: str) -> str:
+    digest = hashlib.sha256(reader.bytes(key)).hexdigest()
+    expected = digest.encode("ascii") + b"\n"
+    if reader.bytes(key + ".sha256") != expected:
+        raise ValueError(f"{label} SHA-256 sidecar mismatch")
+    return digest
+
+
+def _merge_preopened_hashes(
+    destination: dict[str, str], values: Mapping[str, str], *, label: str
+) -> None:
+    for key, digest in values.items():
+        existing = destination.setdefault(key, digest)
+        if existing != digest:
+            raise ValueError(f"Conflicting {label} hashes for {key}")
+
+
+def _validate_prepared_source_envelope_preopened(
+    root: str | Path,
+    *,
+    config_path: str | Path,
+    output_base_override: str | Path | None,
+    preopened_files: Mapping[str, int],
+) -> dict[str, Any]:
+    base = _canonical_absolute_path(root, label="project root")
+    config = _canonical_absolute_path(config_path, label="config path")
+    try:
+        config_key = _canonical_preopened_key(
+            config.relative_to(base).as_posix(), label="config path"
+        )
+    except ValueError as error:
+        raise ValueError("descriptor-bound config path is outside the project root") from error
+    if config_key != "config/sr_v2_spatial_sensitivity_execution.yaml":
+        raise ValueError("descriptor-bound config path is not the frozen operational config")
+    expected_output_base = base.joinpath(*PurePosixPath(OUTPUT_ROOT).parts)
+    if output_base_override is not None and Path(output_base_override) != expected_output_base:
+        raise ValueError("descriptor-bound output_base_override must equal the frozen project output")
+    prepared = expected_output_base / RUN_ID / "prepared"
+    prepared_prefix = f"{OUTPUT_ROOT}/{RUN_ID}/prepared/"
+
+    with _retained_preopened_files(preopened_files) as retained:
+        reader = _PreopenedReader(retained)
+        config_bytes = reader.bytes(config_key)
+        try:
+            config_payload = yaml.safe_load(config_bytes.decode("utf-8"))
+        except (UnicodeDecodeError, yaml.YAMLError) as error:
+            raise ValueError("Spatial execution config is not valid UTF-8 YAML") from error
+        spec = _spatial_execution_spec_from_payload(
+            config_payload, config_path=config
+        )
+        config_sha256 = hashlib.sha256(config_bytes).hexdigest()
+
+        manifest_key = prepared_prefix + "prepared_run_manifest.json"
+        manifest_hash = _preopened_pair(
+            reader, manifest_key, label="Prepared run manifest"
+        )
+        manifest = _preopened_json(
+            reader.bytes(manifest_key), label="Prepared run manifest"
+        )
+        if not isinstance(manifest, Mapping):
+            raise ValueError("Prepared run manifest must be a mapping")
+        if set(manifest) != PREPARED_MANIFEST_EXACT_FIELDS:
+            raise ValueError("Prepared run manifest exact schema mismatch")
+        required = {
+            "schema_id": "sr_v2_spatial_prepared_run/v1",
+            "run_id": RUN_ID,
+            "model_id": MODEL_ID,
+            "operational_config_sha256": config_sha256,
+            "status": "prepared_not_run",
+            "submission_authorized": False,
+            "production_eligible": True,
+            "builder_provenance": {
+                "frame_loader": "default_load_model_frame",
+                "allocation_solver": "default_solve_feasible_allocation",
+                "graph_preparer": "default_graph_artifacts",
+                "envelope_loader": "default_reviewed_launch_envelope",
+            },
+        }
+        if any(manifest.get(key) != value for key, value in required.items()):
+            raise ValueError("Prepared run identity/status contract mismatch")
+        prepared_inventory = _preopened_hash_mapping(
+            manifest.get("prepared_artifact_sha256"),
+            label="prepared artifact inventory",
+        )
+        allowed_prepared = set(prepared_inventory) | {
+            "prepared_run_manifest.json",
+            "prepared_run_manifest.json.sha256",
+        }
+        actual_prepared = {
+            key.removeprefix(prepared_prefix)
+            for key in reader.keys
+            if key.startswith(prepared_prefix)
+        }
+        if actual_prepared != allowed_prepared:
+            raise ValueError(
+                "Prepared exact descriptor inventory mismatch: "
+                f"extra={sorted(actual_prepared - allowed_prepared)} "
+                f"missing={sorted(allowed_prepared - actual_prepared)}"
+            )
+
+        expected_hashes: dict[str, str] = {}
+        _merge_preopened_hashes(
+            expected_hashes, spec.source_authorities, label="source authority"
+        )
+        _merge_preopened_hashes(
+            expected_hashes,
+            {prepared_prefix + key: digest for key, digest in prepared_inventory.items()},
+            label="prepared artifact",
+        )
+        expected_hashes[config_key] = config_sha256
+
+        prepared_config_key = prepared_prefix + config_key
+        if hashlib.sha256(reader.bytes(prepared_config_key)).hexdigest() != config_sha256:
+            raise ValueError("Prepared operational config bytes changed")
+
+        envelope_key = prepared_prefix + "provenance/launch_envelope.json"
+        envelope_hash = _preopened_pair(
+            reader, envelope_key, label="Reviewed launch envelope"
+        )
+        envelope = _preopened_json(
+            reader.bytes(envelope_key), label="Reviewed launch envelope"
+        )
+        if (
+            not isinstance(envelope, Mapping)
+            or envelope.get("schema_id") != "sr_v2_robustness_launch_envelope/v1"
+            or envelope.get("status") != "reviewed_final"
+            or envelope.get("clean_worktree") is not True
+        ):
+            raise ValueError("Reviewed launch envelope contract mismatch")
+        launch_commit = str(envelope.get("launch_commit", "")).lower()
+        bundle_hash = str(envelope.get("bundle_sha256", "")).lower()
+        if len(launch_commit) != 40 or any(
+            character not in "0123456789abcdef" for character in launch_commit
+        ):
+            raise ValueError("Reviewed launch commit is invalid")
+        _require_sha256(bundle_hash, label="bundle_sha256")
+        source_manifest = envelope.get("source_manifest")
+        if (
+            not isinstance(source_manifest, Mapping)
+            or source_manifest.get("schema_id")
+            != "sr_v2_robustness_final_source_manifest/v1"
+            or source_manifest.get("status") != "reviewed_final"
+            or source_manifest.get("joint_regression_passed") is not True
+            or source_manifest.get("source_hash_mode") != "raw_bytes"
+        ):
+            raise ValueError("Reviewed final source manifest contract mismatch")
+        source_manifest_hash = canonical_sha256(source_manifest)
+        if envelope.get("source_manifest_sha256") != source_manifest_hash:
+            raise ValueError("Reviewed final source manifest SHA-256 mismatch")
+        reviewed_sources = _preopened_hash_mapping(
+            source_manifest.get("sources"), label="reviewed source manifest"
+        )
+        if not set(SPATIAL_FINAL_SOURCE_FILES).issubset(reviewed_sources):
+            raise ValueError("Reviewed union source manifest omits spatial executables")
+        _merge_preopened_hashes(
+            expected_hashes, reviewed_sources, label="reviewed source"
+        )
+        evidence_key = _canonical_preopened_key(
+            source_manifest.get("joint_regression_evidence"),
+            label="joint regression evidence",
+        )
+        evidence_hash = _require_sha256(
+            source_manifest.get("joint_regression_evidence_sha256"),
+            label="joint_regression_evidence_sha256",
+        )
+        _merge_preopened_hashes(
+            expected_hashes,
+            {evidence_key: evidence_hash},
+            label="joint regression evidence",
+        )
+        provenance = {
+            "launch_envelope_sha256": envelope_hash,
+            "final_source_manifest_sha256": source_manifest_hash,
+            "launch_commit": launch_commit,
+            "bundle_sha256": bundle_hash,
+            "joint_regression_evidence_sha256": evidence_hash,
+        }
+        if any(manifest.get(field) != value for field, value in provenance.items()):
+            raise ValueError("Prepared run and reviewed launch envelope are not identical")
+
+        copied_source_key = prepared_prefix + "provenance/final_source_manifest.json"
+        _preopened_pair(reader, copied_source_key, label="Prepared final-source manifest")
+        copied_source = _preopened_json(
+            reader.bytes(copied_source_key), label="Prepared final-source manifest"
+        )
+        if canonical_sha256(copied_source) != source_manifest_hash:
+            raise ValueError("Prepared final-source manifest identity mismatch")
+
+        input_relative = _canonical_preopened_key(
+            manifest.get("input_manifest"), label="prepared input manifest"
+        )
+        input_key = prepared_prefix + input_relative
+        input_hash = _preopened_pair(reader, input_key, label="Prepared input manifest")
+        if input_hash != manifest.get("input_manifest_sha256"):
+            raise ValueError("Prepared input manifest identity mismatch")
+        input_manifest = _preopened_json(
+            reader.bytes(input_key), label="Prepared input manifest"
+        )
+        if (
+            not isinstance(input_manifest, Mapping)
+            or set(input_manifest) != INPUT_MANIFEST_EXACT_FIELDS
+        ):
+            raise ValueError("Prepared input manifest exact schema mismatch")
+        input_bindings = {
+            "schema_id": "sr_v2_spatial_input_manifest/v1",
+            "run_id": RUN_ID,
+            "operational_config_sha256": config_sha256,
+            "source_authorities": manifest["source_authorities"],
+            "launch_envelope_sha256": manifest["launch_envelope_sha256"],
+            "final_source_manifest_sha256": manifest["final_source_manifest_sha256"],
+            "launch_commit": manifest["launch_commit"],
+            "bundle_sha256": manifest["bundle_sha256"],
+            "joint_regression_evidence_sha256": manifest[
+                "joint_regression_evidence_sha256"
+            ],
+            "source_model_frame_sha256": spec.source_authorities[
+                "data/processed/bayes_constrained/model_frame.parquet"
+            ],
+            "prepared_model_frame_sha256": manifest["model_frame_sha256"],
+            "model_frame_semantic_sha256": manifest["model_frame_semantic_sha256"],
+            "graph_contract_sha256": manifest["graph_contract_sha256"],
+        }
+        if any(input_manifest.get(key) != value for key, value in input_bindings.items()):
+            raise ValueError("Prepared input manifest identity chain mismatch")
+        graph_inventory = _preopened_hash_mapping(
+            input_manifest.get("graph_artifact_sha256"),
+            label="graph artifact inventory",
+        )
+        _merge_preopened_hashes(
+            expected_hashes,
+            {prepared_prefix + key: digest for key, digest in graph_inventory.items()},
+            label="graph artifact",
+        )
+
+        source_frame_key = "data/processed/bayes_constrained/model_frame.parquet"
+        prepared_frame_relative = _canonical_preopened_key(
+            manifest.get("model_frame"), label="prepared model frame"
+        )
+        prepared_frame_key = prepared_prefix + prepared_frame_relative
+        source_frame_bytes = reader.bytes(source_frame_key)
+        prepared_frame_bytes = reader.bytes(prepared_frame_key)
+        if (
+            hashlib.sha256(source_frame_bytes).hexdigest()
+            != input_manifest["source_model_frame_sha256"]
+            or hashlib.sha256(prepared_frame_bytes).hexdigest()
+            != input_manifest["prepared_model_frame_sha256"]
+        ):
+            raise ValueError("Source/prepared model-frame raw-byte identity mismatch")
+
+        protected_relative = _canonical_preopened_key(
+            manifest.get("protected_tree_manifest"),
+            label="protected-tree manifest",
+        )
+        protected_key = prepared_prefix + protected_relative
+        protected_hash = _preopened_pair(
+            reader, protected_key, label="Prepared protected-tree manifest"
+        )
+        if protected_hash != manifest.get("protected_tree_manifest_sha256"):
+            raise ValueError("Prepared protected-tree manifest identity mismatch")
+        protected_manifest = _preopened_json(
+            reader.bytes(protected_key), label="Prepared protected-tree manifest"
+        )
+        if (
+            not isinstance(protected_manifest, Mapping)
+            or protected_manifest.get("schema_id")
+            != "sr_v2_spatial_protected_tree_manifest/v1"
+            or protected_manifest.get("roots") != list(PROTECTED_TREES)
+        ):
+            raise ValueError("Protected-tree manifest contract mismatch")
+        protected_files = _preopened_hash_mapping(
+            protected_manifest.get("files"), label="protected-tree files"
+        )
+        # The protected category must stand on its own.  A protected path that
+        # is also a reviewed source or source authority would otherwise keep
+        # its digest in the merged closure after the protected manifest drops
+        # it, masking an omission with an unrelated category's coverage.
+        protected_prefixes = tuple(f"{tree}/" for tree in PROTECTED_TREES)
+        for protected_key in sorted(protected_files):
+            if not protected_key.startswith(protected_prefixes):
+                raise ValueError(
+                    "Protected-tree manifest lists a path outside the protected "
+                    f"roots: {protected_key}"
+                )
+        for authenticated_key in sorted(reader.keys):
+            if (
+                authenticated_key.startswith(protected_prefixes)
+                and authenticated_key not in protected_files
+            ):
+                raise ValueError(
+                    "Protected-tree closure omits an authenticated protected "
+                    f"file: {authenticated_key}"
+                )
+        _merge_preopened_hashes(
+            expected_hashes, protected_files, label="protected-tree"
+        )
+
+        expected_keys = set(expected_hashes) | {
+            manifest_key,
+            manifest_key + ".sha256",
+        }
+        if reader.keys != expected_keys:
+            raise ValueError(
+                "preopened descriptor mapping is not the exact derived closure: "
+                f"extra={sorted(reader.keys - expected_keys)} "
+                f"missing={sorted(expected_keys - reader.keys)}"
+            )
+        for key, expected in expected_hashes.items():
+            actual = reader.sha256(key)
+            if actual != expected:
+                raise ValueError(
+                    f"Preopened artifact SHA-256 mismatch for {key}: "
+                    f"expected {expected}, found {actual}"
+                )
+
+        source_semantic = spatial_model_frame_sha256(
+            pd.read_parquet(io.BytesIO(source_frame_bytes))
+        )
+        prepared_semantic = spatial_model_frame_sha256(
+            pd.read_parquet(io.BytesIO(prepared_frame_bytes))
+        )
+        if (
+            source_semantic != prepared_semantic
+            or prepared_semantic != manifest["model_frame_semantic_sha256"]
+        ):
+            raise ValueError("Source/prepared model-frame semantic identity mismatch")
+        mapping = manifest.get("chain_mapping")
+        if not isinstance(mapping, list) or len(mapping) != 4:
+            raise ValueError("Prepared run requires exactly four chain mappings")
+        if [row.get("array_index") for row in mapping] != [1, 2, 3, 4]:
+            raise ValueError("Prepared chain array mapping changed")
+        reader.verify_final_tokens()
+        return {
+            "schema_id": "sr_v2_spatial_prepared_validation/v1",
+            "manifest": dict(manifest),
+            "manifest_sha256": manifest_hash,
+            "prepared_root": str(prepared),
+            "verified_artifact_sha256": dict(prepared_inventory),
+            **provenance,
+        }
+
+
 def validate_prepared_source_envelope(
     root: str | Path,
     *,
     config_path: str | Path,
     output_base_override: str | Path | None = None,
+    preopened_files: Mapping[str, int] | None = None,
 ) -> dict[str, Any]:
     """Revalidate the immutable preparation and its external launch authority.
 
@@ -797,6 +1579,14 @@ def validate_prepared_source_envelope(
     launch authority and intentionally rehashes the repository sources, copied
     envelope, prepared inventory, and all manifest sidecars on every call.
     """
+
+    if preopened_files is not None:
+        return _validate_prepared_source_envelope_preopened(
+            root,
+            config_path=config_path,
+            output_base_override=output_base_override,
+            preopened_files=preopened_files,
+        )
 
     base = Path(root).resolve()
     spec = load_spatial_execution_spec(config_path)
@@ -893,8 +1683,6 @@ def validate_prepared_source_envelope(
         or sha256_file(prepared_frame_path) != input_manifest["prepared_model_frame_sha256"]
     ):
         raise ValueError("Source/prepared model-frame raw-byte identity mismatch")
-    from .spatial_bym2 import spatial_model_frame_sha256
-
     source_semantic = spatial_model_frame_sha256(pd.read_parquet(source_frame_path))
     prepared_semantic = spatial_model_frame_sha256(pd.read_parquet(prepared_frame_path))
     if source_semantic != prepared_semantic or prepared_semantic != manifest["model_frame_semantic_sha256"]:
