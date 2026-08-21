@@ -225,3 +225,173 @@ def test_calibration_sidecar_carries_the_no_precise_claim_boundary(calibration_b
     assert "does not authorize" in sidecar["interpretation_boundary"]
     assert sidecar["replicates"] == 20
     assert sidecar["suppressed_cells_total"] == 4337
+
+
+# --- Figure 1: suppression and constraint architecture -----------------------
+
+ARCHITECTURE_GENERATOR = ROOT / "scripts" / "114_figure_sr_v2_suppression_architecture.py"
+
+
+def load_architecture_generator():
+    spec = importlib.util.spec_from_file_location("sr_v2_architecture", ARCHITECTURE_GENERATOR)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+@pytest.fixture(scope="module")
+def architecture_built(tmp_path_factory: pytest.TempPathFactory):
+    module = load_architecture_generator()
+    module.DESTINATION = tmp_path_factory.mktemp("architecture")
+    assert module.main([]) == 0
+    stem = "figure_suppression_architecture"
+    sidecar = json.loads((module.DESTINATION / f"{stem}.json").read_text(encoding="utf-8"))
+    return module, sidecar, stem
+
+
+def test_architecture_figure_writes_vector_and_raster(architecture_built) -> None:
+    module, _sidecar, stem = architecture_built
+    for suffix in (".pdf", ".png"):
+        path = module.DESTINATION / f"{stem}{suffix}"
+        assert path.is_file() and path.stat().st_size > 0, path
+
+
+def test_panel_a_shares_recompute_from_the_frozen_model_frame(architecture_built) -> None:
+    module, sidecar, _stem = architecture_built
+    frame = pd.read_parquet(module.MODEL_FRAME)
+    for row in [entry for entry in sidecar["rows"] if entry["panel"] == "a"]:
+        subset = frame[frame["primary_rurality"] == row["rurality"]]
+        expected_count = int((subset["q002_count_status"] == row["status"]).sum())
+        assert row["county_years"] == expected_count, row
+        expected_percent = 100.0 * expected_count / len(subset)
+        assert row["percent_of_county_years"] == pytest.approx(expected_percent, abs=1e-4), row
+
+
+def test_exact_publication_falls_monotonically_along_the_rurality_gradient(
+    architecture_built,
+) -> None:
+    """The differential in panel a is the figure's argument; assert its direction."""
+
+    _module, sidecar, _stem = architecture_built
+    order = [key for key, _label in _module_rurality_order(sidecar)]
+    exact = {
+        row["rurality"]: row["percent_of_county_years"]
+        for row in sidecar["rows"]
+        if row["panel"] == "a" and row["status"] == "exact"
+    }
+    shares = [exact[key] for key in order]
+    assert shares == sorted(shares, reverse=True), shares
+    assert shares[0] > 100 * shares[-1], shares
+
+
+def _module_rurality_order(sidecar) -> list[tuple[str, str]]:
+    seen: list[tuple[str, str]] = []
+    for row in sidecar["rows"]:
+        if row["panel"] != "a":
+            continue
+        pair = (row["rurality"], row["rurality_label"])
+        if pair not in seen:
+            seen.append(pair)
+    return seen
+
+
+def test_worked_county_feasible_set_recomputes_by_a_different_method(
+    architecture_built,
+) -> None:
+    """Count the allocations with inclusion-exclusion, not the generator's search."""
+
+    import math
+
+    _module, sidecar, _stem = architecture_built
+    example = sidecar["worked_example"]
+    parts = len(example["suppressed_years"])
+    total = example["published_period_total"]
+    free = total - parts
+    closed_form = sum(
+        (-1) ** j * math.comb(parts, j) * math.comb(free - 9 * j + parts - 1, parts - 1)
+        for j in range(parts + 1)
+        if free - 9 * j >= 0
+    )
+    assert example["feasible_allocations"] == closed_form
+    assert example["allocations_under_bounds_only"] == 9 ** parts
+    assert (
+        example["feasible_set_reduction_factor"]
+        == example["allocations_under_bounds_only"] // closed_form
+    )
+    marginal = example["feasible_marginal_counts_per_suppressed_year"]
+    assert sum(marginal.values()) == closed_form
+    assert min(int(key) for key in marginal) == example["feasible_per_year_lower"]
+    assert max(int(key) for key in marginal) == example["feasible_per_year_upper"]
+
+
+def test_worked_county_uses_only_quantities_wonder_already_publishes(
+    architecture_built,
+) -> None:
+    """Panel b must carry no model-derived estimate for a named county."""
+
+    module, sidecar, _stem = architecture_built
+    frame = pd.read_parquet(module.MODEL_FRAME)
+    county = frame[frame["county_fips"] == sidecar["worked_example"]["county_fips"]]
+    assert sidecar["worked_example"]["published_period_total"] == int(
+        county["q001_period_exact_count"].iloc[0]
+    )
+    # ``year`` is stored as a string in the frozen frame; the generator coerces
+    # it, so the check must too rather than silently matching nothing.
+    years = county["year"].astype(int)
+    for row in [entry for entry in sidecar["rows"] if entry["panel"] == "b"]:
+        record = county[years == row["year"]].iloc[0]
+        if row["status"] == "suppressed_1_9":
+            assert (row["published_lower"], row["published_upper"]) == (
+                int(record["q002_lower"]),
+                int(record["q002_upper"]),
+            )
+        else:
+            assert row["published_lower"] == row["published_upper"] == 0
+    assert "posterior" not in json.dumps(sidecar["worked_example"]).lower()
+
+
+def test_panel_c_matches_the_frozen_constraint_geometry(architecture_built) -> None:
+    module, sidecar, _stem = architecture_built
+    geometry = json.loads(module.GEOMETRY.read_text(encoding="utf-8"))
+    row = next(entry for entry in sidecar["rows"] if entry["panel"] == "c")
+    assert row["latent_variables"] == geometry["latent_variables"]
+    assert row["independent_equalities"] == geometry["independent_equalities"]
+    assert row["equality_nullity"] == geometry["equality_nullity"]
+    # The decomposition must close exactly, in both directions.
+    assert row["latent_variables"] - row["independent_equalities"] == row["equality_nullity"]
+    assert (
+        row["nominal_equalities"]
+        - row["zero_information_equalities"]
+        - row["algebraically_implied_equalities"]
+        == row["independent_equalities"]
+    )
+    assert row["nominal_equalities"] == (
+        geometry["nominal_county_period_equalities"]
+        + geometry["nominal_state_year_equalities"]
+        + geometry["nominal_national_year_equalities"]
+        + geometry["nominal_grand_total_equalities"]
+    )
+
+
+def test_panel_c_refuses_an_internally_inconsistent_geometry(
+    architecture_built, tmp_path: Path
+) -> None:
+    module, _sidecar, _stem = architecture_built
+    geometry = json.loads(module.GEOMETRY.read_text(encoding="utf-8"))
+    geometry["equality_nullity"] = int(geometry["equality_nullity"]) + 1
+    figure = module.plt.figure()
+    try:
+        with pytest.raises(AssertionError):
+            module.draw_dimensionality(figure.add_subplot(1, 1, 1), geometry)
+    finally:
+        module.plt.close(figure)
+
+
+def test_architecture_sidecar_states_the_disclosure_boundary(architecture_built) -> None:
+    _module, sidecar, _stem = architecture_built
+    assert sidecar["counties"] == 3142
+    assert sidecar["county_years"] == 3142 * 6
+    boundary = sidecar["disclosure_boundary"].lower()
+    assert "already publishes" in boundary
+    assert "no model-derived estimate" in boundary
