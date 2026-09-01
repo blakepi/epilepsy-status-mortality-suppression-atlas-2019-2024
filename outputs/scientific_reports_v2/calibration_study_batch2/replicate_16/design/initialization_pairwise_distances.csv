@@ -1,0 +1,7 @@
+left_chain,right_chain,l1_distance,different_cells
+1,2,316,88
+1,3,298,82
+1,4,354,94
+2,3,340,87
+2,4,328,90
+3,4,356,93

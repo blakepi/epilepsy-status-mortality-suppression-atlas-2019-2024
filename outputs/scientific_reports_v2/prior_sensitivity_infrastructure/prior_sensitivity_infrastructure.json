@@ -1,0 +1,84 @@
+{
+  "checks": [
+    {
+      "check": "python_ast:model",
+      "detail": "AST parse passed",
+      "passed": true
+    },
+    {
+      "check": "python_ast:prepare",
+      "detail": "AST parse passed",
+      "passed": true
+    },
+    {
+      "check": "python_ast:runner",
+      "detail": "AST parse passed",
+      "passed": true
+    },
+    {
+      "check": "python_ast:summarize",
+      "detail": "AST parse passed",
+      "passed": true
+    },
+    {
+      "check": "primary_default_unchanged",
+      "detail": "default profile matches corrected primary target",
+      "passed": true
+    },
+    {
+      "check": "context_restores_profile",
+      "detail": "profile override is scoped and exception-safe",
+      "passed": true
+    },
+    {
+      "check": "prepare_requires_passed_production",
+      "detail": "sensitivity blocked before corrected production pass",
+      "passed": true
+    },
+    {
+      "check": "both_profiles_prespecified",
+      "detail": "broader and regularizing profiles",
+      "passed": true
+    },
+    {
+      "check": "fresh_chain_and_initialization_seeds",
+      "detail": "profile-specific nonproduction seeds",
+      "passed": true
+    },
+    {
+      "check": "runner_activates_recorded_profile",
+      "detail": "single validated sampler reused under explicit profile context",
+      "passed": true
+    },
+    {
+      "check": "runner_uses_fresh_feasible_starts",
+      "detail": "sensitivity chains do not inherit a primary posterior state",
+      "passed": true
+    },
+    {
+      "check": "summary_rechecks_primary_production_gate",
+      "detail": "comparison requires passed primary analysis",
+      "passed": true
+    },
+    {
+      "check": "summary_reports_all_parameter_convergence",
+      "detail": "all-parameter convergence is retained",
+      "passed": true
+    },
+    {
+      "check": "summary_reports_material_primary_shifts",
+      "detail": "effect-size change and interval overlap reported",
+      "passed": true
+    },
+    {
+      "check": "registry_contains_profiles",
+      "detail": "profiles frozen before corrected results",
+      "passed": true
+    }
+  ],
+  "generated_utc": "2026-08-11T04:09:36.726084+00:00",
+  "interpretation_boundary": "Infrastructure validation only. Prior-sensitivity chains remain blocked until the corrected primary production gate passes.",
+  "passed": true,
+  "production_launched": false,
+  "sensitivity_launched": false
+}

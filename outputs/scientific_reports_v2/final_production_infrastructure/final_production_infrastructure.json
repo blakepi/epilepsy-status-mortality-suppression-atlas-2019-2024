@@ -1,0 +1,224 @@
+{
+  "authoritative_submission_helper": "hpc/wahab/submit_sr_v2_production_final.sh",
+  "checks": [
+    {
+      "check": "python_ast:82_prepare_sr_v2_production_final.py",
+      "detail": "AST parse passed",
+      "passed": true
+    },
+    {
+      "check": "v2_namespace:82_prepare_sr_v2_production_final.py",
+      "detail": "isolated corrected production namespace",
+      "passed": true
+    },
+    {
+      "check": "python_ast:76_run_sr_v2_production_chain.py",
+      "detail": "AST parse passed",
+      "passed": true
+    },
+    {
+      "check": "v2_namespace:76_run_sr_v2_production_chain.py",
+      "detail": "isolated corrected production namespace",
+      "passed": true
+    },
+    {
+      "check": "python_ast:77_merge_sr_v2_production.py",
+      "detail": "AST parse passed",
+      "passed": true
+    },
+    {
+      "check": "v2_namespace:77_merge_sr_v2_production.py",
+      "detail": "isolated corrected production namespace",
+      "passed": true
+    },
+    {
+      "check": "python_ast:83_gate_sr_v2_production_final.py",
+      "detail": "AST parse passed",
+      "passed": true
+    },
+    {
+      "check": "v2_namespace:83_gate_sr_v2_production_final.py",
+      "detail": "isolated corrected production namespace",
+      "passed": true
+    },
+    {
+      "check": "frozen_v111_guard",
+      "detail": "immutable v1.1.1 tag and commit required",
+      "passed": true
+    },
+    {
+      "check": "scientific_reports_branch_guard",
+      "detail": "final preparation restricted to v2 branch",
+      "passed": true
+    },
+    {
+      "check": "exact_kernel_gates_required",
+      "detail": "deterministic and randomized exact-kernel evidence required",
+      "passed": true
+    },
+    {
+      "check": "constraint_geometry_required",
+      "detail": "audited latent-variable rank and nullity required",
+      "passed": true
+    },
+    {
+      "check": "extended_real_pilot_required",
+      "detail": "extended real-data tuning gate required",
+      "passed": true
+    },
+    {
+      "check": "tuned_calibration_required",
+      "detail": "tuned truth-known calibration gate required",
+      "passed": true
+    },
+    {
+      "check": "prespecified_chain_seed_range",
+      "detail": "chain seeds 58291\u201358298",
+      "passed": true
+    },
+    {
+      "check": "prespecified_initialization_seed_range",
+      "detail": "dispersed initialization seeds 57291\u201357298",
+      "passed": true
+    },
+    {
+      "check": "eight_chain_array",
+      "detail": "eight independent production jobs",
+      "passed": true
+    },
+    {
+      "check": "cpu_only_array",
+      "detail": "CPU-only main-partition production",
+      "passed": true
+    },
+    {
+      "check": "final_submit_uses_final_prepare",
+      "detail": "final gate-aware preparation",
+      "passed": true
+    },
+    {
+      "check": "final_submit_uses_final_stage",
+      "detail": "tuned validation evidence staged",
+      "passed": true
+    },
+    {
+      "check": "final_submit_fail_closed_dependency",
+      "detail": "finalization runs only after successful array",
+      "passed": true
+    },
+    {
+      "check": "final_submit_uses_final_gate_job",
+      "detail": "final calibrated gate job selected",
+      "passed": true
+    },
+    {
+      "check": "final_stage_includes_tuned_calibration",
+      "detail": "tuned calibration evidence copied to scratch",
+      "passed": true
+    },
+    {
+      "check": "finalize_merges_then_gates",
+      "detail": "merge precedes fail-closed gate",
+      "passed": true
+    },
+    {
+      "check": "all_parameter_gate",
+      "detail": "all-parameter and primary ESS thresholds enforced",
+      "passed": true
+    },
+    {
+      "check": "latent_summary_gate",
+      "detail": "representative latent summaries gated",
+      "passed": true
+    },
+    {
+      "check": "constraint_validation_gate",
+      "detail": "all retained latent states must satisfy constraints",
+      "passed": true
+    },
+    {
+      "check": "final_gate_requires_tuned_calibration",
+      "detail": "final production gate rechecks tuned calibration",
+      "passed": true
+    },
+    {
+      "check": "shell_shebang:stage_sr_v2_to_scratch_final.sh",
+      "detail": "login-shell shebang",
+      "passed": true
+    },
+    {
+      "check": "shell_strict_mode:stage_sr_v2_to_scratch_final.sh",
+      "detail": "fail-closed shell mode",
+      "passed": true
+    },
+    {
+      "check": "shell_portable_paths:stage_sr_v2_to_scratch_final.sh",
+      "detail": "no drive-qualified Windows path",
+      "passed": true
+    },
+    {
+      "check": "shell_shebang:sync_sr_v2_results_home.sh",
+      "detail": "login-shell shebang",
+      "passed": true
+    },
+    {
+      "check": "shell_strict_mode:sync_sr_v2_results_home.sh",
+      "detail": "fail-closed shell mode",
+      "passed": true
+    },
+    {
+      "check": "shell_portable_paths:sync_sr_v2_results_home.sh",
+      "detail": "no drive-qualified Windows path",
+      "passed": true
+    },
+    {
+      "check": "shell_shebang:submit_sr_v2_production_final.sh",
+      "detail": "login-shell shebang",
+      "passed": true
+    },
+    {
+      "check": "shell_strict_mode:submit_sr_v2_production_final.sh",
+      "detail": "fail-closed shell mode",
+      "passed": true
+    },
+    {
+      "check": "shell_portable_paths:submit_sr_v2_production_final.sh",
+      "detail": "no drive-qualified Windows path",
+      "passed": true
+    },
+    {
+      "check": "shell_shebang:60_sr_v2_production_chain_array.sbatch",
+      "detail": "login-shell shebang",
+      "passed": true
+    },
+    {
+      "check": "shell_strict_mode:60_sr_v2_production_chain_array.sbatch",
+      "detail": "fail-closed shell mode",
+      "passed": true
+    },
+    {
+      "check": "shell_portable_paths:60_sr_v2_production_chain_array.sbatch",
+      "detail": "no drive-qualified Windows path",
+      "passed": true
+    },
+    {
+      "check": "shell_shebang:62_sr_v2_finalize_production_final.sbatch",
+      "detail": "login-shell shebang",
+      "passed": true
+    },
+    {
+      "check": "shell_strict_mode:62_sr_v2_finalize_production_final.sbatch",
+      "detail": "fail-closed shell mode",
+      "passed": true
+    },
+    {
+      "check": "shell_portable_paths:62_sr_v2_finalize_production_final.sbatch",
+      "detail": "no drive-qualified Windows path",
+      "passed": true
+    }
+  ],
+  "generated_utc": "2026-08-11T01:46:45.148623+00:00",
+  "interpretation_boundary": "Infrastructure validation only. No corrected empirical production chain was launched.",
+  "passed": true,
+  "production_launched": false
+}

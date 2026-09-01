@@ -1,0 +1,12 @@
+{
+  "cases": 30,
+  "cases_where_legacy_kernel_was_disconnected": 0,
+  "failed": 0,
+  "maximum_feasible_states": 18,
+  "maximum_repaired_detailed_balance_error": 1.6653345369377348e-16,
+  "maximum_repaired_row_sum_error": 8.881784197001252e-16,
+  "maximum_repaired_stationarity_error": 3.3306690738754696e-16,
+  "minimum_feasible_states": 2,
+  "pass": true,
+  "passed": 30
+}

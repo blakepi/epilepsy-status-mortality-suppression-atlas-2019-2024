@@ -1,0 +1,13 @@
+{
+  "chains_completed": 4,
+  "computational_gate_pass": false,
+  "draws_per_chain": 600,
+  "interpretation_boundary": "Single synthetic replicate and computational smoke test only. Coverage and bias require a prespecified multi-replicate calibration study.",
+  "maximum_primary_rhat": 1.766289619552399,
+  "minimum_primary_bulk_ess": 6.226045873780719,
+  "primary_truth_coverage_fraction": 1.0,
+  "suppressed_cell_coverage_95": 0.9955947136563876,
+  "suppressed_cell_mean_interval_width": 3.1323788546255513,
+  "suppressed_cell_rmse": 1.0492580837474395,
+  "validation_failures": 0
+}

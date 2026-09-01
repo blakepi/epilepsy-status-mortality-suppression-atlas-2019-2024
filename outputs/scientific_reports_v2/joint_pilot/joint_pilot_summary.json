@@ -1,0 +1,20 @@
+{
+  "chains_completed": 4,
+  "draws_per_chain": 100,
+  "interpretation_boundary": "Short tuning pilot only; no corrected epidemiologic estimate is authorized.",
+  "maximum_latent_summary_rhat": 1.3475497486455408,
+  "maximum_primary_rhat": 1.694574667700296,
+  "median_final_fraction_free_cells_changed": 0.46972666322846823,
+  "minimum_latent_summary_bulk_ess": 9.935325178690807,
+  "minimum_primary_bulk_ess": 6.835328497083025,
+  "pilot_pass": false,
+  "recommended_proposal_scale_multipliers": {
+    "beta": 0.6,
+    "log_kappa": 2.4,
+    "log_sigma_state": 5.0,
+    "log_sigma_year": 9.0,
+    "state": 1.3,
+    "year": 1.5
+  },
+  "validation_failures": 0
+}

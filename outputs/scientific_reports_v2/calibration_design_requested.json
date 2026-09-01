@@ -1,0 +1,6 @@
+{
+  "branch": "scientific-reports-v2",
+  "attempt": 3,
+  "purpose": "Validate a truth-known state-clustered synthetic suppression design, aggregate construction, and dispersed feasible initializations after removing non-serializable arrays from parquet metadata.",
+  "interpretation_boundary": "Design smoke test only; no estimator-performance or epidemiologic claim."
+}

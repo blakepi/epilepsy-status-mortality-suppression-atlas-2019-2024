@@ -1,0 +1,5 @@
+cell_group,cells,mean_absolute_error,root_mean_squared_error,coverage_95,mean_interval_width
+all_cells,432,0.4068872170781893,0.7562176827729076,1.0,1.6574074074074074
+suppressed_cells,227,0.7743404307391092,1.0432196844490744,1.0,3.154185022026432
+exact_cells,41,0.0,0.0,1.0,0.0
+zero_cells,164,0.0,0.0,1.0,0.0

@@ -1,0 +1,62 @@
+{
+ "manuscript": "manuscript/scientific_reports_v2/manuscript_draft_nonfinal.md",
+ "outstanding_placeholders": [
+  "AUTHOR_BLOCK",
+  "DISCUSSION_SUPPRESSION_RESULT",
+  "ETHICS_DETERMINATION",
+  "FINAL_DISCUSSION_SENTENCE",
+  "ONE_SENTENCE_ROBUSTNESS_RESULT",
+  "REPOSITORY_DOI",
+  "REPOSITORY_DOI_AND_VERSION",
+  "REPOSITORY_VERSION",
+  "ROBUSTNESS_RESULTS_PARAGRAPH",
+  "SPATIAL_MODEL_RESULT",
+  "SUPPLEMENT_ACCEPTANCE_TABLE",
+  "SUPPLEMENT_PARAMETER_TABLE",
+  "SUPPRESSION_SENSITIVITY_RESULT"
+ ],
+ "resolved": {
+  "ADJACENCY_ACCESS_DATE": {
+   "source": "spatial_residual_diagnostics/spatial_residual_summary.json",
+   "value": "2026-08-18"
+  },
+  "COUNTY_SUMMARY_RESULT": {
+   "source": "production_8chain/county_posterior_summary.csv",
+   "value": "They are reported for all 3,142 counties, each with a posterior mean, median, and 95% credible interval on both the count and the rate scale."
+  },
+  "DISCUSSION_PRIMARY_FINDING": {
+   "source": "production_8chain/posterior_primary_summary.csv",
+   "value": "higher mortality in nonmetro nonadjacent counties than in large metropolitan counties (rate ratio 1.23; 95% credible interval, 1.17 to 1.30), alongside a monotone gradient across social-vulnerability quartiles"
+  },
+  "PRIMARY_CRI": {
+   "source": "production_8chain/posterior_primary_summary.csv",
+   "value": "1.17 to 1.30"
+  },
+  "PRIMARY_IRR": {
+   "source": "production_8chain/posterior_primary_summary.csv",
+   "value": "1.23"
+  },
+  "PRIMARY_POSTERIOR_PROBABILITY_STATEMENT": {
+   "source": "production_8chain/posterior_primary_summary.csv",
+   "value": "greater than 0.999 that the rate ratio exceeded 1"
+  },
+  "PRODUCTION_DIAGNOSTIC_SUMMARY": {
+   "source": "production_8chain/production_gate.json",
+   "value": "Across all monitored parameters the worst rank-normalized split R-hat was 1.006 (state_effect[15]), with bulk effective sample size 2,071 and tail effective sample size 4,229; the worst stochastic latent summary was latent_county_period[48035] at R-hat 1.0015."
+  },
+  "RURALITY_RESULTS_SENTENCE": {
+   "source": "production_8chain/posterior_primary_summary.csv",
+   "value": "other metropolitan, 1.14 (95% credible interval, 1.10 to 1.18); nonmetro adjacent, 1.27 (95% credible interval, 1.22 to 1.33); nonmetro nonadjacent, 1.23 (95% credible interval, 1.17 to 1.30)"
+  },
+  "SPATIAL_DIAGNOSTIC_RESULT": {
+   "source": "spatial_residual_diagnostics/spatial_residual_summary.json",
+   "value": "Global Moran's I was 0.117 for the conditional Pearson residual across 3,142 counties (3,128 with at least one model neighbor), with a two-sided permutation P value of 0.0001, the smallest value attainable with 9,999 permutations; 19 within-state Pearson statistics also met the prespecified materiality rule, so the prespecified structured county spatial-effect sensitivity was triggered."
+  },
+  "SVI_RESULTS_SENTENCE": {
+   "source": "production_8chain/posterior_primary_summary.csv",
+   "value": "a monotone gradient: quartile 2, 1.11 (95% credible interval, 1.07 to 1.16); quartile 3, 1.25 (95% credible interval, 1.20 to 1.30); the most vulnerable quartile, 1.43 (95% credible interval, 1.37 to 1.50), each relative to the least vulnerable quartile"
+  }
+ },
+ "schema_id": "sr_v2_manuscript_results/v1",
+ "submission_ready": false
+}

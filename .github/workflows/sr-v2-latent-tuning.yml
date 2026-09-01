@@ -1,0 +1,65 @@
+name: Scientific Reports v2 latent tuning
+
+on:
+  push:
+    branches:
+      - scientific-reports-v2
+    paths:
+      - '.github/workflows/sr-v2-latent-tuning.yml'
+      - 'scripts/67_compare_latent_move_profiles.py'
+      - 'src/bayes_constrained/latent_pilot.py'
+      - 'src/bayes_constrained/heatbath.py'
+      - 'src/bayes_constrained/sampler.py'
+
+concurrency:
+  group: scientific-reports-v2-latent-tuning-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  compare-profiles:
+    if: ${{ !contains(github.event.head_commit.message, '[skip tuning]') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Check out v2 branch
+        uses: actions/checkout@v4
+        with:
+          ref: scientific-reports-v2
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Install tuning dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pandas numpy scipy pyarrow statsmodels PyYAML
+
+      - name: Compare fixed-theta latent move profiles
+        run: python scripts/67_compare_latent_move_profiles.py
+
+      - name: Verify generated files
+        run: |
+          test -s outputs/scientific_reports_v2/latent_tuning/latent_tuning_profiles.csv
+          test -s outputs/scientific_reports_v2/latent_tuning/selected_latent_tuning.yaml
+          git diff --check
+
+      - name: Commit tuning evidence
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add outputs/scientific_reports_v2/latent_tuning
+          if git diff --cached --quiet; then
+            echo "No tuning changes to commit."
+            exit 0
+          fi
+          git commit -m "test: select v2 latent move profile [skip sr-v2] [skip tuning]"
+          git pull --rebase origin scientific-reports-v2
+          git push origin HEAD:scientific-reports-v2

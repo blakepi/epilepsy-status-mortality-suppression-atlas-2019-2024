@@ -1,0 +1,7 @@
+chain_left,chain_right,starting_l1_distance_free,final_l1_distance_free,starting_cells_different,final_cells_different
+1,2,16976,16382,3167,4258
+1,3,17292,16442,3223,4252
+1,4,17478,16706,3221,4287
+2,3,17218,16498,3205,4314
+2,4,17700,16970,3270,4356
+3,4,17546,16812,3266,4343

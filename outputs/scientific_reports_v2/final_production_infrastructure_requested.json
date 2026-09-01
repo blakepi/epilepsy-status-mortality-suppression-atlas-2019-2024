@@ -1,0 +1,5 @@
+{
+  "purpose": "Compile and test the authoritative calibrated Scientific Reports v2 production preparation, staging, Slurm array, merger, fail-closed gate, frozen-baseline guards, prespecified seeds, and validation-evidence requirements without launching production inference.",
+  "authoritative_submission_helper": "hpc/wahab/submit_sr_v2_production_final.sh",
+  "production_launched": false
+}

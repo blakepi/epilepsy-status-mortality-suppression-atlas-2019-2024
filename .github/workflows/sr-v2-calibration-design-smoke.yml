@@ -1,0 +1,60 @@
+name: Scientific Reports v2 calibration design smoke
+
+on:
+  push:
+    branches:
+      - scientific-reports-v2
+    paths:
+      - 'outputs/scientific_reports_v2/calibration_design_requested.json'
+
+permissions:
+  contents: write
+
+jobs:
+  calibration-design:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out calibration request
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Install calibration dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pandas numpy scipy pyarrow statsmodels PyYAML pytest
+
+      - name: Run calibration unit tests
+        run: python -m pytest -q tests/test_sr_v2_calibration.py
+
+      - name: Generate truth-known calibration design
+        run: python scripts/72_run_sr_v2_calibration_design_smoke.py
+
+      - name: Verify calibration evidence
+        run: |
+          test -s outputs/scientific_reports_v2/calibration_design_smoke/calibration_design_summary.json
+          test -s outputs/scientific_reports_v2/calibration_design_smoke/calibration_design_summary.md
+          test -s outputs/scientific_reports_v2/calibration_design_smoke/truth.json
+          git diff --check
+
+      - name: Commit calibration-design evidence
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add outputs/scientific_reports_v2/calibration_design_smoke
+          if git diff --cached --quiet; then
+            echo "No calibration-design evidence to commit."
+            exit 0
+          fi
+          git commit -m "test: record truth-known calibration design [skip sr-v2] [skip tuning] [skip joint-pilot]"
+          git pull --rebase origin scientific-reports-v2
+          git push origin HEAD:scientific-reports-v2

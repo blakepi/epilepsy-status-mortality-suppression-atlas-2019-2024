@@ -2,19 +2,41 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
+import hashlib
 import json
 import os
 from pathlib import Path
 import signal
 import time
+from typing import Callable, Mapping
 
 import numpy as np
 import pandas as pd
 
 from .constraints import append_validation, assert_constraints, solve_and_save_initial_allocations
 from .data import load_config
-from .model import Design, Theta, initialize_theta, log_posterior_theta, make_design, mu, nb2_logpmf, crude_intercept_prior
+from .heatbath import feasible_amplitudes, sample_amplitude
+from .interval_paths import IntervalPathSupport, build_interval_path_support, interval_path_direction
+from .model import (
+    DEFAULT_LIKELIHOOD_FAMILY,
+    Design,
+    PriorSpecification,
+    Theta,
+    count_logpmf,
+    crude_intercept_prior,
+    initialize_theta,
+    linear_predictor,
+    log_posterior_theta,
+    make_design,
+    mu,
+    normalize_likelihood_family,
+    prior_specification_from_mapping,
+)
 from .paths import BAYES_DATA, OUTPUT_DIR, PROJECT_ROOT, rel
+from .spatial_bym2 import (
+    componentwise_center,
+    validate_structured_effect,
+)
 
 
 @dataclass
@@ -33,6 +55,76 @@ class MoveState:
     county_year_to_row: dict[tuple[int, int], int]
     free_by_state_year: list[np.ndarray]
     interval_counties: set[int]
+    years: np.ndarray
+    cycle_state_counties: list[tuple[int, np.ndarray]]
+    interval_path_support: IntervalPathSupport
+
+
+@dataclass(frozen=True)
+class SpatialMALAState:
+    """Adaptation state for the joint BYM2 field proposal.
+
+    The common multiplier is adapted only in 100-attempt windows during the
+    first 45,000 iterations of extension epoch zero.  All counters remain
+    cumulative after adaptation freezes so checkpoint/status evidence can be
+    reconciled exactly.
+    """
+
+    multiplier: float = 1.0
+    epsilon_structured: float = 0.02
+    epsilon_unstructured: float = 0.04
+    attempted: int = 0
+    accepted: int = 0
+    window_attempted: int = 0
+    window_accepted: int = 0
+    windows_completed: int = 0
+    adaptation_frozen: bool = False
+
+    def to_dict(self) -> dict[str, float | int | bool]:
+        return {
+            "multiplier": float(self.multiplier),
+            "epsilon_structured": float(self.epsilon_structured),
+            "epsilon_unstructured": float(self.epsilon_unstructured),
+            "attempted": int(self.attempted),
+            "accepted": int(self.accepted),
+            "window_attempted": int(self.window_attempted),
+            "window_accepted": int(self.window_accepted),
+            "windows_completed": int(self.windows_completed),
+            "adaptation_frozen": bool(self.adaptation_frozen),
+        }
+
+    @classmethod
+    def from_dict(cls, payload: dict[str, object]) -> "SpatialMALAState":
+        state = cls(
+            multiplier=float(payload.get("multiplier", 1.0)),
+            epsilon_structured=float(payload.get("epsilon_structured", 0.02)),
+            epsilon_unstructured=float(payload.get("epsilon_unstructured", 0.04)),
+            attempted=int(payload.get("attempted", 0)),
+            accepted=int(payload.get("accepted", 0)),
+            window_attempted=int(payload.get("window_attempted", 0)),
+            window_accepted=int(payload.get("window_accepted", 0)),
+            windows_completed=int(payload.get("windows_completed", 0)),
+            adaptation_frozen=bool(payload.get("adaptation_frozen", False)),
+        )
+        if (
+            not np.isfinite(state.multiplier)
+            or not 0.1 <= state.multiplier <= 5.0
+            or state.epsilon_structured != 0.02 * state.multiplier
+            or state.epsilon_unstructured != 0.04 * state.multiplier
+            or min(
+                state.attempted,
+                state.accepted,
+                state.window_attempted,
+                state.window_accepted,
+                state.windows_completed,
+            )
+            < 0
+            or state.accepted > state.attempted
+            or state.window_accepted > state.window_attempted
+            or state.window_attempted >= 100
+        ):
+            raise ValueError("Invalid spatial MALA adaptation state.")
+        return state
 
 
 def _codes(series: pd.Series) -> tuple[np.ndarray, list[str]]:
@@ -67,8 +159,31 @@ def build_move_state(frame: pd.DataFrame, y: np.ndarray) -> MoveState:
     state_groups = {int(s): np.where(state_code == s)[0] for s in np.unique(state_code)}
     state_counties = {int(s): np.unique(county_code[idx]) for s, idx in state_groups.items()}
     county_year_to_row = {(int(c), int(t)): int(i) for i, (c, t) in enumerate(zip(county_code, year_code))}
-    period_status = frame.drop_duplicates("county_fips").sort_values("county_fips")["q001_period_status"].astype(str).to_numpy()
-    interval_counties = set(np.where(period_status == "suppressed_1_9")[0].tolist())
+    interval_counties = set(np.where(period_upper > period_lower)[0].tolist())
+    years = np.unique(year_code)
+    free_mask = upper > lower
+    cycle_state_counties: list[tuple[int, np.ndarray]] = []
+    for state, state_county_codes in state_counties.items():
+        candidates = []
+        for county in state_county_codes:
+            rows = np.where(
+                (state_code == int(state))
+                & (county_code == int(county))
+                & free_mask
+            )[0]
+            if len(rows) >= 2:
+                candidates.append(int(county))
+        if len(candidates) >= 3 and len(years) >= 3:
+            cycle_state_counties.append((int(state), np.asarray(candidates, dtype=int)))
+    interval_path_support = build_interval_path_support(
+        lower=lower,
+        upper=upper,
+        county_code=county_code,
+        state_code=state_code,
+        year_code=year_code,
+        interval_counties=interval_counties,
+        county_year_to_row=county_year_to_row,
+    )
     return MoveState(
         lower=lower,
         upper=upper,
@@ -84,11 +199,27 @@ def build_move_state(frame: pd.DataFrame, y: np.ndarray) -> MoveState:
         county_year_to_row=county_year_to_row,
         free_by_state_year=free_by_state_year,
         interval_counties=interval_counties,
+        years=years,
+        cycle_state_counties=cycle_state_counties,
+        interval_path_support=interval_path_support,
     )
 
 
-def _local_loglik(y_values: np.ndarray, mu_values: np.ndarray, kappa: float) -> float:
-    return float(nb2_logpmf(y_values, mu_values, kappa).sum())
+def _local_loglik(
+    y_values: np.ndarray,
+    mu_values: np.ndarray,
+    kappa: float | None,
+    *,
+    likelihood_family: str = DEFAULT_LIKELIHOOD_FAMILY,
+) -> float:
+    return float(
+        count_logpmf(
+            y_values,
+            mu_values,
+            likelihood_family=likelihood_family,
+            kappa=kappa,
+        ).sum()
+    )
 
 
 def _try_apply_delta(
@@ -97,8 +228,10 @@ def _try_apply_delta(
     idx: np.ndarray,
     delta: np.ndarray,
     current_mu: np.ndarray,
-    kappa: float,
+    kappa: float | None,
     rng: np.random.Generator,
+    *,
+    likelihood_family: str = DEFAULT_LIKELIHOOD_FAMILY,
 ) -> bool:
     old = y[idx]
     new = old + delta
@@ -110,8 +243,12 @@ def _try_apply_delta(
         new_period_total[affected_counties == c] += int(delta[move.county_code[idx] == c].sum())
     if np.any(new_period_total < move.period_lower[affected_counties]) or np.any(new_period_total > move.period_upper[affected_counties]):
         return False
-    old_ll = _local_loglik(old, current_mu[idx], kappa)
-    new_ll = _local_loglik(new, current_mu[idx], kappa)
+    old_ll = _local_loglik(
+        old, current_mu[idx], kappa, likelihood_family=likelihood_family
+    )
+    new_ll = _local_loglik(
+        new, current_mu[idx], kappa, likelihood_family=likelihood_family
+    )
     if np.log(rng.uniform()) < new_ll - old_ll:
         y[idx] = new
         for c in affected_counties:
@@ -120,67 +257,274 @@ def _try_apply_delta(
     return False
 
 
-def state_year_transfer(y: np.ndarray, move: MoveState, current_mu: np.ndarray, kappa: float, rng: np.random.Generator) -> bool:
+
+def _apply_heatbath_direction(
+    y: np.ndarray,
+    move: MoveState,
+    indices: np.ndarray,
+    direction: np.ndarray,
+    current_mu: np.ndarray,
+    kappa: float | None,
+    rng: np.random.Generator,
+    *,
+    likelihood_family: str = DEFAULT_LIKELIHOOD_FAMILY,
+) -> bool:
+    indices = np.asarray(indices, dtype=int)
+    direction = np.asarray(direction, dtype=int)
+    amplitudes = feasible_amplitudes(
+        y,
+        indices,
+        direction,
+        lower=move.lower,
+        upper=move.upper,
+        county_code=move.county_code,
+        period_total=move.period_total,
+        period_lower=move.period_lower,
+        period_upper=move.period_upper,
+    )
+    amplitude = sample_amplitude(
+        y,
+        indices,
+        direction,
+        amplitudes,
+        current_mu[indices],
+        kappa,
+        rng,
+        likelihood_family=likelihood_family,
+    )
+    if amplitude == 0:
+        return False
+    change = amplitude * direction
+    y[indices] += change
+    for county in np.unique(move.county_code[indices]):
+        move.period_total[county] += int(change[move.county_code[indices] == county].sum())
+    return True
+
+def state_year_transfer(
+    y: np.ndarray,
+    move: MoveState,
+    current_mu: np.ndarray,
+    kappa: float | None,
+    rng: np.random.Generator,
+    *,
+    likelihood_family: str = DEFAULT_LIKELIHOOD_FAMILY,
+) -> bool:
     groups = [g for g in move.free_by_state_year if len(g) >= 2]
     if not groups:
         return False
-    g = groups[int(rng.integers(0, len(groups)))]
-    a, b = rng.choice(g, size=2, replace=False)
-    if rng.uniform() < 0.5:
-        idx = np.asarray([a, b])
-        delta = np.asarray([-1, 1])
-    else:
-        idx = np.asarray([a, b])
-        delta = np.asarray([1, -1])
-    return _try_apply_delta(y, move, idx, delta, current_mu, kappa, rng)
+    group = groups[int(rng.integers(0, len(groups)))]
+    a, b = rng.choice(group, size=2, replace=False)
+    return _apply_heatbath_direction(
+        y,
+        move,
+        np.asarray([a, b]),
+        np.asarray([-1, 1]),
+        current_mu,
+        kappa,
+        rng,
+        likelihood_family=likelihood_family,
+    )
 
-
-def period_interval_transfer(y: np.ndarray, move: MoveState, current_mu: np.ndarray, kappa: float, rng: np.random.Generator) -> bool:
+def period_interval_transfer(
+    y: np.ndarray,
+    move: MoveState,
+    current_mu: np.ndarray,
+    kappa: float | None,
+    rng: np.random.Generator,
+    *,
+    likelihood_family: str = DEFAULT_LIKELIHOOD_FAMILY,
+) -> bool:
     groups = []
-    for g in move.free_by_state_year:
-        if len(g) < 2:
+    for group in move.free_by_state_year:
+        if len(group) < 2:
             continue
-        county = move.county_code[g]
-        mask = np.asarray([c in move.interval_counties for c in county])
+        county = move.county_code[group]
+        mask = np.asarray([int(code) in move.interval_counties for code in county])
         if mask.sum() >= 2:
-            groups.append(g[mask])
+            groups.append(group[mask])
     if not groups:
         return False
-    g = groups[int(rng.integers(0, len(groups)))]
-    a, b = rng.choice(g, size=2, replace=False)
-    idx = np.asarray([a, b])
-    delta = np.asarray([-1, 1]) if rng.uniform() < 0.5 else np.asarray([1, -1])
-    return _try_apply_delta(y, move, idx, delta, current_mu, kappa, rng)
+    group = groups[int(rng.integers(0, len(groups)))]
+    a, b = rng.choice(group, size=2, replace=False)
+    return _apply_heatbath_direction(
+        y,
+        move,
+        np.asarray([a, b]),
+        np.asarray([-1, 1]),
+        current_mu,
+        kappa,
+        rng,
+        likelihood_family=likelihood_family,
+    )
 
 
-def state_2x2_swap(y: np.ndarray, move: MoveState, current_mu: np.ndarray, kappa: float, rng: np.random.Generator) -> bool:
-    states = [s for s, counties in move.state_counties.items() if len(counties) >= 2]
+def interval_path_transfer(
+    y: np.ndarray,
+    move: MoveState,
+    current_mu: np.ndarray,
+    kappa: float | None,
+    rng: np.random.Generator,
+    *,
+    likelihood_family: str = DEFAULT_LIKELIHOOD_FAMILY,
+) -> bool:
+    groups = move.interval_path_support.endpoint_groups
+    if not groups:
+        return False
+    group = groups[int(rng.integers(0, len(groups)))]
+    endpoint_a, endpoint_b = rng.choice(group, size=2, replace=False)
+    proposal = interval_path_direction(
+        int(endpoint_a),
+        int(endpoint_b),
+        state_code=move.state_code,
+        year_code=move.year_code,
+        support=move.interval_path_support,
+    )
+    if proposal is None:
+        return False
+    indices, direction = proposal
+    return _apply_heatbath_direction(
+        y,
+        move,
+        indices,
+        direction,
+        current_mu,
+        kappa,
+        rng,
+        likelihood_family=likelihood_family,
+    )
+
+def state_2x2_swap(
+    y: np.ndarray,
+    move: MoveState,
+    current_mu: np.ndarray,
+    kappa: float | None,
+    rng: np.random.Generator,
+    *,
+    likelihood_family: str = DEFAULT_LIKELIHOOD_FAMILY,
+) -> bool:
+    states = [state for state, counties in move.state_counties.items() if len(counties) >= 2]
     if not states:
         return False
     state = states[int(rng.integers(0, len(states)))]
     counties = rng.choice(move.state_counties[state], size=2, replace=False)
-    years = np.unique(move.year_code)
-    if len(years) < 2:
+    if len(move.years) < 2:
         return False
-    t, u = rng.choice(years, size=2, replace=False)
-    keys = [(int(counties[0]), int(t)), (int(counties[0]), int(u)), (int(counties[1]), int(t)), (int(counties[1]), int(u))]
+    year_a, year_b = rng.choice(move.years, size=2, replace=False)
+    keys = [
+        (int(counties[0]), int(year_a)),
+        (int(counties[0]), int(year_b)),
+        (int(counties[1]), int(year_a)),
+        (int(counties[1]), int(year_b)),
+    ]
     if any(key not in move.county_year_to_row for key in keys):
         return False
-    idx = np.asarray([move.county_year_to_row[key] for key in keys])
-    delta = np.asarray([1, -1, -1, 1])
-    if rng.uniform() < 0.5:
-        delta = -delta
-    return _try_apply_delta(y, move, idx, delta, current_mu, kappa, rng)
+    indices = np.asarray([move.county_year_to_row[key] for key in keys], dtype=int)
+    if np.any(move.upper[indices] <= move.lower[indices]):
+        return False
+    return _apply_heatbath_direction(
+        y,
+        move,
+        indices,
+        np.asarray([1, -1, -1, 1]),
+        current_mu,
+        kappa,
+        rng,
+        likelihood_family=likelihood_family,
+    )
 
+def state_cycle_swap(
+    y: np.ndarray,
+    move: MoveState,
+    current_mu: np.ndarray,
+    kappa: float | None,
+    rng: np.random.Generator,
+    *,
+    max_cycle_half_length: int = 6,
+    likelihood_family: str = DEFAULT_LIKELIHOOD_FAMILY,
+) -> bool:
+    """Propose an alternating move around a simple bipartite support cycle.
 
-def blocked_refresh(y: np.ndarray, move: MoveState, current_mu: np.ndarray, kappa: float, rng: np.random.Generator, attempts: int = 12) -> int:
+    Two-by-two swaps are not a Markov basis when fixed cells create structural
+    zeros. A feasible fiber can contain longer even cycles but no admissible
+    2x2 rectangle. This proposal samples ordered counties and years from the
+    static free-cell support and alternates +1/-1 around the resulting cycle.
+    It preserves every state-year and county-period total exactly. Because the
+    selection law is independent of the current counts and the opposite sign
+    has the same probability, the proposal is symmetric.
+    """
+
+    years = move.years
+    eligible: list[tuple[int, np.ndarray, int]] = []
+    for state, counties in move.cycle_state_counties:
+        maximum = min(int(max_cycle_half_length), len(counties), len(years))
+        if maximum >= 3:
+            eligible.append((int(state), counties, maximum))
+    if not eligible:
+        return False
+
+    _, counties, maximum = eligible[int(rng.integers(0, len(eligible)))]
+    length = int(rng.integers(3, maximum + 1))
+    selected_counties = rng.choice(counties, size=length, replace=False)
+    selected_years = rng.choice(years, size=length, replace=False)
+
+    indices: list[int] = []
+    delta: list[int] = []
+    for position in range(length):
+        positive_key = (int(selected_counties[position]), int(selected_years[position]))
+        negative_key = (int(selected_counties[(position + 1) % length]), int(selected_years[position]))
+        if positive_key not in move.county_year_to_row or negative_key not in move.county_year_to_row:
+            return False
+        positive = int(move.county_year_to_row[positive_key])
+        negative = int(move.county_year_to_row[negative_key])
+        if not (move.upper[positive] > move.lower[positive] and move.upper[negative] > move.lower[negative]):
+            return False
+        indices.extend([positive, negative])
+        delta.extend([1, -1])
+
+    indices_array = np.asarray(indices, dtype=int)
+    direction = np.asarray(delta, dtype=int)
+    return _apply_heatbath_direction(
+        y,
+        move,
+        indices_array,
+        direction,
+        current_mu,
+        kappa,
+        rng,
+        likelihood_family=likelihood_family,
+    )
+
+def blocked_refresh(
+    y: np.ndarray,
+    move: MoveState,
+    current_mu: np.ndarray,
+    kappa: float | None,
+    rng: np.random.Generator,
+    attempts: int = 12,
+    *,
+    likelihood_family: str = DEFAULT_LIKELIHOOD_FAMILY,
+) -> int:
     accepted = 0
     for _ in range(attempts):
-        accepted += int(state_year_transfer(y, move, current_mu, kappa, rng))
+        accepted += int(
+            state_year_transfer(
+                y,
+                move,
+                current_mu,
+                kappa,
+                rng,
+                likelihood_family=likelihood_family,
+            )
+        )
     return accepted
 
 
-def _proposal_scales(theta: Theta, multipliers: dict[str, float] | None = None) -> dict[str, float]:
+def _proposal_scales(
+    theta: Theta,
+    multipliers: dict[str, float] | None = None,
+    *,
+    likelihood_family: str = DEFAULT_LIKELIHOOD_FAMILY,
+) -> dict[str, float]:
     base = {
         "beta": 0.01,
         "state": 0.01,
@@ -193,8 +537,26 @@ def _proposal_scales(theta: Theta, multipliers: dict[str, float] | None = None) 
         for key, value in multipliers.items():
             if key in base:
                 base[key] *= float(value)
+    if normalize_likelihood_family(likelihood_family) == "poisson":
+        del base["log_kappa"]
     return base
 
+
+
+def _normalized_move_weights(settings: dict) -> dict[str, float]:
+    configured = settings.get("move_weights", {}) or {}
+    values = {
+        "state_year_transfer": float(configured.get("state_year_transfer", configured.get("transfer", 0.50))),
+        "county_period_exploration": float(configured.get("county_period_exploration", configured.get("interval_transfer", 0.25))),
+        "interval_path_transfer": float(configured.get("interval_path_transfer", 0.20)),
+        "swap_2x2": float(configured.get("swap_2x2", 0.25)),
+        "cycle_swap": float(configured.get("cycle_swap", 0.10)),
+    }
+    values = {key: max(value, 0.0) for key, value in values.items()}
+    total = sum(values.values())
+    if total <= 0:
+        raise ValueError("At least one latent-count move weight must be positive.")
+    return {key: value / total for key, value in values.items()}
 
 def _theta_to_rows(theta: Theta, design: Design, chain: int, draw: int, iteration: int) -> list[dict]:
     rows = []
@@ -208,9 +570,37 @@ def _theta_to_rows(theta: Theta, design: Design, chain: int, draw: int, iteratio
         [
             {"chain": chain, "draw": draw, "iteration": iteration, "parameter": "sigma_state", "value": float(np.exp(theta.log_sigma_state))},
             {"chain": chain, "draw": draw, "iteration": iteration, "parameter": "sigma_year", "value": float(np.exp(theta.log_sigma_year))},
-            {"chain": chain, "draw": draw, "iteration": iteration, "parameter": "kappa", "value": float(np.exp(theta.log_kappa))},
         ]
     )
+    if design.likelihood_family == "negative_binomial_2":
+        rows.append(
+            {"chain": chain, "draw": draw, "iteration": iteration, "parameter": "kappa", "value": float(np.exp(theta.log_kappa))}
+        )
+    if design.spatial_graph is not None:
+        _require_spatial_theta(theta, design)
+        if theta.logit_phi_structured >= 0:
+            phi = 1.0 / (1.0 + np.exp(-theta.logit_phi_structured))
+        else:
+            exp_value = np.exp(theta.logit_phi_structured)
+            phi = exp_value / (1.0 + exp_value)
+        rows.extend(
+            [
+                {
+                    "chain": chain,
+                    "draw": draw,
+                    "iteration": iteration,
+                    "parameter": "sigma_county",
+                    "value": float(np.exp(theta.log_sigma_county)),
+                },
+                {
+                    "chain": chain,
+                    "draw": draw,
+                    "iteration": iteration,
+                    "parameter": "phi_structured",
+                    "value": float(phi),
+                },
+            ]
+        )
     return rows
 
 
@@ -232,6 +622,7 @@ def _update_theta_block(
     block: str,
     scale: float,
     current_lp: float,
+    prior: PriorSpecification | None = None,
 ) -> tuple[Theta, float, bool]:
     proposal = theta.copy()
     if block == "beta":
@@ -249,10 +640,822 @@ def _update_theta_block(
     else:
         raise ValueError(block)
     proposal = _center_random_effects(proposal)
-    proposed_lp = log_posterior_theta(y, proposal, design, intercept_mean=intercept_mean)
+    proposed_lp = log_posterior_theta(y, proposal, design, intercept_mean=intercept_mean, prior=prior)
     if np.isfinite(proposed_lp) and np.log(rng.uniform()) < proposed_lp - current_lp:
         return proposal, proposed_lp, True
     return theta, current_lp, False
+
+
+def _spatial_design_graph(design: Design):
+    graph = design.spatial_graph
+    if graph is None:
+        raise ValueError("Spatial updates require Design.spatial_graph.")
+    return graph
+
+
+def _require_spatial_theta(theta: Theta, design: Design) -> None:
+    graph = _spatial_design_graph(design)
+    if (
+        theta.spatial_structured is None
+        or theta.spatial_unstructured is None
+        or theta.log_sigma_county is None
+        or theta.logit_phi_structured is None
+    ):
+        raise ValueError("Spatial updates require the complete BYM2 Theta state.")
+    validate_structured_effect(theta.spatial_structured, graph)
+    unstructured = np.asarray(theta.spatial_unstructured, dtype=np.float64)
+    if unstructured.shape != (len(graph.counties),) or not np.isfinite(
+        unstructured
+    ).all():
+        raise ValueError("Spatial unstructured effects have invalid shape or values.")
+    if not np.isfinite(theta.log_sigma_county) or not np.isfinite(
+        theta.logit_phi_structured
+    ):
+        raise ValueError("Spatial hyperparameters must be finite.")
+
+
+def spatial_county_score(
+    y: np.ndarray,
+    theta: Theta,
+    design: Design,
+) -> np.ndarray:
+    """County-aggregate the exact NB2 score with target clipping/flooring.
+
+    ``mu`` first clips the predictor to [-30, 30] and ``nb2_logpmf`` then
+    floors the mean at 1e-12.  Both flat regions have derivative zero.  The
+    floor matters for predictors between -30 and log(1e-12), so it is applied
+    explicitly here rather than approximated from the predictor clip alone.
+    """
+
+    graph = _spatial_design_graph(design)
+    _require_spatial_theta(theta, design)
+    if design.likelihood_family != "negative_binomial_2":
+        raise ValueError("The frozen BYM2 sensitivity target requires NB2.")
+    values = np.asarray(y, dtype=np.float64)
+    if values.shape != design.offset.shape or not np.isfinite(values).all():
+        raise ValueError("Observed/latent counts have invalid shape or values.")
+    eta = linear_predictor(theta, design)
+    clipped_eta = np.clip(eta, -30.0, 30.0)
+    fitted = np.maximum(np.exp(clipped_eta), 1.0e-12)
+    kappa = float(np.exp(theta.log_kappa))
+    if not np.isfinite(kappa) or kappa <= 0:
+        raise ValueError("NB2 kappa must be finite and positive.")
+    row_score = values - (values + kappa) * fitted / (kappa + fitted)
+    active = (eta > np.log(1.0e-12)) & (eta < 30.0)
+    row_score = np.where(active, row_score, 0.0)
+    county_score = np.bincount(
+        np.asarray(graph.row_county_index, dtype=np.int64),
+        weights=row_score,
+        minlength=len(graph.counties),
+    ).astype(np.float64, copy=False)
+    if county_score.shape != (len(graph.counties),) or not np.isfinite(
+        county_score
+    ).all():
+        raise ValueError("County NB2 score is nonfinite or malformed.")
+    return county_score
+
+
+def _spatial_gradients(
+    y: np.ndarray,
+    theta: Theta,
+    design: Design,
+) -> tuple[np.ndarray, np.ndarray]:
+    graph = _spatial_design_graph(design)
+    _require_spatial_theta(theta, design)
+    score = spatial_county_score(y, theta, design)
+    sigma = float(np.exp(theta.log_sigma_county))
+    # Stable logistic transform; finite logit was checked above.
+    if theta.logit_phi_structured >= 0:
+        phi = 1.0 / (1.0 + np.exp(-theta.logit_phi_structured))
+    else:
+        exp_value = np.exp(theta.logit_phi_structured)
+        phi = exp_value / (1.0 + exp_value)
+    projected_score = componentwise_center(score, graph)
+    structured = np.asarray(theta.spatial_structured, dtype=np.float64)
+    unstructured = np.asarray(theta.spatial_unstructured, dtype=np.float64)
+    grad_structured = (
+        sigma * np.sqrt(phi) * projected_score
+        - graph.scaled_precision @ structured
+    )
+    grad_unstructured = (
+        sigma * np.sqrt(1.0 - phi) * score - unstructured
+    )
+    grad_structured = componentwise_center(grad_structured, graph)
+    if not np.isfinite(grad_structured).all() or not np.isfinite(
+        grad_unstructured
+    ).all():
+        raise ValueError("Spatial MALA gradient is nonfinite.")
+    return grad_structured, np.asarray(grad_unstructured, dtype=np.float64)
+
+
+def spatial_mala_log_q(
+    to_structured: np.ndarray,
+    to_unstructured: np.ndarray,
+    *,
+    from_structured: np.ndarray,
+    from_unstructured: np.ndarray,
+    gradient_structured: np.ndarray,
+    gradient_unstructured: np.ndarray,
+    epsilon_structured: float,
+    epsilon_unstructured: float,
+    graph,
+) -> float:
+    """Return the variable part of log q(to | from) on the exact subspace."""
+
+    epsilon_structured = float(epsilon_structured)
+    epsilon_unstructured = float(epsilon_unstructured)
+    if (
+        not np.isfinite(epsilon_structured)
+        or epsilon_structured <= 0
+        or not np.isfinite(epsilon_unstructured)
+        or epsilon_unstructured <= 0
+    ):
+        raise ValueError("MALA step sizes must be finite and positive.")
+    validate_structured_effect(from_structured, graph)
+    validate_structured_effect(to_structured, graph)
+    gradient_u = componentwise_center(gradient_structured, graph)
+    forward_u = componentwise_center(
+        np.asarray(to_structured, dtype=np.float64)
+        - np.asarray(from_structured, dtype=np.float64)
+        - 0.5 * epsilon_structured**2 * gradient_u,
+        graph,
+    )
+    forward_v = (
+        np.asarray(to_unstructured, dtype=np.float64)
+        - np.asarray(from_unstructured, dtype=np.float64)
+        - 0.5
+        * epsilon_unstructured**2
+        * np.asarray(gradient_unstructured, dtype=np.float64)
+    )
+    if forward_v.shape != (len(graph.counties),) or not np.isfinite(
+        forward_v
+    ).all():
+        raise ValueError("Unstructured MALA residual is malformed or nonfinite.")
+    # The structured Euclidean norm is the exact Gaussian norm in the
+    # rank-reduced tangent subspace because forward_u has been projected by P.
+    return float(
+        -0.5 * (forward_u @ forward_u) / epsilon_structured**2
+        - 0.5 * (forward_v @ forward_v) / epsilon_unstructured**2
+    )
+
+
+def advance_spatial_mala_adaptation(
+    state: SpatialMALAState,
+    *,
+    accepted: bool,
+    iteration: int,
+    extension_epoch: int,
+) -> SpatialMALAState:
+    """Record one attempted MALA move and perform the frozen window update."""
+
+    if iteration <= 0 or iteration % 5 != 0 or extension_epoch < 0:
+        raise ValueError(
+            "A spatial MALA attempt must occur on a positive multiple-of-five iteration."
+        )
+    attempted = state.attempted + 1
+    accepted_total = state.accepted + int(bool(accepted))
+    may_adapt = (
+        extension_epoch == 0
+        and iteration <= 45_000
+        and not state.adaptation_frozen
+    )
+    window_attempted = state.window_attempted
+    window_accepted = state.window_accepted
+    windows_completed = state.windows_completed
+    multiplier = state.multiplier
+    if may_adapt:
+        window_attempted += 1
+        window_accepted += int(bool(accepted))
+        if window_attempted == 100:
+            windows_completed += 1
+            gain = min(0.05, windows_completed ** -0.6)
+            rate = window_accepted / 100.0
+            log_multiplier = np.clip(
+                np.log(multiplier) + gain * (rate - 0.574),
+                np.log(0.1),
+                np.log(5.0),
+            )
+            multiplier = float(np.exp(log_multiplier))
+            window_attempted = 0
+            window_accepted = 0
+    frozen = bool(
+        state.adaptation_frozen
+        or extension_epoch != 0
+        or iteration >= 45_000
+    )
+    return SpatialMALAState(
+        multiplier=multiplier,
+        epsilon_structured=0.02 * multiplier,
+        epsilon_unstructured=0.04 * multiplier,
+        attempted=attempted,
+        accepted=accepted_total,
+        window_attempted=window_attempted,
+        window_accepted=window_accepted,
+        windows_completed=windows_completed,
+        adaptation_frozen=frozen,
+    )
+
+
+def update_spatial_hyperparameters(
+    y: np.ndarray,
+    theta: Theta,
+    design: Design,
+    *,
+    intercept_mean: float,
+    rng: np.random.Generator,
+    current_target: float,
+    prior: PriorSpecification | None = None,
+    log_sigma_sd: float = 0.08,
+    logit_phi_sd: float = 0.15,
+) -> tuple[Theta, float, bool]:
+    """Symmetric two-dimensional random-walk update for BYM2 hyperparameters."""
+
+    _require_spatial_theta(theta, design)
+    proposal = theta.copy()
+    increments = rng.normal(size=2)
+    proposal.log_sigma_county = float(
+        theta.log_sigma_county + log_sigma_sd * increments[0]
+    )
+    proposal.logit_phi_structured = float(
+        theta.logit_phi_structured + logit_phi_sd * increments[1]
+    )
+    proposed_target = log_posterior_theta(
+        y,
+        proposal,
+        design,
+        intercept_mean=intercept_mean,
+        prior=prior,
+    )
+    if np.isfinite(proposed_target) and np.log(rng.uniform()) < (
+        proposed_target - current_target
+    ):
+        return proposal, float(proposed_target), True
+    return theta, float(current_target), False
+
+
+def update_spatial_fields_mala(
+    y: np.ndarray,
+    theta: Theta,
+    design: Design,
+    *,
+    intercept_mean: float,
+    rng: np.random.Generator,
+    current_target: float,
+    adaptation_state: SpatialMALAState,
+    iteration: int,
+    extension_epoch: int,
+    prior: PriorSpecification | None = None,
+) -> tuple[Theta, float, SpatialMALAState, bool]:
+    """Joint exact-Hastings MALA update of structured/unstructured fields."""
+
+    graph = _spatial_design_graph(design)
+    if iteration <= 0 or iteration % 5 != 0:
+        raise ValueError("Spatial MALA updates run exactly every five iterations.")
+    _require_spatial_theta(theta, design)
+    current_u = np.asarray(theta.spatial_structured, dtype=np.float64)
+    current_v = np.asarray(theta.spatial_unstructured, dtype=np.float64)
+    grad_u, grad_v = _spatial_gradients(y, theta, design)
+    epsilon_u = adaptation_state.epsilon_structured
+    epsilon_v = adaptation_state.epsilon_unstructured
+    noise_u = componentwise_center(rng.normal(size=len(graph.counties)), graph)
+    noise_v = rng.normal(size=len(graph.counties))
+    proposed_u = componentwise_center(
+        current_u + 0.5 * epsilon_u**2 * grad_u + epsilon_u * noise_u,
+        graph,
+    )
+    proposed_v = current_v + 0.5 * epsilon_v**2 * grad_v + epsilon_v * noise_v
+    proposal = theta.copy()
+    proposal.spatial_structured = proposed_u
+    proposal.spatial_unstructured = proposed_v
+    proposed_target = log_posterior_theta(
+        y,
+        proposal,
+        design,
+        intercept_mean=intercept_mean,
+        prior=prior,
+    )
+    accepted = False
+    if np.isfinite(proposed_target):
+        proposed_grad_u, proposed_grad_v = _spatial_gradients(
+            y, proposal, design
+        )
+        log_forward = spatial_mala_log_q(
+            proposed_u,
+            proposed_v,
+            from_structured=current_u,
+            from_unstructured=current_v,
+            gradient_structured=grad_u,
+            gradient_unstructured=grad_v,
+            epsilon_structured=epsilon_u,
+            epsilon_unstructured=epsilon_v,
+            graph=graph,
+        )
+        log_reverse = spatial_mala_log_q(
+            current_u,
+            current_v,
+            from_structured=proposed_u,
+            from_unstructured=proposed_v,
+            gradient_structured=proposed_grad_u,
+            gradient_unstructured=proposed_grad_v,
+            epsilon_structured=epsilon_u,
+            epsilon_unstructured=epsilon_v,
+            graph=graph,
+        )
+        log_acceptance = (
+            proposed_target - current_target + log_reverse - log_forward
+        )
+        accepted = bool(np.log(rng.uniform()) < log_acceptance)
+    updated_state = advance_spatial_mala_adaptation(
+        adaptation_state,
+        accepted=accepted,
+        iteration=iteration,
+        extension_epoch=extension_epoch,
+    )
+    if accepted:
+        return proposal, float(proposed_target), updated_state, True
+    return theta, float(current_target), updated_state, False
+
+
+def spatial_iteration_schedule(iteration: int) -> dict[str, int | bool]:
+    """Return the frozen cumulative BYM2 schedule at one global iteration."""
+
+    if (
+        isinstance(iteration, (bool, np.bool_))
+        or not isinstance(iteration, (int, np.integer))
+        or int(iteration) < 0
+        or int(iteration) > 450_000
+    ):
+        raise ValueError("Spatial iteration must be an exact integer in 0..450000.")
+    current = int(iteration)
+    saved_draws = max(0, (current - 45_000) // 30)
+    return {
+        "iteration": current,
+        "saved_draws": saved_draws,
+        "next_draw_id": saved_draws + 1,
+        "mala_attempts": current // 5,
+        "base_theta_attempts": current,
+        "spatial_hyperparameter_attempts": current,
+        "adaptation_frozen": current >= 45_000,
+        "retains_draw": current > 45_000 and (current - 45_000) % 30 == 0,
+    }
+
+
+def _spatial_checkpoint_name(
+    *, extension_epoch: int, job_attempt: int, iteration: int
+) -> str:
+    return (
+        f"checkpoint_epoch_{extension_epoch}_attempt_{job_attempt}_"
+        f"iter_{iteration:09d}.json"
+    )
+
+
+class SpatialChainExecutionError(RuntimeError):
+    """An in-loop failure carrying only progress that reached immutable storage."""
+
+    def __init__(self, message: str, *, progress: Mapping[str, object]) -> None:
+        super().__init__(message)
+        self.progress = dict(progress)
+
+
+def run_spatial_mcmc_chain(
+    frame: pd.DataFrame,
+    *,
+    design: Design,
+    identity: Mapping[str, object],
+    checkpoint_path: str | Path,
+    checkpoint_dir: str | Path,
+    chunk_dir: str | Path,
+    job_attempt: int,
+    settings: Mapping[str, object],
+    prior: PriorSpecification | None = None,
+    checkpoint_every: int = 500,
+    max_runtime_minutes: int | None = None,
+    stop_before_time_limit_minutes: int = 15,
+    stop_requested: Callable[[int], bool] | None = None,
+) -> dict[str, object]:
+    """Execute one exact spatial epoch/retry from an identity-bound checkpoint.
+
+    The cumulative transition order is fixed: latent moves, full-target refresh,
+    the six base-theta blocks, a standalone hyperparameter update, a MALA field
+    update on global multiples of five, and only then retained-draw capture.
+    This function owns the executable loop so operational scripts never copy
+    private sampler machinery.
+    """
+
+    from .spatial_bym2 import (
+        SPATIAL_DRAW_CHUNK_SIZE,
+        commit_spatial_draw_chunk,
+        load_spatial_checkpoint,
+        save_spatial_checkpoint,
+    )
+
+    if design.spatial_graph is None:
+        raise ValueError("Spatial chain execution requires a spatial design.")
+    target = identity.get("target") if isinstance(identity, Mapping) else None
+    if not isinstance(target, Mapping):
+        raise ValueError("Spatial chain execution requires a complete identity.")
+    extension_epoch = target.get("extension_epoch")
+    if (
+        isinstance(extension_epoch, (bool, np.bool_))
+        or not isinstance(extension_epoch, (int, np.integer))
+        or int(extension_epoch) not in range(4)
+    ):
+        raise ValueError("Spatial identity extension epoch must be in 0..3.")
+    extension_epoch = int(extension_epoch)
+    if (
+        isinstance(job_attempt, (bool, np.bool_))
+        or not isinstance(job_attempt, (int, np.integer))
+        or int(job_attempt) not in range(1, 4)
+    ):
+        raise ValueError("Spatial job attempt must be an exact integer in 1..3.")
+    job_attempt = int(job_attempt)
+    target_iteration = (180_000, 270_000, 360_000, 450_000)[extension_epoch]
+    checkpoint_every = int(checkpoint_every)
+    if checkpoint_every <= 0:
+        raise ValueError("Spatial checkpoint interval must be positive.")
+    checkpoint_root = Path(checkpoint_dir)
+    chunk_root = Path(chunk_dir)
+    checkpoint_root.mkdir(parents=True, exist_ok=True)
+    chunk_root.mkdir(parents=True, exist_ok=True)
+    source_checkpoint = Path(checkpoint_path).resolve()
+    if source_checkpoint.parent != checkpoint_root.resolve():
+        raise ValueError("Spatial resume checkpoint must be in the declared root.")
+    intercept_mean = float.fromhex(str(target["intercept_mean_float_hex"]))
+    loaded = load_spatial_checkpoint(
+        source_checkpoint,
+        expected_identity=identity,
+        frame=frame,
+        design=design,
+        intercept_mean=intercept_mean,
+        prior=prior,
+        chunk_dir=chunk_root,
+    )
+    start_iteration = int(loaded["iteration"])
+    start_saved_draws = int(loaded["saved_draws"])
+    if start_iteration >= target_iteration:
+        if start_iteration != target_iteration:
+            raise ValueError("Spatial checkpoint exceeds its epoch target.")
+        return {
+            "status": "completed",
+            "iteration": start_iteration,
+            "saved_draws": int(loaded["saved_draws"]),
+            "latest_checkpoint": str(source_checkpoint),
+            "extension_epoch": extension_epoch,
+            "job_attempt": job_attempt,
+            "chain_id": int(identity["chain"]["chain_id"]),
+            "committed_chunks": loaded["committed_chunks"],
+            "start_saved_draws": start_saved_draws,
+            "retained_assertion_records": [],
+            "evidence_builder": "actual_public_chain_loop",
+        }
+    y = np.asarray(loaded["y"], dtype=np.int64).copy()
+    theta = loaded["theta"]
+    rng = loaded["rng"]
+    current_target = float(loaded["current_target"])
+    saved_draws = int(loaded["saved_draws"])
+    retained_assertion_records: list[dict[str, object]] = []
+    next_draw_id = int(loaded["next_draw_id"])
+    committed_chunks = list(loaded["committed_chunks"])
+    pending_scalar_records = loaded["pending_scalar"].to_dict("records")
+    pending_structured = [
+        row.copy() for row in np.asarray(loaded["pending_structured"], dtype=np.float64)
+    ]
+    pending_unstructured = [
+        row.copy() for row in np.asarray(loaded["pending_unstructured"], dtype=np.float64)
+    ]
+    adaptation = SpatialMALAState.from_dict(dict(loaded["adaptation_state"]))
+    accepted = {key: int(value) for key, value in loaded["accepted"].items()}
+    proposed = {key: int(value) for key, value in loaded["proposed"].items()}
+    parameter_schema = list(target["parameter_schema"])
+    chain_id = int(identity["chain"]["chain_id"])
+
+    move = build_move_state(frame, y)
+    max_count_proposals = int(settings.get("max_count_proposals_per_iter", 350))
+    blocked_frequency = int(settings.get("blocked_refresh_frequency", 25))
+    blocked_attempts = int(settings.get("blocked_refresh_attempts", 12))
+    move_weights = _normalized_move_weights(dict(settings))
+    cumulative_weights = np.cumsum(
+        [
+            move_weights["state_year_transfer"],
+            move_weights["county_period_exploration"],
+            move_weights["interval_path_transfer"],
+            move_weights["swap_2x2"],
+            move_weights["cycle_swap"],
+        ]
+    )
+    max_cycle_half_length = int(settings.get("max_cycle_half_length", 6))
+    deadline_seconds = None
+    if max_runtime_minutes is not None:
+        usable = max(1, int(max_runtime_minutes) - int(stop_before_time_limit_minutes))
+        deadline_seconds = time.monotonic() + usable * 60
+    signal_stop = {"value": False}
+
+    def _signal_handler(_signum: int, _frame: object) -> None:
+        signal_stop["value"] = True
+
+    previous_handler = (
+        signal.signal(signal.SIGUSR1, _signal_handler)
+        if hasattr(signal, "SIGUSR1")
+        else None
+    )
+
+    def _pending_frame() -> pd.DataFrame:
+        if not pending_scalar_records:
+            return pd.DataFrame()
+        return pd.DataFrame(pending_scalar_records).loc[
+            :, ["chain_id", "draw_id", "extension_epoch", "parameter", "value"]
+        ]
+
+    def _pending_array(rows: list[np.ndarray]) -> np.ndarray:
+        if not rows:
+            return np.empty((0, len(design.spatial_graph.counties)), dtype=np.float64)
+        return np.asarray(rows, dtype=np.float64)
+
+    def _save_checkpoint(iteration: int) -> Path:
+        destination = checkpoint_root / _spatial_checkpoint_name(
+            extension_epoch=extension_epoch,
+            job_attempt=job_attempt,
+            iteration=iteration,
+        )
+        save_spatial_checkpoint(
+            destination,
+            identity=identity,
+            extension_epoch=extension_epoch,
+            job_attempt=job_attempt,
+            y=y,
+            theta=theta,
+            rng=rng,
+            frame=frame,
+            design=design,
+            intercept_mean=intercept_mean,
+            prior=prior,
+            iteration=iteration,
+            saved_draws=saved_draws,
+            current_target=current_target,
+            accepted=accepted,
+            proposed=proposed,
+            committed_chunks=committed_chunks,
+            pending_scalar=_pending_frame(),
+            pending_structured=_pending_array(pending_structured),
+            pending_unstructured=_pending_array(pending_unstructured),
+            adaptation_state=adaptation.to_dict(),
+            next_draw_id=next_draw_id,
+            output_positions={
+                "scalar_rows": saved_draws * len(parameter_schema),
+                "spatial_draws": saved_draws,
+            },
+            chunk_dir=chunk_root,
+        )
+        return destination
+
+    latest_checkpoint = source_checkpoint
+    status = "running"
+    iteration = start_iteration
+    try:
+        for iteration in range(start_iteration + 1, target_iteration + 1):
+            current_mu = mu(theta, design)
+            kappa = float(np.exp(theta.log_kappa))
+            free_cells = int((move.upper > move.lower).sum())
+            count_moves = min(
+                max_count_proposals,
+                max(
+                    1,
+                    int(
+                        free_cells
+                        * float(settings.get("count_move_sweeps_per_iter", 0.1))
+                    ),
+                ),
+            )
+            for _ in range(count_moves):
+                draw = rng.uniform()
+                if draw < cumulative_weights[0]:
+                    proposed["transfer"] += 1
+                    accepted["transfer"] += int(
+                        state_year_transfer(y, move, current_mu, kappa, rng)
+                    )
+                elif draw < cumulative_weights[1]:
+                    proposed["interval_transfer"] += 1
+                    accepted["interval_transfer"] += int(
+                        period_interval_transfer(y, move, current_mu, kappa, rng)
+                    )
+                elif draw < cumulative_weights[2]:
+                    proposed["interval_path"] += 1
+                    accepted["interval_path"] += int(
+                        interval_path_transfer(y, move, current_mu, kappa, rng)
+                    )
+                elif draw < cumulative_weights[3]:
+                    proposed["swap_2x2"] += 1
+                    accepted["swap_2x2"] += int(
+                        state_2x2_swap(y, move, current_mu, kappa, rng)
+                    )
+                else:
+                    proposed["cycle_swap"] += 1
+                    accepted["cycle_swap"] += int(
+                        state_cycle_swap(
+                            y,
+                            move,
+                            current_mu,
+                            kappa,
+                            rng,
+                            max_cycle_half_length=max_cycle_half_length,
+                        )
+                    )
+            if blocked_frequency and iteration % blocked_frequency == 0:
+                proposed["blocked_refresh"] += blocked_attempts
+                accepted["blocked_refresh"] += blocked_refresh(
+                    y,
+                    move,
+                    current_mu,
+                    kappa,
+                    rng,
+                    attempts=blocked_attempts,
+                )
+
+            # Exact frozen ordering starts with a full-target refresh after all
+            # latent moves and before any continuous-parameter transition.
+            current_target = log_posterior_theta(
+                y,
+                theta,
+                design,
+                intercept_mean=intercept_mean,
+                prior=prior,
+            )
+            scales = _proposal_scales(theta, likelihood_family="negative_binomial_2")
+            if tuple(scales) != (
+                "beta",
+                "state",
+                "year",
+                "log_sigma_state",
+                "log_sigma_year",
+                "log_kappa",
+            ):
+                raise ValueError("Spatial base-theta block universe changed.")
+            for block, scale in scales.items():
+                proposed[block] += 1
+                theta, current_target, was_accepted = _update_theta_block(
+                    y,
+                    theta,
+                    design,
+                    intercept_mean,
+                    rng,
+                    block,
+                    scale,
+                    current_target,
+                    prior,
+                )
+                accepted[block] += int(was_accepted)
+            proposed["spatial_hyperparameters"] += 1
+            theta, current_target, was_accepted = update_spatial_hyperparameters(
+                y,
+                theta,
+                design,
+                intercept_mean=intercept_mean,
+                rng=rng,
+                current_target=current_target,
+                prior=prior,
+            )
+            accepted["spatial_hyperparameters"] += int(was_accepted)
+            if iteration % 5 == 0:
+                proposed["mala"] += 1
+                theta, current_target, adaptation, was_accepted = (
+                    update_spatial_fields_mala(
+                        y,
+                        theta,
+                        design,
+                        intercept_mean=intercept_mean,
+                        rng=rng,
+                        current_target=current_target,
+                        adaptation_state=adaptation,
+                        iteration=iteration,
+                        extension_epoch=extension_epoch,
+                        prior=prior,
+                    )
+                )
+                accepted["mala"] += int(was_accepted)
+
+            schedule = spatial_iteration_schedule(iteration)
+            if schedule["retains_draw"]:
+                assert_constraints(y, frame, label=f"spatial_chain{chain_id}_draw{next_draw_id}")
+                validate_structured_effect(theta.spatial_structured, design.spatial_graph)
+                draw_id = next_draw_id
+                assertion = {
+                    "schema_id": "sr_v2_spatial_retained_assertion/v1",
+                    "chain_id": chain_id,
+                    "draw_id": draw_id,
+                    "cumulative_iteration": iteration,
+                    "extension_epoch": extension_epoch,
+                    "chunk_id": (draw_id - 1) // SPATIAL_DRAW_CHUNK_SIZE + 1,
+                    "capture_order": (
+                        "after_latent_target_base6_hyper_and_scheduled_mala"
+                    ),
+                    "count_constraints_asserted": True,
+                    "spatial_constraints_asserted": True,
+                    "latent_y_sha256": hashlib.sha256(
+                        np.ascontiguousarray(y, dtype=np.dtype("<i8")).tobytes(
+                            order="C"
+                        )
+                    ).hexdigest(),
+                    "structured_effect_sha256": hashlib.sha256(
+                        np.ascontiguousarray(
+                            theta.spatial_structured, dtype=np.dtype("<f8")
+                        ).tobytes(order="C")
+                    ).hexdigest(),
+                }
+                assertion["assertion_sha256"] = hashlib.sha256(
+                    json.dumps(
+                        assertion,
+                        sort_keys=True,
+                        separators=(",", ":"),
+                        ensure_ascii=True,
+                        allow_nan=False,
+                    ).encode("utf-8")
+                ).hexdigest()
+                retained_assertion_records.append(assertion)
+                for row in _theta_to_rows(theta, design, chain_id, draw_id, iteration):
+                    pending_scalar_records.append(
+                        {
+                            "chain_id": int(row["chain"]),
+                            "draw_id": int(row["draw"]),
+                            "extension_epoch": extension_epoch,
+                            "parameter": str(row["parameter"]),
+                            "value": np.float64(row["value"]),
+                        }
+                    )
+                pending_structured.append(
+                    np.asarray(theta.spatial_structured, dtype=np.float64).copy()
+                )
+                pending_unstructured.append(
+                    np.asarray(theta.spatial_unstructured, dtype=np.float64).copy()
+                )
+                saved_draws += 1
+                next_draw_id += 1
+                if len(pending_structured) == SPATIAL_DRAW_CHUNK_SIZE:
+                    draw_end = next_draw_id - 1
+                    draw_start = draw_end - SPATIAL_DRAW_CHUNK_SIZE + 1
+                    record = commit_spatial_draw_chunk(
+                        chunk_root,
+                        chain_id=chain_id,
+                        extension_epoch=extension_epoch,
+                        graph=design.spatial_graph,
+                        parameter_schema=parameter_schema,
+                        chunk_id=len(committed_chunks) + 1,
+                        draw_ids=np.arange(draw_start, draw_end + 1, dtype=np.int64),
+                        scalar_draws=_pending_frame(),
+                        structured=_pending_array(pending_structured),
+                        unstructured=_pending_array(pending_unstructured),
+                    )
+                    committed_chunks.append(record)
+                    pending_scalar_records.clear()
+                    pending_structured.clear()
+                    pending_unstructured.clear()
+            if int(schedule["saved_draws"]) != saved_draws:
+                raise ValueError("Spatial saved-draw schedule drifted from global iteration.")
+
+            requested = bool(stop_requested(iteration)) if stop_requested else False
+            if deadline_seconds is not None and time.monotonic() >= deadline_seconds:
+                signal_stop["value"] = True
+            should_stop = requested or signal_stop["value"]
+            if iteration % checkpoint_every == 0 or should_stop:
+                assert_constraints(y, frame, label=f"spatial_chain{chain_id}_checkpoint_{iteration}")
+                latest_checkpoint = _save_checkpoint(iteration)
+            if should_stop:
+                status = "checkpointed"
+                break
+        else:
+            status = "completed"
+            if pending_structured or pending_unstructured or pending_scalar_records:
+                raise ValueError("A completed frozen epoch must end on a full draw chunk.")
+            if latest_checkpoint.name != _spatial_checkpoint_name(
+                extension_epoch=extension_epoch,
+                job_attempt=job_attempt,
+                iteration=iteration,
+            ):
+                latest_checkpoint = _save_checkpoint(iteration)
+        return {
+            "status": status,
+            "iteration": iteration,
+            "saved_draws": saved_draws,
+            "latest_checkpoint": str(latest_checkpoint),
+            "extension_epoch": extension_epoch,
+            "job_attempt": job_attempt,
+            "chain_id": chain_id,
+            "committed_chunks": committed_chunks,
+            "start_saved_draws": start_saved_draws,
+            "retained_assertion_records": retained_assertion_records,
+            "evidence_builder": "actual_public_chain_loop",
+        }
+    except Exception as error:
+        raise SpatialChainExecutionError(
+            f"Spatial public chain loop failed: {type(error).__name__}: {error}",
+            progress={
+                "start_saved_draws": start_saved_draws,
+                "retained_assertion_records": retained_assertion_records,
+                "evidence_builder": "actual_public_chain_loop",
+            },
+        ) from error
+    finally:
+        if previous_handler is not None and hasattr(signal, "SIGUSR1"):
+            signal.signal(signal.SIGUSR1, previous_handler)
 
 
 def _settings(config: dict, mode: str) -> dict:
@@ -306,6 +1509,7 @@ def _merge_selected_tuning(settings: dict) -> dict:
         "blocked_refresh_frequency",
         "blocked_refresh_attempts",
         "block_size",
+        "max_cycle_half_length",
         "move_weights",
         "proposal_scale_multipliers",
     ]:
@@ -365,6 +1569,18 @@ def _atomic_parquet(path: Path, frame: pd.DataFrame) -> None:
 
 
 def _theta_payload(theta: Theta) -> dict[str, object]:
+    if any(
+        value is not None
+        for value in (
+            theta.spatial_structured,
+            theta.spatial_unstructured,
+            theta.log_sigma_county,
+            theta.logit_phi_structured,
+        )
+    ):
+        raise ValueError(
+            "Spatial state requires the schema-v2 spatial checkpoint writer."
+        )
     theta = _center_random_effects(theta)
     return {
         "beta": theta.beta,
@@ -388,6 +1604,38 @@ def _theta_from_payload(payload: dict[str, object]) -> Theta:
     return _center_random_effects(theta)
 
 
+class LikelihoodFamilyMismatchError(ValueError):
+    """Raised when persisted chain evidence belongs to a different target."""
+
+
+def _validated_evidence_likelihood_family(
+    recorded_family: object | None,
+    *,
+    expected_likelihood_family: str,
+    source: str,
+) -> str:
+    """Validate persisted target identity, with legacy evidence treated as NB2.
+
+    Checkpoints and statuses written before likelihood-family sensitivities did
+    not carry this field and can only belong to the historical default NB2
+    target. This compatibility rule is deliberately one-way: missing metadata
+    can never authorize Poisson evidence reuse.
+    """
+
+    expected = normalize_likelihood_family(expected_likelihood_family)
+    recorded = normalize_likelihood_family(
+        DEFAULT_LIKELIHOOD_FAMILY
+        if recorded_family is None
+        else str(recorded_family)
+    )
+    if recorded != expected:
+        raise LikelihoodFamilyMismatchError(
+            f"{source} likelihood family mismatch: "
+            f"recorded={recorded!r} requested={expected!r}"
+        )
+    return recorded
+
+
 def save_chain_checkpoint(
     path: Path,
     *,
@@ -401,33 +1649,82 @@ def save_chain_checkpoint(
     proposed: dict[str, int],
     param_accept: dict[str, int],
     param_prop: dict[str, int],
+    likelihood_family: str = DEFAULT_LIKELIHOOD_FAMILY,
+    target_identity: dict[str, object] | None = None,
 ) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(path.suffix + ".tmp.npz")
     theta_state = _theta_payload(theta)
-    np.savez_compressed(
-        tmp,
-        y=np.asarray(y, dtype=np.int16),
-        beta=theta_state["beta"],
-        state_effect=theta_state["state_effect"],
-        year_effect=theta_state["year_effect"],
-        log_sigma_state=np.asarray(theta_state["log_sigma_state"]),
-        log_sigma_year=np.asarray(theta_state["log_sigma_year"]),
-        log_kappa=np.asarray(theta_state["log_kappa"]),
-        rng_state=np.asarray(json.dumps(rng.bit_generator.state)),
-        iteration=np.asarray(int(iteration)),
-        saved_draws=np.asarray(int(saved_draws)),
-        current_lp=np.asarray(float(current_lp)),
-        accepted_json=np.asarray(json.dumps(accepted)),
-        proposed_json=np.asarray(json.dumps(proposed)),
-        param_accept_json=np.asarray(json.dumps(param_accept)),
-        param_prop_json=np.asarray(json.dumps(param_prop)),
-    )
+    family = normalize_likelihood_family(likelihood_family)
+    payload = {
+        "y": np.asarray(y, dtype=np.int16),
+        "beta": theta_state["beta"],
+        "state_effect": theta_state["state_effect"],
+        "year_effect": theta_state["year_effect"],
+        "log_sigma_state": np.asarray(theta_state["log_sigma_state"]),
+        "log_sigma_year": np.asarray(theta_state["log_sigma_year"]),
+        "log_kappa": np.asarray(theta_state["log_kappa"]),
+        "rng_state": np.asarray(json.dumps(rng.bit_generator.state)),
+        "iteration": np.asarray(int(iteration)),
+        "saved_draws": np.asarray(int(saved_draws)),
+        "current_lp": np.asarray(float(current_lp)),
+        "accepted_json": np.asarray(json.dumps(accepted)),
+        "proposed_json": np.asarray(json.dumps(proposed)),
+        "param_accept_json": np.asarray(json.dumps(param_accept)),
+        "param_prop_json": np.asarray(json.dumps(param_prop)),
+        "likelihood_family": np.asarray(family),
+    }
+    if target_identity is not None:
+        payload["target_identity_json"] = np.asarray(
+            json.dumps(target_identity, sort_keys=True, separators=(",", ":"), ensure_ascii=True, allow_nan=False)
+        )
+    np.savez_compressed(tmp, **payload)
     os.replace(tmp, path)
+    if target_identity is not None:
+        digest = hashlib.sha256(path.read_bytes()).hexdigest()
+        sidecar = path.with_name(path.name + ".sha256")
+        sidecar_tmp = sidecar.with_name(sidecar.name + ".tmp")
+        sidecar_tmp.write_text(digest + "\n", encoding="ascii", newline="\n")
+        os.replace(sidecar_tmp, sidecar)
 
 
-def load_chain_checkpoint(path: Path) -> dict[str, object]:
+def load_chain_checkpoint(
+    path: Path,
+    *,
+    expected_likelihood_family: str = DEFAULT_LIKELIHOOD_FAMILY,
+    expected_target_identity: dict[str, object] | None = None,
+) -> dict[str, object]:
+    sidecar = path.with_name(path.name + ".sha256")
+    if expected_target_identity is not None and not sidecar.is_file():
+        raise ValueError(f"Heavy checkpoint SHA-256 sidecar is missing: {sidecar}")
+    if expected_target_identity is not None:
+        expected_hash = sidecar.read_text(encoding="ascii").strip().lower()
+        actual_hash = hashlib.sha256(path.read_bytes()).hexdigest()
+        if expected_hash != actual_hash:
+            raise ValueError(
+                f"Checkpoint sidecar SHA-256 mismatch: expected {expected_hash}, found {actual_hash}"
+            )
     data = np.load(path, allow_pickle=True)
+    recorded_family = (
+        str(data["likelihood_family"].item())
+        if "likelihood_family" in data.files
+        else None
+    )
+    family = _validated_evidence_likelihood_family(
+        recorded_family,
+        expected_likelihood_family=expected_likelihood_family,
+        source=str(path),
+    )
+    recorded_identity = (
+        json.loads(str(data["target_identity_json"].item()))
+        if "target_identity_json" in data.files and str(data["target_identity_json"].item())
+        else None
+    )
+    if expected_target_identity is not None:
+        expected_canonical = json.dumps(expected_target_identity, sort_keys=True, separators=(",", ":"), ensure_ascii=True, allow_nan=False)
+        recorded_canonical = json.dumps(recorded_identity, sort_keys=True, separators=(",", ":"), ensure_ascii=True, allow_nan=False)
+        if recorded_canonical != expected_canonical:
+            raise ValueError("Heavy checkpoint target identity mismatch")
     rng = np.random.default_rng()
     rng.bit_generator.state = json.loads(str(data["rng_state"].item()))
     theta = _theta_from_payload(
@@ -451,15 +1748,26 @@ def load_chain_checkpoint(path: Path) -> dict[str, object]:
         "proposed": json.loads(str(data["proposed_json"].item())),
         "param_accept": json.loads(str(data["param_accept_json"].item())),
         "param_prop": json.loads(str(data["param_prop_json"].item())),
+        "likelihood_family": family,
+        "target_identity": recorded_identity,
     }
 
 
-def latest_valid_checkpoint(checkpoint_dir: Path) -> Path | None:
+def latest_valid_checkpoint(
+    checkpoint_dir: Path,
+    *,
+    expected_likelihood_family: str = DEFAULT_LIKELIHOOD_FAMILY,
+) -> Path | None:
     checkpoints = sorted(checkpoint_dir.glob("checkpoint_iter_*.npz"))
     for path in reversed(checkpoints):
         try:
-            load_chain_checkpoint(path)
+            load_chain_checkpoint(
+                path,
+                expected_likelihood_family=expected_likelihood_family,
+            )
             return path
+        except LikelihoodFamilyMismatchError:
+            raise
         except Exception:
             continue
     return None
@@ -562,9 +1870,18 @@ def run_mcmc_chain_hpc(
     stop_before_time_limit_minutes: int = 10,
     force: bool = False,
     model_name: str = "primary",
+    target_identity: dict[str, object] | None = None,
+    resume_checkpoint_path: str | Path | None = None,
 ) -> dict:
     config = _load_config_path(config_path)
     settings = _hpc_settings(config, mode, array_task_id)
+    likelihood_family = normalize_likelihood_family(
+        settings.get(
+            "likelihood_family",
+            settings.get("likelihood", DEFAULT_LIKELIHOOD_FAMILY),
+        )
+    )
+    settings["likelihood_family"] = likelihood_family
     seeds = list(settings.get("random_seeds") or config.get("run", {}).get("random_seeds") or [17291])
     if seed is None:
         seed = int(seeds[(chain_id - 1) % len(seeds)]) + (100000 if mode == "extend" else 0)
@@ -575,9 +1892,15 @@ def run_mcmc_chain_hpc(
     if not checkpoint_root.is_absolute():
         checkpoint_root = PROJECT_ROOT / checkpoint_root
     status_path = chain_dir / "chain_status.json"
-    if status_path.exists() and not force:
+    if status_path.exists():
         status = json.loads(status_path.read_text(encoding="utf-8"))
-        if status.get("status") == "completed":
+        status_family = _validated_evidence_likelihood_family(
+            status.get("likelihood_family"),
+            expected_likelihood_family=likelihood_family,
+            source=str(status_path),
+        )
+        status["likelihood_family"] = status_family
+        if status.get("status") == "completed" and not force:
             return status
 
     _write_resolved_config(
@@ -596,7 +1919,10 @@ def run_mcmc_chain_hpc(
         },
     )
 
-    design = make_design(frame, model=model_name)
+    design = make_design(
+        frame, model=model_name, likelihood_family=likelihood_family
+    )
+    prior = prior_specification_from_mapping(config.get("model", {}))
     intercept_mean = crude_intercept_prior(frame)
     n_iter = int(settings["n_iter"])
     burn_in = int(settings.get("burn_in", 0))
@@ -605,44 +1931,78 @@ def run_mcmc_chain_hpc(
     blocked_frequency = int(settings.get("blocked_refresh_frequency", 25))
     blocked_attempts = int(settings.get("blocked_refresh_attempts", 12))
     checkpoint_every = max(1, int(checkpoint_every or settings.get("checkpoint_every", 250)))
-    move_weights = settings.get("move_weights", {})
-    weight_transfer = float(move_weights.get("state_year_transfer", move_weights.get("transfer", 0.55)))
-    weight_interval = float(move_weights.get("county_period_exploration", move_weights.get("interval_transfer", 0.20)))
-    weight_swap = float(move_weights.get("swap_2x2", 0.25))
-    weight_total = max(weight_transfer + weight_interval + weight_swap, 1e-12)
-    weight_transfer /= weight_total
-    weight_interval /= weight_total
+    move_weights = _normalized_move_weights(settings)
+    weight_transfer = move_weights["state_year_transfer"]
+    weight_interval = move_weights["county_period_exploration"]
+    weight_path = move_weights["interval_path_transfer"]
+    weight_swap = move_weights["swap_2x2"]
+    weight_cycle = move_weights["cycle_swap"]
+    max_cycle_half_length = int(settings.get("max_cycle_half_length", 6))
 
     checkpoint_root.mkdir(parents=True, exist_ok=True)
-    parameter_rows: list[dict]
-    latent_draws: list[np.ndarray]
-    validation_rows: list[dict]
-    runtime_rows: list[dict]
-    parameter_rows, latent_draws, validation_rows, runtime_rows = _load_existing_chain_outputs(chain_dir) if resume else ([], [], [], [])
-
-    latest = latest_valid_checkpoint(checkpoint_root) if resume else None
+    if target_identity is not None and resume:
+        if resume_checkpoint_path is None:
+            raise ValueError("Heavy resume requires an exact status/manifest-declared checkpoint path")
+        latest = Path(resume_checkpoint_path).resolve()
+        if latest.parent != checkpoint_root.resolve() or not latest.is_file():
+            raise ValueError("Heavy resume checkpoint must be an existing file in the declared checkpoint root")
+    else:
+        latest = (
+            latest_valid_checkpoint(
+                checkpoint_root,
+                expected_likelihood_family=likelihood_family,
+            )
+            if resume
+            else None
+        )
     if latest is not None:
-        checkpoint = load_chain_checkpoint(latest)
+        checkpoint = load_chain_checkpoint(
+            latest,
+            expected_likelihood_family=likelihood_family,
+            expected_target_identity=target_identity,
+        )
+        parameter_rows, latent_draws, validation_rows, runtime_rows = (
+            _load_existing_chain_outputs(chain_dir)
+        )
         y = checkpoint["y"]
         theta = checkpoint["theta"]
         rng = checkpoint["rng"]
         start_iteration = int(checkpoint["iteration"])
         saved = int(checkpoint["saved_draws"])
-        current_lp = float(checkpoint["current_lp"])
+        assert_constraints(y, frame, label=f"chain{chain_id}_resume")
+        recomputed_lp = log_posterior_theta(y, theta, design, intercept_mean=intercept_mean, prior=prior)
+        if not np.isfinite(recomputed_lp) or not np.isclose(
+            recomputed_lp,
+            float(checkpoint["current_lp"]),
+            rtol=1e-12,
+            atol=1e-8,
+        ):
+            raise ValueError("Resume checkpoint current log posterior does not match the requested target")
+        current_lp = float(recomputed_lp)
         accepted = {key: int(value) for key, value in checkpoint["accepted"].items()}
         proposed = {key: int(value) for key, value in checkpoint["proposed"].items()}
         param_accept = {key: int(value) for key, value in checkpoint["param_accept"].items()}
         param_prop = {key: int(value) for key, value in checkpoint["param_prop"].items()}
         resume_source = rel(latest)
     else:
+        parameter_rows, latent_draws, validation_rows, runtime_rows = (
+            [],
+            [],
+            [],
+            [],
+        )
         rng = np.random.default_rng(int(seed))
         init_path = _initial_allocation_path(chain_id)
         y = pd.read_parquet(init_path)["latent_count"].to_numpy(dtype=int).copy()
         assert_constraints(y, frame, label=f"chain{chain_id}_start")
         theta = initialize_theta(frame, y, design)
-        current_lp = log_posterior_theta(y, theta, design, intercept_mean=intercept_mean)
-        scales0 = _proposal_scales(theta, settings.get("proposal_scale_multipliers"))
-        accepted = {"transfer": 0, "interval_transfer": 0, "swap_2x2": 0, "blocked_refresh": 0}
+        current_lp = log_posterior_theta(y, theta, design, intercept_mean=intercept_mean, prior=prior)
+        scales0 = _proposal_scales(
+            theta,
+            settings.get("proposal_scale_multipliers"),
+            likelihood_family=likelihood_family,
+        )
+        accepted = {"transfer": 0, "interval_transfer": 0, "interval_path": 0, "swap_2x2": 0, "cycle_swap": 0, "blocked_refresh": 0}
         proposed = {key: 0 for key in accepted}
         param_accept = {key: 0 for key in scales0}
         param_prop = {key: 0 for key in scales0}
@@ -669,28 +2029,96 @@ def run_mcmc_chain_hpc(
     try:
         for iteration in range(start_iteration + 1, target_iteration + 1):
             current_mu = mu(theta, design)
-            kappa = float(np.exp(theta.log_kappa))
+            kappa = (
+                None
+                if likelihood_family == "poisson"
+                else float(np.exp(theta.log_kappa))
+            )
             free_cells = int((move.upper > move.lower).sum())
             count_moves = min(max_count_proposals, max(1, int(free_cells * float(settings.get("count_move_sweeps_per_iter", 0.1)))))
             for _ in range(count_moves):
                 r = rng.uniform()
                 if r < weight_transfer:
                     proposed["transfer"] += 1
-                    accepted["transfer"] += int(state_year_transfer(y, move, current_mu, kappa, rng))
+                    accepted["transfer"] += int(
+                        state_year_transfer(
+                            y,
+                            move,
+                            current_mu,
+                            kappa,
+                            rng,
+                            likelihood_family=likelihood_family,
+                        )
+                    )
                 elif r < weight_transfer + weight_interval:
                     proposed["interval_transfer"] += 1
-                    accepted["interval_transfer"] += int(period_interval_transfer(y, move, current_mu, kappa, rng))
-                else:
+                    accepted["interval_transfer"] += int(
+                        period_interval_transfer(
+                            y,
+                            move,
+                            current_mu,
+                            kappa,
+                            rng,
+                            likelihood_family=likelihood_family,
+                        )
+                    )
+                elif r < weight_transfer + weight_interval + weight_path:
+                    proposed["interval_path"] += 1
+                    accepted["interval_path"] += int(
+                        interval_path_transfer(
+                            y,
+                            move,
+                            current_mu,
+                            kappa,
+                            rng,
+                            likelihood_family=likelihood_family,
+                        )
+                    )
+                elif r < weight_transfer + weight_interval + weight_path + weight_swap:
                     proposed["swap_2x2"] += 1
-                    accepted["swap_2x2"] += int(state_2x2_swap(y, move, current_mu, kappa, rng))
+                    accepted["swap_2x2"] += int(
+                        state_2x2_swap(
+                            y,
+                            move,
+                            current_mu,
+                            kappa,
+                            rng,
+                            likelihood_family=likelihood_family,
+                        )
+                    )
+                else:
+                    proposed["cycle_swap"] += 1
+                    accepted["cycle_swap"] += int(
+                        state_cycle_swap(
+                            y,
+                            move,
+                            current_mu,
+                            kappa,
+                            rng,
+                            max_cycle_half_length=max_cycle_half_length,
+                            likelihood_family=likelihood_family,
+                        )
+                    )
             if blocked_frequency and iteration % blocked_frequency == 0:
                 proposed["blocked_refresh"] += blocked_attempts
-                accepted["blocked_refresh"] += blocked_refresh(y, move, current_mu, kappa, rng, attempts=blocked_attempts)
-            current_lp = log_posterior_theta(y, theta, design, intercept_mean=intercept_mean)
-            scales = _proposal_scales(theta, settings.get("proposal_scale_multipliers"))
+                accepted["blocked_refresh"] += blocked_refresh(
+                    y,
+                    move,
+                    current_mu,
+                    kappa,
+                    rng,
+                    attempts=blocked_attempts,
+                    likelihood_family=likelihood_family,
+                )
+            current_lp = log_posterior_theta(y, theta, design, intercept_mean=intercept_mean, prior=prior)
+            scales = _proposal_scales(
+                theta,
+                settings.get("proposal_scale_multipliers"),
+                likelihood_family=likelihood_family,
+            )
             for block, scale in scales.items():
                 param_prop[block] += 1
-                theta, current_lp, ok = _update_theta_block(y, theta, design, intercept_mean, rng, block, scale, current_lp)
+                theta, current_lp, ok = _update_theta_block(y, theta, design, intercept_mean, rng, block, scale, current_lp, prior)
                 param_accept[block] += int(ok)
             if iteration > burn_in and (iteration - burn_in) % thin == 0:
                 saved += 1
@@ -720,6 +2148,8 @@ def run_mcmc_chain_hpc(
                     proposed=proposed,
                     param_accept=param_accept,
                     param_prop=param_prop,
+                    likelihood_family=likelihood_family,
+                    target_identity=target_identity,
                 )
                 _write_chain_outputs(
                     chain_dir,
@@ -735,6 +2165,7 @@ def run_mcmc_chain_hpc(
                         "iteration": iteration,
                         "target_iteration": target_iteration,
                         "saved_draws": saved,
+                        "likelihood_family": likelihood_family,
                         "latest_checkpoint": rel(checkpoint_path),
                         "resume_source": resume_source,
                     },
@@ -762,6 +2193,8 @@ def run_mcmc_chain_hpc(
                 proposed=proposed,
                 param_accept=param_accept,
                 param_prop=param_prop,
+                likelihood_family=likelihood_family,
+                target_identity=target_identity,
             )
         runtime_rows.append(
             {
@@ -779,6 +2212,7 @@ def run_mcmc_chain_hpc(
             "iteration": final_iteration,
             "target_iteration": target_iteration,
             "saved_draws": saved,
+            "likelihood_family": likelihood_family,
             "seed": int(seed),
             "config_path": config.get("_config_path", ""),
             "resume_source": resume_source,
@@ -813,7 +2247,13 @@ def run_mcmc_chain_hpc(
             validation_rows=validation_rows,
             acceptance_rows=_acceptance_rows(chain_id, accepted, proposed, param_accept, param_prop),
             runtime_rows=runtime_rows,
-            status={"status": "failed", "mode": mode, "error": repr(exc), "saved_draws": saved},
+            status={
+                "status": "failed",
+                "mode": mode,
+                "error": repr(exc),
+                "saved_draws": saved,
+                "likelihood_family": likelihood_family,
+            },
         )
         raise
     finally:
@@ -824,12 +2264,21 @@ def run_mcmc_chain_hpc(
 def run_mcmc(frame: pd.DataFrame, *, mode: str = "production", model_name: str = "primary") -> dict:
     config = load_config()
     settings = _settings(config, mode)
+    likelihood_family = normalize_likelihood_family(
+        settings.get(
+            "likelihood_family",
+            settings.get("likelihood", DEFAULT_LIKELIHOOD_FAMILY),
+        )
+    )
+    settings["likelihood_family"] = likelihood_family
     seeds = config["run"].get("random_seeds", [17291, 17292, 17293, 17294])
     manifest_path = OUTPUT_DIR / "initial_allocation_manifest.csv"
     if not manifest_path.exists():
         solve_and_save_initial_allocations(frame, seeds=seeds)
 
-    design = make_design(frame, model=model_name)
+    design = make_design(
+        frame, model=model_name, likelihood_family=likelihood_family
+    )
     intercept_mean = crude_intercept_prior(frame)
     n_iter = int(settings["n_iter"])
     burn_in = int(settings["burn_in"])
@@ -837,6 +2286,13 @@ def run_mcmc(frame: pd.DataFrame, *, mode: str = "production", model_name: str =
     max_count_proposals = int(settings.get("max_count_proposals_per_iter", 350))
     blocked_frequency = int(settings.get("blocked_refresh_frequency", 25))
     n_chains = int(settings.get("n_chains", 4))
+    move_weights = _normalized_move_weights(settings)
+    weight_transfer = move_weights["state_year_transfer"]
+    weight_interval = move_weights["county_period_exploration"]
+    weight_path = move_weights["interval_path_transfer"]
+    weight_swap = move_weights["swap_2x2"]
+    weight_cycle = move_weights["cycle_swap"]
+    max_cycle_half_length = int(settings.get("max_cycle_half_length", 6))
     chain_rows = []
     latent_draws = []
     draw_meta = []
@@ -852,31 +2308,74 @@ def run_mcmc(frame: pd.DataFrame, *, mode: str = "production", model_name: str =
         move = build_move_state(frame, y)
         theta = initialize_theta(frame, y, design)
         current_lp = log_posterior_theta(y, theta, design, intercept_mean=intercept_mean)
-        scales = _proposal_scales(theta)
-        accepted = {"transfer": 0, "interval_transfer": 0, "swap_2x2": 0, "blocked_refresh": 0}
+        scales = _proposal_scales(theta, likelihood_family=likelihood_family)
+        accepted = {"transfer": 0, "interval_transfer": 0, "interval_path": 0, "swap_2x2": 0, "cycle_swap": 0, "blocked_refresh": 0}
         proposed = {key: 0 for key in accepted}
         param_accept = {key: 0 for key in scales}
         param_prop = {key: 0 for key in scales}
         saved = 0
         for iteration in range(1, n_iter + 1):
             current_mu = mu(theta, design)
-            kappa = float(np.exp(theta.log_kappa))
+            kappa = (
+                None
+                if likelihood_family == "poisson"
+                else float(np.exp(theta.log_kappa))
+            )
             free_cells = int((move.upper > move.lower).sum())
             count_moves = min(max_count_proposals, max(1, int(free_cells * float(settings.get("count_move_sweeps_per_iter", 0.1)))))
             for _ in range(count_moves):
                 r = rng.uniform()
                 if r < 0.55:
                     proposed["transfer"] += 1
-                    accepted["transfer"] += int(state_year_transfer(y, move, current_mu, kappa, rng))
+                    accepted["transfer"] += int(
+                        state_year_transfer(
+                            y,
+                            move,
+                            current_mu,
+                            kappa,
+                            rng,
+                            likelihood_family=likelihood_family,
+                        )
+                    )
                 elif r < 0.75:
                     proposed["interval_transfer"] += 1
-                    accepted["interval_transfer"] += int(period_interval_transfer(y, move, current_mu, kappa, rng))
+                    accepted["interval_transfer"] += int(
+                        period_interval_transfer(
+                            y,
+                            move,
+                            current_mu,
+                            kappa,
+                            rng,
+                            likelihood_family=likelihood_family,
+                        )
+                    )
                 else:
                     proposed["swap_2x2"] += 1
-                    accepted["swap_2x2"] += int(state_2x2_swap(y, move, current_mu, kappa, rng))
+                    accepted["swap_2x2"] += int(
+                        state_2x2_swap(
+                            y,
+                            move,
+                            current_mu,
+                            kappa,
+                            rng,
+                            likelihood_family=likelihood_family,
+                        )
+                    )
             if blocked_frequency and iteration % blocked_frequency == 0:
                 proposed["blocked_refresh"] += 12
-                accepted["blocked_refresh"] += blocked_refresh(y, move, current_mu, kappa, rng, attempts=12)
+                accepted["blocked_refresh"] += blocked_refresh(
+                    y,
+                    move,
+                    current_mu,
+                    kappa,
+                    rng,
+                    attempts=12,
+                    likelihood_family=likelihood_family,
+                )
+            # Count moves mutate y. Refresh the current target value before any
+            # parameter Metropolis ratio is evaluated. The v1 local runner
+            # compared proposals against a log posterior from the previous y.
+            current_lp = log_posterior_theta(y, theta, design, intercept_mean=intercept_mean)
             for block, scale in scales.items():
                 param_prop[block] += 1
                 theta, current_lp, ok = _update_theta_block(y, theta, design, intercept_mean, rng, block, scale, current_lp)
@@ -929,6 +2428,7 @@ def run_mcmc(frame: pd.DataFrame, *, mode: str = "production", model_name: str =
     run_meta = {
         "mode": settings["mode"],
         "model_name": model_name,
+        "likelihood_family": likelihood_family,
         "started": run_started,
         "finished": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "n_chains": n_chains,

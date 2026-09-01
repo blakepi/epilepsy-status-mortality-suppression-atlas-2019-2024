@@ -1,0 +1,63 @@
+name: Scientific Reports v2 joint-pilot evidence recovery
+
+on:
+  push:
+    branches:
+      - scientific-reports-v2
+    paths:
+      - 'outputs/scientific_reports_v2/joint_pilot_recovery.json'
+
+permissions:
+  contents: write
+
+jobs:
+  recover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out recovery request
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Install summary dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pandas numpy scipy pyarrow statsmodels matplotlib PyYAML arviz
+
+      - name: Download completed chain artifacts from run 31446816642
+        uses: actions/download-artifact@v4
+        with:
+          pattern: joint-pilot-chain-*
+          path: outputs/scientific_reports_v2/joint_pilot
+          merge-multiple: true
+          run-id: 31446816642
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate HOLD-or-PASS evidence without discarding outputs
+        continue-on-error: true
+        run: python scripts/69_summarize_sr_v2_joint_pilot.py
+
+      - name: Verify recovered evidence
+        run: |
+          test -s outputs/scientific_reports_v2/joint_pilot/joint_pilot_summary.json
+          test -s outputs/scientific_reports_v2/joint_pilot/joint_pilot_summary.md
+          test -s outputs/scientific_reports_v2/joint_pilot/recommended_joint_tuning.yaml
+          git diff --check
+
+      - name: Commit recovered evidence
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add outputs/scientific_reports_v2/joint_pilot
+          git commit -m "test: recover corrected joint-pilot evidence [skip sr-v2] [skip tuning] [skip joint-pilot]"
+          git pull --rebase origin scientific-reports-v2
+          git push origin HEAD:scientific-reports-v2

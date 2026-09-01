@@ -1,0 +1,44 @@
+{
+  "fixture_schema": "sr_v2_primary_rng_reference/v1",
+  "frozen_source_commit": "b65ff96388e1f4125bc60b804103089b90e4295a",
+  "input": {
+    "frame_contract": "structural_six_cycle_frame/v1",
+    "frame_semantic_sha256": "3aee8d8442063ab04dcc38c6c315d9997cd920f23e3afd1a1f92e86dfafa6c6a",
+    "design_columns": ["Intercept", "primary_rurality_metro_other", "primary_rurality_nonmetro_adjacent", "primary_rurality_nonmetro_nonadjacent", "svi_quartile_Q2", "svi_quartile_Q3", "svi_quartile_Q4_highest", "z_pct_age65", "z_pct_male"],
+    "initial_y": [1, 2, 0, 0, 1, 2, 2, 0, 1],
+    "initial_theta": {
+      "beta": ["-0x1.b333333333333p+2", "0x1.3333333333333p+0", "-0x1.0000000000000p+0", "0x0.0p+0", "0x0.0p+0", "0x0.0p+0", "0x0.0p+0", "0x0.0p+0", "0x0.0p+0"],
+      "state_effect": ["0x0.0p+0"],
+      "year_effect": ["0x1.999999999999ap-1", "-0x1.999999999999ap-2", "-0x1.999999999999ap-2"],
+      "log_sigma_state": "-0x1.9c041f7ed8d33p+0",
+      "log_sigma_year": "-0x1.9c041f7ed8d33p+0",
+      "log_kappa": "0x1.193ea7aad030bp+0"
+    },
+    "intercept_mean_hex": "-0x1.c4deab14fa3dep+2"
+  },
+  "driver": {
+    "bit_generator": "PCG64", "seed": 17291, "likelihood_family": "negative_binomial_2", "iterations": 30,
+    "count_moves_per_iteration": 6, "blocked_refresh_frequency": 25, "blocked_refresh_attempts": 12, "max_cycle_half_length": 6,
+    "move_weights_hex": {"state_year_transfer": "0x1.89d89d89d89d8p-2", "county_period_exploration": "0x1.89d89d89d89d8p-3", "interval_path_transfer": "0x1.3b13b13b13b14p-3", "swap_2x2": "0x1.89d89d89d89d8p-3", "cycle_swap": "0x1.3b13b13b13b14p-4"},
+    "proposal_scales_hex": {"beta": "0x1.47ae147ae147bp-7", "state": "0x1.47ae147ae147bp-7", "year": "0x1.47ae147ae147bp-7", "log_sigma_state": "0x1.999999999999ap-5", "log_sigma_year": "0x1.999999999999ap-5", "log_kappa": "0x1.999999999999ap-5"},
+    "parameter_block_order": ["beta", "state", "year", "log_sigma_state", "log_sigma_year", "log_kappa"]
+  },
+  "trace_semantic_sha256": [
+    "e6769cbe5322c6bcb8cc5ec583b77448c969be50b3aea8704f2a1d700e61769a", "7da36baa1857f7fa33fa064f52ad186b53e463b9d1131daf7e2cfcb744133361", "182fd17035fceaf283b7d9be6f0a5056ea1e4e268fed53a875148e0382db377a", "493d2ca7311c802f080b2423c46450578a286bcb48cd8e2332111fb6b40a49fd", "3b35383d1e04986cb345fecb610cce579f962a9b8cff861d3933bdd9e8876422", "f9ced0c6c44fb5eb823529d4add8ee5d34a51d4bf0d29aa128c8fbe29a5ad783", "916c03c5c5c4b2443bf944b673f66860516e6cc6bf5cf3dbddd44fde0dfa79a7", "b7acecadc769ffba6cda1e7c19942c3fbbcdcde414bd94863bef521201a91f25", "3364d53285558c3eb349deced1989514683d0380ea0163d6560c9127a514b506", "408ea5a007388e8af68f3be0c2688c2c51ff5c3c6cf33b1b495a27eebedc3708", "c2a003b59ff0b3a74e74ca9ab2de11c1f73d97e5311b01562077385d846b81ae", "9fda4badf431ef869691429cb6c2a4c421187eda48fb98917785b36cc72b1cbb", "08f566e99ab269c29a415cb6f2bb92fa6924cdbb8641e4e6c5d7dbbbe733dcfd", "e407a0fb527a9a7315b2afb6835434ad3631c9e0b6c1a2cd62b5922c3afb3af0", "810ceba9eb93e0df8bcea2b9433d0bb42a2113a793db03d7540fdd4426a8925a", "4977f732d512a3693fb4fb741a9c4fce0b0752d3dad7e215e8f98098aa432ccb", "8d38ad042325fdd266a8b645400a1304e78990dc2124adff268b52def85cadfb", "52aa5be40a200ea128f0cde69c384082613aa81417fd2250a2ce4516e17a60db", "c9cf1b81bf79ec58a88d5affaa880190716f0e5c24aa831ee40329e2d11d320f", "1220ae20251cd94445ca9f1897351f3a3492790d28add7ed94ff1b279cb3a1b7", "b7642d5f8ce93a463ce1604ec4b83de2a35c00fd1f91b6ffbed042b14a114c27", "05dd19b3e61c6aa97a2b8373d50bbb3e56c0fa81042401243c3f627befe999b0", "62beba6f54b3ca81eecf7bb7a3aa9536c6e71e1e04d27af3511c00c530278380", "1c3f3ca2766f44d1487928996efbd67fb98279f00c6df92286f8ddf6ff13cb34", "0e8a9a998a1bf8c3260c9af5242d14ca5fa04a4d8faa5832251589592d2ad054", "ef3adaf87c1eafb5ece0bec9dee20d591955fb877e5ee57918be140b2266338f", "f2f6b0842ea6269460b7a4355ed289d31ec1e0047fdf1ffcf80ff5152c0b14c6", "06f1b61d57e9d6af7dcf7039548fc140db288906023e4dc1250b69befdf3a820", "1cbd27710e48a60024b10694dd387946226efa6067d7dfaa3aeb25d41e4a37c5", "79ca01a0747ae79962164fe7d4cbb85882eee7a5ae2a37da7d00a977079773d1"
+  ],
+  "final": {
+    "y": [1, 2, 0, 0, 1, 2, 2, 0, 1],
+    "accepted": {"blocked_refresh": 0, "cycle_swap": 4, "interval_path": 0, "interval_transfer": 0, "swap_2x2": 0, "transfer": 0},
+    "proposed": {"blocked_refresh": 12, "cycle_swap": 15, "interval_path": 23, "interval_transfer": 29, "swap_2x2": 32, "transfer": 81},
+    "param_accept": {"beta": 29, "state": 30, "year": 27, "log_sigma_state": 30, "log_sigma_year": 21, "log_kappa": 28},
+    "param_prop": {"beta": 30, "state": 30, "year": 30, "log_sigma_state": 30, "log_sigma_year": 30, "log_kappa": 30},
+    "current_lp_decimal": "-34.436050720637276",
+    "rng_state": {"bit_generator": "PCG64", "has_uint32": 1, "state": {"inc": 224981362231441008548331868335964483447, "state": 95893607439835650202328461786439311127}, "uinteger": 3945060682},
+    "next_raw_uint64": [2404091896728934080, 13695681725724205735, 14379154003528431865, 12848816892013277851, 13732841377270305759, 13950633073208519615, 8997763335589623376, 17515484389196032571]
+  },
+  "checkpoint": {
+    "base_keys": ["accepted_json", "beta", "current_lp", "iteration", "likelihood_family", "log_kappa", "log_sigma_state", "log_sigma_year", "param_accept_json", "param_prop_json", "proposed_json", "rng_state", "saved_draws", "state_effect", "y", "year_effect"],
+    "identity_bound_adds": ["target_identity_json"], "identity_bound_requires_sha256_sidecar": true,
+    "spatial_disabled_forbidden_key_prefixes": ["spatial_", "graph_", "mala_"]
+  }
+}

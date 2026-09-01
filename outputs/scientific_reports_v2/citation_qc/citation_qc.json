@@ -1,0 +1,28 @@
+{
+  "citation_groups": 8,
+  "cited_numbers": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    7,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    17
+  ],
+  "generated_utc": "2026-08-12T22:26:18.084127+00:00",
+  "interpretation_boundary": "This audit verifies numeric citation integrity and a small set of semantic mappings in the nonfinal working draft. Bibliographic metadata and DOI resolution remain separate final-package gates.",
+  "manuscript_changed": false,
+  "normalizations_applied": [],
+  "out_of_range_citations": [],
+  "passed": true,
+  "reference_count": 17,
+  "references_contiguous": true,
+  "unresolved_old_fragments": [],
+  "write_mode": false
+}

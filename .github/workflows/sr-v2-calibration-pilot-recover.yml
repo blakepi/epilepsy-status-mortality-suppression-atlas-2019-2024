@@ -1,0 +1,90 @@
+name: Scientific Reports v2 calibration-pilot evidence recovery
+
+on:
+  push:
+    branches:
+      - scientific-reports-v2
+    paths:
+      - 'outputs/scientific_reports_v2/calibration_pilot_recovery.json'
+
+permissions:
+  contents: write
+
+jobs:
+  recover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out recovery request
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Install summary dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pandas numpy scipy pyarrow statsmodels matplotlib PyYAML arviz
+
+      - name: Download completed calibration-chain artifacts from run 31448594506
+        uses: actions/download-artifact@v4
+        with:
+          pattern: calibration-pilot-chain-*
+          path: outputs/scientific_reports_v2/calibration_pilot/replicate_001
+          merge-multiple: true
+          run-id: 31448594506
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate calibration PASS-or-HOLD evidence
+        continue-on-error: true
+        run: python scripts/74_summarize_sr_v2_calibration_pilot.py
+
+      - name: Verify recovered calibration evidence
+        run: |
+          test -s outputs/scientific_reports_v2/calibration_pilot/replicate_001/calibration_pilot_summary.json
+          test -s outputs/scientific_reports_v2/calibration_pilot/replicate_001/calibration_pilot_summary.md
+          test -s outputs/scientific_reports_v2/calibration_pilot/replicate_001/calibration_primary_recovery.csv
+          test -s outputs/scientific_reports_v2/calibration_pilot/replicate_001/calibration_latent_recovery_summary.csv
+          test -s outputs/scientific_reports_v2/calibration_pilot/replicate_001/calibration_comparator_results.csv
+          git diff --check
+
+      - name: Commit recovered calibration evidence
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            outputs/scientific_reports_v2/calibration_pilot/replicate_001/calibration_acceptance.csv \
+            outputs/scientific_reports_v2/calibration_pilot/replicate_001/calibration_acceptance_summary.csv \
+            outputs/scientific_reports_v2/calibration_pilot/replicate_001/calibration_chain_status.csv \
+            outputs/scientific_reports_v2/calibration_pilot/replicate_001/calibration_parameter_diagnostics.csv \
+            outputs/scientific_reports_v2/calibration_pilot/replicate_001/calibration_primary_recovery.csv \
+            outputs/scientific_reports_v2/calibration_pilot/replicate_001/calibration_cell_recovery.csv \
+            outputs/scientific_reports_v2/calibration_pilot/replicate_001/calibration_latent_recovery_summary.csv \
+            outputs/scientific_reports_v2/calibration_pilot/replicate_001/calibration_comparator_results.csv \
+            outputs/scientific_reports_v2/calibration_pilot/replicate_001/calibration_pilot_summary.json \
+            outputs/scientific_reports_v2/calibration_pilot/replicate_001/calibration_pilot_summary.md
+          if git diff --cached --quiet; then
+            echo "No calibration-pilot evidence to commit."
+          else
+            git commit -m "test: recover truth-known calibration pilot evidence [skip sr-v2] [skip tuning] [skip joint-pilot]"
+            git pull --rebase origin scientific-reports-v2
+            git push origin HEAD:scientific-reports-v2
+          fi
+
+      - name: Enforce calibration computational gate after evidence is committed
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          path = Path('outputs/scientific_reports_v2/calibration_pilot/replicate_001/calibration_pilot_summary.json')
+          summary = json.loads(path.read_text(encoding='utf-8'))
+          if not summary.get('computational_gate_pass', False):
+              raise SystemExit('Truth-known calibration pilot is on HOLD; evidence was committed for diagnosis.')
+          PY

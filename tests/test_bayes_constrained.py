@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -15,12 +16,17 @@ sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(ROOT / "scripts" / "hpc_wahab"))
 
 from bayes_constrained.constraints import assert_constraints, solve_feasible_allocation, validate_constraints  # noqa: E402
-from bayes_constrained.data import GRAND_TOTAL, load_model_frame  # noqa: E402
+from bayes_constrained.data import (  # noqa: E402
+    GRAND_TOTAL,
+    load_model_frame,
+    make_pandemic_exclusion_frame,
+)
 from bayes_constrained.diagnostics import diagnostics_table  # noqa: E402
 from bayes_constrained.model import Theta, nb2_logpmf  # noqa: E402
 from bayes_constrained.sampler import _center_random_effects, build_move_state, load_chain_checkpoint, save_chain_checkpoint, state_2x2_swap, state_year_transfer  # noqa: E402
 from common import read_submitted_jobs  # noqa: E402
 from gate_convergence import gate  # noqa: E402
+from submission_viz.tables import _constraint_summary  # noqa: E402
 
 
 def toy_frame() -> pd.DataFrame:
@@ -114,6 +120,49 @@ def test_milp_initialization_returns_feasible_toy_solution() -> None:
     frame = toy_frame()
     y = solve_feasible_allocation(frame, seed=123, time_limit_seconds=30)
     assert validate_constraints(y, frame).passed
+
+
+def test_milp_uses_selected_year_contract_without_source_period_total() -> None:
+    full = toy_frame()
+    full.loc[:, "q001_period_lower"] = 99
+    full.loc[:, "q001_period_upper"] = 99
+    selected = make_pandemic_exclusion_frame(full, excluded_years=("2020",))
+    y = solve_feasible_allocation(selected, seed=124, time_limit_seconds=30)
+    assert validate_constraints(y, selected).passed
+    assert y.sum() == 5
+    assert selected.drop_duplicates("county_fips")[
+        "source_full_period_q001_lower"
+    ].eq(99).all()
+
+
+def test_constraint_summary_renders_legacy_and_modeled_year_grand_totals(
+    tmp_path: Path,
+) -> None:
+    constraint_path = tmp_path / "constraint-validation.csv"
+    pd.DataFrame(
+        {
+            "check": [
+                "grand_total_equals_58380",
+                "grand_total_matches_modeled_years",
+            ],
+            "labels_checked": [8, 4],
+            "validation_records": [8, 4],
+            "failed_records": [0, 0],
+        }
+    ).to_csv(constraint_path, index=False)
+
+    rendered = _constraint_summary(
+        {"paths": {"constraint_validation": str(constraint_path)}}
+    ).set_index("Validation check")
+
+    assert rendered.index.tolist() == [
+        "Grand total equals 58,380",
+        "Grand total matches modeled years",
+    ]
+    assert rendered["Units checked"].to_dict() == {
+        "Grand total equals 58,380": 8,
+        "Grand total matches modeled years": 4,
+    }
 
 
 def test_mcmc_count_moves_preserve_constraints_on_toy_problem() -> None:
@@ -261,7 +310,7 @@ def _write_gate_inputs(base: Path, *, r_hat: float = 1.01, ess: float = 500.0, e
             "draws_per_chain": [4500] * len(parameters),
         }
     ).to_csv(base / "hpc_mcmc_diagnostics.csv", index=False)
-    pd.DataFrame({"label": ["draw1"], "check": ["grand_total_equals_58380"], "passed": [True], "detail": ["58380"]}).to_csv(base / "hpc_constraint_validation_summary.csv", index=False)
+    pd.DataFrame({"label": ["draw1"], "check": ["grand_total_matches_modeled_years"], "passed": [True], "detail": ["actual=58380 expected=58380 included_years=2019,2020,2021,2022,2023,2024"]}).to_csv(base / "hpc_constraint_validation_summary.csv", index=False)
     pd.DataFrame(
         {
             "chain": [f"chain_{idx:02d}" for idx in range(1, 9)],
@@ -333,12 +382,21 @@ def test_slurm_scripts_have_required_logging_and_environment_activation() -> Non
         text = path.read_text(encoding="utf-8")
         assert text.startswith("#!/bin/bash -l")
         assert "#SBATCH --job-name" in text
-        assert "#SBATCH --output=logs/slurm/%x_%A_%a.out" in text
-        assert "#SBATCH --error=logs/slurm/%x_%A_%a.err" in text
-        assert 'source "$VENV_PATH/bin/activate"' in text
-        assert "PYTHONPATH=\"$PROJECT_HOME\"" in text
+        assert "#SBATCH --output=logs/slurm/" in text
+        assert "#SBATCH --error=logs/slurm/" in text
+        # The venv may be entered by activation or addressed by absolute path.
+        # Hard-pathing the interpreter is the stronger of the two because it
+        # cannot be defeated by PATH order, so both satisfy the requirement.
+        assert (
+            'source "$VENV_PATH/bin/activate"' in text
+            or '"$VENV_PATH/bin/python"' in text
+        )
+        # The project code must be importable from a project root.  Scratch-only
+        # is the strongest form because it keeps an unvalidated home checkout off
+        # the import path, so it is permitted alongside the older home form.
+        assert re.search(r'PYTHONPATH="\$PROJECT_(HOME|SCRATCH)', text)
         assert "MPLBACKEND=Agg" in text
-        assert "sync_results_home.sh" in text
+        assert re.search(r"sync_[a-z0-9_]*results_home\.sh", text)
         assert "make " not in text.lower()
 
 

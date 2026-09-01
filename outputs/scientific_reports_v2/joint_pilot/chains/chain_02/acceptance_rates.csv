@@ -1,0 +1,13 @@
+chain,block,accepted,proposed,acceptance_rate,type
+2,transfer,745,14328,0.05199609156895589,count_move
+2,interval_transfer,20283,86690,0.2339716230245703,count_move
+2,interval_path,13025,72389,0.17993065244719503,count_move
+2,swap_2x2,4646,86962,0.05342563418504634,count_move
+2,cycle_swap,422,29131,0.014486286086986372,count_move
+2,blocked_refresh,30,480,0.0625,count_move
+2,beta,695,1500,0.4633333333333333,parameter
+2,state,547,1500,0.36466666666666664,parameter
+2,year,528,1500,0.352,parameter
+2,log_sigma_state,755,1500,0.5033333333333333,parameter
+2,log_sigma_year,1122,1500,0.748,parameter
+2,log_kappa,458,1500,0.30533333333333335,parameter

@@ -1,0 +1,26 @@
+{
+  "branch": "scientific-reports-v2",
+  "purpose": "Complete the prespecified descriptive calibration program by adding four independently seeded replicates under each of the four frozen event-rate and overdispersion conditions.",
+  "batch": 2,
+  "replicates": 16,
+  "scenario_families": {
+    "baseline_rate_3_4_kappa_10": 4,
+    "lower_rate_2_4_kappa_10": 4,
+    "higher_rate_5_0_kappa_10": 4,
+    "baseline_rate_3_4_kappa_4": 4
+  },
+  "combined_program_replicates_after_completion": 20,
+  "combined_replicates_per_scenario_family": 5,
+  "chains_per_replicate": 4,
+  "iterations_per_chain": 24000,
+  "burn_in": 6000,
+  "thin": 10,
+  "seed_freeze": {
+    "truth_seed_formula": "71000 + replicate_id",
+    "count_seed_formula": "72000 + replicate_id",
+    "initialization_seed_base_formula": "73000 + 10 * replicate_id",
+    "chain_seed_formula": "620000 + 100 * replicate_id + chain_id"
+  },
+  "reporting_gate": "Twenty completed replicates, five per scenario family, with every replicate passing its computational gate authorize descriptive calibration reporting with exact binomial Monte Carlo intervals.",
+  "interpretation_boundary": "Method-calibration evidence only. Completion authorizes descriptive reporting of bias, RMSE, coverage, and convergence; it does not authorize a claim that nominal 95% coverage has been estimated precisely or any empirical epidemiologic estimate."
+}

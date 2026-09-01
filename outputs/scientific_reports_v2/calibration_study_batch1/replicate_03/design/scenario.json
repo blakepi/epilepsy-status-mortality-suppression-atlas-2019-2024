@@ -1,0 +1,9 @@
+{
+  "baseline_rate_per_100k": 5.0,
+  "count_seed": 52003,
+  "initialization_seed_base": 53030,
+  "kappa": 10.0,
+  "replicate_id": 3,
+  "scenario_id": "higher_rate_5_0_kappa_10",
+  "truth_seed": 51003
+}

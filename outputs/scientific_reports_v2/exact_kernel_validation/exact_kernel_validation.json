@@ -1,0 +1,63 @@
+{
+  "cases": [
+    {
+      "blocked_kernel": {
+        "detailed_balance_error": 0.0,
+        "row_sum_error": 2.220446049250313e-16,
+        "states": 2,
+        "stationarity_error": 1.1102230246251565e-16,
+        "strongly_connected_components": 2
+      },
+      "case": "chordless_six_cycle_structural_support",
+      "empirical_probabilities": [
+        0.5353965517241379,
+        0.4646034482758621
+      ],
+      "exact_probabilities": [
+        0.5331948544600152,
+        0.46680514553998537
+      ],
+      "feasible_states": 2,
+      "maximum_empirical_absolute_error": 0.0022016972641232813,
+      "pass": true,
+      "repaired_kernel": {
+        "detailed_balance_error": 1.3877787807814457e-17,
+        "row_sum_error": 4.440892098500626e-16,
+        "states": 2,
+        "stationarity_error": 1.6653345369377348e-16,
+        "strongly_connected_components": 1
+      }
+    },
+    {
+      "blocked_kernel": {
+        "detailed_balance_error": 0.0,
+        "row_sum_error": 0.0,
+        "states": 2,
+        "stationarity_error": 0.0,
+        "strongly_connected_components": 2
+      },
+      "case": "cross_year_interval_endpoint_path",
+      "empirical_probabilities": [
+        0.7146551724137931,
+        0.2853448275862069
+      ],
+      "exact_probabilities": [
+        0.7173541861973528,
+        0.2826458138026469
+      ],
+      "feasible_states": 2,
+      "maximum_empirical_absolute_error": 0.002699013783559967,
+      "pass": true,
+      "repaired_kernel": {
+        "detailed_balance_error": 2.498001805406602e-16,
+        "row_sum_error": 0.0,
+        "states": 2,
+        "stationarity_error": 3.3306690738754696e-16,
+        "strongly_connected_components": 1
+      }
+    }
+  ],
+  "cases_passed": 2,
+  "cases_total": 2,
+  "pass": true
+}

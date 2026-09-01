@@ -5,6 +5,7 @@ import json
 import platform
 import subprocess
 import sys
+from copy import deepcopy
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -112,6 +113,90 @@ def _standardize(series: pd.Series) -> pd.Series:
     if not sd or np.isnan(sd):
         return pd.Series(0.0, index=series.index)
     return (vals - vals.mean(skipna=True)) / sd
+
+
+def make_pandemic_exclusion_frame(
+    frame: pd.DataFrame,
+    excluded_years: tuple[str, ...] = ("2020", "2021"),
+) -> pd.DataFrame:
+    excluded = {str(year) for year in excluded_years}
+    out = (
+        frame.loc[~frame["year"].astype(str).isin(excluded)]
+        .copy(deep=True)
+        .reset_index(drop=True)
+    )
+    out.attrs = deepcopy(frame.attrs)
+    out["source_full_period_q001_lower"] = out["q001_period_lower"]
+    out["source_full_period_q001_upper"] = out["q001_period_upper"]
+    retained_bounds = out.groupby("county_fips", sort=False)[
+        ["q002_lower", "q002_upper"]
+    ].transform("sum")
+    out["q001_period_lower"] = retained_bounds["q002_lower"].astype(int)
+    out["q001_period_upper"] = retained_bounds["q002_upper"].astype(int)
+    out["q001_period_status"] = "not_applied_full_period_year_subset"
+    out["q001_period_exact_count"] = np.nan
+    out.attrs["grand_total"] = int(
+        pd.to_numeric(
+            out.drop_duplicates("year")["q003_national_year_total"],
+            errors="raise",
+        ).sum()
+    )
+    out.attrs["q001_constraint_policy"] = "full_period_q001_not_applied"
+    out.attrs["constraint_contract"] = "selected_years_no_period_total"
+    out.attrs["included_years"] = sorted(out["year"].astype(str).unique())
+    return out
+
+
+def augment_age17_covariate(
+    frame: pd.DataFrame,
+    svi_path: str | Path,
+) -> pd.DataFrame:
+    archive = pd.read_csv(
+        svi_path,
+        dtype={"FIPS": str},
+        usecols=["FIPS", "EP_AGE17"],
+    ).rename(columns={"FIPS": "county_fips", "EP_AGE17": "pct_age17"})
+    archive["county_fips"] = (
+        archive["county_fips"]
+        .astype(str)
+        .str.replace(r"\.0$", "", regex=True)
+        .str.zfill(5)
+    )
+    archive["pct_age17"] = pd.to_numeric(
+        archive["pct_age17"], errors="coerce"
+    )
+
+    original_index = frame.index.copy()
+    original_attrs = deepcopy(frame.attrs)
+    out = frame.copy(deep=True)
+    out["county_fips"] = (
+        out["county_fips"]
+        .astype(str)
+        .str.replace(r"\.0$", "", regex=True)
+        .str.zfill(5)
+    )
+    out["_age17_row_order"] = np.arange(len(out))
+    out = out.merge(
+        archive,
+        on="county_fips",
+        how="left",
+        sort=False,
+        validate="many_to_one",
+    ).sort_values("_age17_row_order")
+    out = out.drop(columns="_age17_row_order")
+    out.index = original_index
+    out.attrs = original_attrs
+
+    out["age17_imputed_flag"] = out["pct_age17"].isna()
+    state_medians = out.groupby("state_fips")["pct_age17"].transform("median")
+    national_median = out["pct_age17"].median(skipna=True)
+    out["pct_age17"] = (
+        out["pct_age17"].fillna(state_medians).fillna(national_median)
+    )
+    if out["pct_age17"].isna().any():
+        raise ValueError("Archived SVI EP_AGE17 cannot be imputed")
+    out["z_pct_age17"] = _standardize(out["pct_age17"])
+    return out
 
 
 def load_config() -> dict:

@@ -1,0 +1,215 @@
+{
+ "counties": 3142,
+ "county_years": 18852,
+ "disclosure_boundary": "Panel b shows only quantities CDC WONDER already publishes: the suppression flag, its 1-9 bound, and the published county total. No model-derived estimate for a named county appears in this figure.",
+ "rows": [
+  {
+   "county_years": 768,
+   "panel": "a",
+   "percent_of_county_years": 29.0249,
+   "rurality": "metro_large",
+   "rurality_label": "Metropolitan, large",
+   "status": "exact",
+   "status_label": "Published exact count"
+  },
+  {
+   "county_years": 1445,
+   "panel": "a",
+   "percent_of_county_years": 54.6107,
+   "rurality": "metro_large",
+   "rurality_label": "Metropolitan, large",
+   "status": "suppressed_1_9",
+   "status_label": "Suppressed (1\u20139)"
+  },
+  {
+   "county_years": 433,
+   "panel": "a",
+   "percent_of_county_years": 16.3643,
+   "rurality": "metro_large",
+   "rurality_label": "Metropolitan, large",
+   "status": "zero",
+   "status_label": "Published zero"
+  },
+  {
+   "county_years": 544,
+   "panel": "a",
+   "percent_of_county_years": 12.2855,
+   "rurality": "metro_other",
+   "rurality_label": "Metropolitan, other",
+   "status": "exact",
+   "status_label": "Published exact count"
+  },
+  {
+   "county_years": 2821,
+   "panel": "a",
+   "percent_of_county_years": 63.7082,
+   "rurality": "metro_other",
+   "rurality_label": "Metropolitan, other",
+   "status": "suppressed_1_9",
+   "status_label": "Suppressed (1\u20139)"
+  },
+  {
+   "county_years": 1063,
+   "panel": "a",
+   "percent_of_county_years": 24.0063,
+   "rurality": "metro_other",
+   "rurality_label": "Metropolitan, other",
+   "status": "zero",
+   "status_label": "Published zero"
+  },
+  {
+   "county_years": 33,
+   "panel": "a",
+   "percent_of_county_years": 0.5228,
+   "rurality": "nonmetro_adjacent",
+   "rurality_label": "Nonmetro, adjacent",
+   "status": "exact",
+   "status_label": "Published exact count"
+  },
+  {
+   "county_years": 3466,
+   "panel": "a",
+   "percent_of_county_years": 54.9113,
+   "rurality": "nonmetro_adjacent",
+   "rurality_label": "Nonmetro, adjacent",
+   "status": "suppressed_1_9",
+   "status_label": "Suppressed (1\u20139)"
+  },
+  {
+   "county_years": 2813,
+   "panel": "a",
+   "percent_of_county_years": 44.5659,
+   "rurality": "nonmetro_adjacent",
+   "rurality_label": "Nonmetro, adjacent",
+   "status": "zero",
+   "status_label": "Published zero"
+  },
+  {
+   "county_years": 5,
+   "panel": "a",
+   "percent_of_county_years": 0.0915,
+   "rurality": "nonmetro_nonadjacent",
+   "rurality_label": "Nonmetro, nonadjacent",
+   "status": "exact",
+   "status_label": "Published exact count"
+  },
+  {
+   "county_years": 1963,
+   "panel": "a",
+   "percent_of_county_years": 35.9129,
+   "rurality": "nonmetro_nonadjacent",
+   "rurality_label": "Nonmetro, nonadjacent",
+   "status": "suppressed_1_9",
+   "status_label": "Suppressed (1\u20139)"
+  },
+  {
+   "county_years": 3498,
+   "panel": "a",
+   "percent_of_county_years": 63.9956,
+   "rurality": "nonmetro_nonadjacent",
+   "rurality_label": "Nonmetro, nonadjacent",
+   "status": "zero",
+   "status_label": "Published zero"
+  },
+  {
+   "feasible_lower": 1,
+   "feasible_upper": 7,
+   "panel": "b",
+   "published_lower": 1,
+   "published_upper": 9,
+   "status": "suppressed_1_9",
+   "year": 2019
+  },
+  {
+   "feasible_lower": 1,
+   "feasible_upper": 7,
+   "panel": "b",
+   "published_lower": 1,
+   "published_upper": 9,
+   "status": "suppressed_1_9",
+   "year": 2020
+  },
+  {
+   "feasible_lower": 1,
+   "feasible_upper": 7,
+   "panel": "b",
+   "published_lower": 1,
+   "published_upper": 9,
+   "status": "suppressed_1_9",
+   "year": 2021
+  },
+  {
+   "feasible_lower": 0,
+   "feasible_upper": 0,
+   "panel": "b",
+   "published_lower": 0,
+   "published_upper": 0,
+   "status": "zero",
+   "year": 2022
+  },
+  {
+   "feasible_lower": 1,
+   "feasible_upper": 7,
+   "panel": "b",
+   "published_lower": 1,
+   "published_upper": 9,
+   "status": "suppressed_1_9",
+   "year": 2023
+  },
+  {
+   "feasible_lower": 1,
+   "feasible_upper": 7,
+   "panel": "b",
+   "published_lower": 1,
+   "published_upper": 9,
+   "status": "suppressed_1_9",
+   "year": 2024
+  },
+  {
+   "algebraically_implied_equalities": 10,
+   "equality_nullity": 8439,
+   "fraction_of_latent_dimensions_fixed": 0.129551,
+   "independent_equalities": 1256,
+   "latent_variables": 9695,
+   "nominal_equalities": 1733,
+   "panel": "c",
+   "zero_information_equalities": 467
+  }
+ ],
+ "schema_id": "sr_v2_figure_suppression_architecture/v1",
+ "sources": {
+  "constraint_geometry": "outputs/scientific_reports_v2/constraint_geometry/constraint_geometry.json",
+  "model_frame": "data/processed/bayes_constrained/model_frame.parquet"
+ },
+ "worked_example": {
+  "allocations_under_bounds_only": 59049,
+  "county_fips": "01025",
+  "county_name": "Clarke County, Alabama",
+  "feasible_allocations": 210,
+  "feasible_marginal_counts_per_suppressed_year": {
+   "1": 84,
+   "2": 56,
+   "3": 35,
+   "4": 20,
+   "5": 10,
+   "6": 4,
+   "7": 1
+  },
+  "feasible_per_year_lower": 1,
+  "feasible_per_year_upper": 7,
+  "feasible_set_reduction_factor": 281,
+  "naive_suppressed_equals_5_total": 25,
+  "naive_suppressed_equals_9_total": 45,
+  "published_period_total": 11,
+  "rurality": "nonmetro_nonadjacent",
+  "suppressed_years": [
+   2019,
+   2020,
+   2021,
+   2023,
+   2024
+  ],
+  "svi_quartile": "Q4_highest",
+  "visible_only_total": 0
+ }
+}

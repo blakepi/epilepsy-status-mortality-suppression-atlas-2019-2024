@@ -1,0 +1,49 @@
+{
+  "burn_in": 75000,
+  "evidence_sha256": {
+    "calibration_design": "f9be7de3b7ae60f5e704d44c96f1c2f57995b7ac7a936d2b95c239e46f27e16c",
+    "calibration_extension": "a15264c5e4c2011c93ab11e348ba6bec0b9a3f8b8b88279a533ae79edff7f6dd",
+    "constraint_geometry": "6165aa9fa770e02b88205f4b3599a9a2a9c334562ad8d1d74f8f10c82d26b804",
+    "exact_kernel": "329bde77657a58d4c32aed9db2c8e3e4a8dde914d0b8631bedf7e72015f76a47",
+    "extended_real_pilot": "4fcb079842212b86a321d67b87b34be548897dc1e40669394670d407633f3609",
+    "fixed_theta_tuning": "b28f965d833b58759ceb0076700be2d624808ee7faa9bf8849230b465e33394b",
+    "randomized_exact_kernel": "edc1a90122951e7cc8245b8554c7335d95e5760be62114cab6dac12bda155819",
+    "recommended_production_tuning": "2459cf04d0c88a1ed42c4ef8dcb631c1bdea3233ad510f072222b719eabd7121"
+  },
+  "expected_draws_per_chain": 4500,
+  "frozen_baseline_commit": "50b468d212616ee80be55045dedf8a696db14df5",
+  "frozen_baseline_tag": "v1.1.1",
+  "frozen_tuning_sha256": "53edddb76744c7d8618367d01888b9aeb0f69b4bb2352821a4426d5592fa03aa",
+  "generated_utc": "2026-08-13T01:27:59.830663+00:00",
+  "git_branch": "scientific-reports-v2",
+  "git_commit": "11691bd882020f76e1b6eb6224e4789a6534f65c",
+  "hpc_config_path": "hpc/wahab/configs/sr_v2_production.yaml",
+  "hpc_config_sha256": "b475ddc4547680c085b172244b567a01c59dc2920da95910ac0eecfff172a393",
+  "initialization_seeds": [
+    57291,
+    57292,
+    57293,
+    57294,
+    57295,
+    57296,
+    57297,
+    57298
+  ],
+  "iterations_per_chain": 300000,
+  "n_chains": 8,
+  "output_config_path": "outputs/scientific_reports_v2/production_8chain/config/sr_v2_production.yaml",
+  "output_config_sha256": "b475ddc4547680c085b172244b567a01c59dc2920da95910ac0eecfff172a393",
+  "production_launched": false,
+  "random_seeds": [
+    58291,
+    58292,
+    58293,
+    58294,
+    58295,
+    58296,
+    58297,
+    58298
+  ],
+  "status": "prepared_not_run",
+  "thin": 50
+}

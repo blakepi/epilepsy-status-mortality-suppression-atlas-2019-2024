@@ -1,0 +1,127 @@
+schema_id: sr_v2_heavy_sensitivity_execution/v1
+run_id: sr-v2-heavy-sensitivity-20260818-v1
+repository_base_commit: 123904015805758119d8cc9d88c6bb94efbc36e1
+output_root: outputs/scientific_reports_v2/heavy_sensitivity
+source_authorities:
+  config/scientific_reports_v2_robustness_registry.yaml: 072e039b78af11a0bb4d6532bb8fb09f70b81d825a38faa3cf89670ca7843814
+  outputs/scientific_reports_v2/production_8chain/production_gate.json: 38be94b401138864cf6e4cb030f2bd53e9b8ad6ea24e080e0353824124784437
+  outputs/scientific_reports_v2/production_8chain/posterior_primary_summary.csv: 2842efa4c95b018aed3626b58b33e42792c0348655225c3a89ec58b4109452e6
+  outputs/scientific_reports_v2/production_8chain/config/sr_v2_production.yaml: b475ddc4547680c085b172244b567a01c59dc2920da95910ac0eecfff172a393
+  data/processed/bayes_constrained/model_frame.parquet: 2f20555f4b690e1a495e2409dbb2f9bb128a6d3f7b0bb39f4017034aaf2a9e44
+  data/raw/covariates/SVI_2022_US_county.csv: bc47d244153e359d5c09f621a4bf344a1e593159c16fbd3c28a15461b70a6c0f
+final_source_manifest:
+  schema_id: sr_v2_robustness_final_source_manifest/v1
+  required_status: reviewed_final
+  source_hash_mode: raw_bytes
+  required_sources:
+    - src/bayes_constrained/__init__.py
+    - src/bayes_constrained/paths.py
+    - src/bayes_constrained/data.py
+    - src/bayes_constrained/constraints.py
+    - src/bayes_constrained/target_density.py
+    - src/bayes_constrained/model.py
+    - src/bayes_constrained/heatbath.py
+    - src/bayes_constrained/interval_paths.py
+    - src/bayes_constrained/sampler.py
+    - src/bayes_constrained/diagnostics.py
+    - src/bayes_constrained/sensitivity.py
+    - scripts/100_prepare_sr_v2_heavy_sensitivity.py
+    - scripts/101_run_sr_v2_heavy_sensitivity_chain.py
+    - scripts/102_merge_sr_v2_heavy_sensitivity.py
+    - scripts/103_gate_sr_v2_heavy_sensitivity.py
+    - scripts/104_validate_sr_v2_heavy_sensitivity_infrastructure.py
+launch_envelope:
+  schema_id: sr_v2_robustness_launch_envelope/v1
+  required_status: reviewed_final
+  requires_clean_worktree: true
+execution:
+  chains_per_profile: 4
+  iterations_per_chain: 180000
+  burn_in: 45000
+  thin: 30
+  retained_draws_per_chain: 4500
+  checkpoint_every: 500
+  max_runtime_minutes: 4260
+  stop_before_time_limit_minutes: 15
+thresholds:
+  rhat_max_all: 1.05
+  ess_bulk_min_all: 100
+  ess_tail_min_all: 100
+  rhat_max_primary: 1.03
+  ess_bulk_min_primary: 400
+  ess_tail_min_primary: 400
+  constraint_failures_allowed: 0
+profiles:
+  - id: prior_broader
+    likelihood: negative_binomial_2
+    model: primary
+    frame: full
+    prior: broader
+  - id: prior_regularizing
+    likelihood: negative_binomial_2
+    model: primary
+    frame: full
+    prior: regularizing
+  - id: model_family_poisson
+    likelihood: poisson
+    model: primary
+    frame: full
+    prior: default
+  - id: pandemic_interaction
+    likelihood: negative_binomial_2
+    model: pandemic_interaction
+    frame: full
+    prior: default
+  - id: pandemic_exclusion
+    likelihood: negative_binomial_2
+    model: primary
+    frame: pandemic_exclusion
+    prior: default
+  - id: age_structure_age17
+    likelihood: negative_binomial_2
+    model: age_structure_age17
+    frame: age17_augmented
+    prior: default
+chain_map:
+  - {array_index: 1, profile: prior_broader, chain: 1, chain_seed: 68291, initialization_seed: 67291}
+  - {array_index: 2, profile: prior_broader, chain: 2, chain_seed: 68292, initialization_seed: 67292}
+  - {array_index: 3, profile: prior_broader, chain: 3, chain_seed: 68293, initialization_seed: 67293}
+  - {array_index: 4, profile: prior_broader, chain: 4, chain_seed: 68294, initialization_seed: 67294}
+  - {array_index: 5, profile: prior_regularizing, chain: 1, chain_seed: 69291, initialization_seed: 67391}
+  - {array_index: 6, profile: prior_regularizing, chain: 2, chain_seed: 69292, initialization_seed: 67392}
+  - {array_index: 7, profile: prior_regularizing, chain: 3, chain_seed: 69293, initialization_seed: 67393}
+  - {array_index: 8, profile: prior_regularizing, chain: 4, chain_seed: 69294, initialization_seed: 67394}
+  - {array_index: 9, profile: model_family_poisson, chain: 1, chain_seed: 70291, initialization_seed: 70251}
+  - {array_index: 10, profile: model_family_poisson, chain: 2, chain_seed: 70292, initialization_seed: 70252}
+  - {array_index: 11, profile: model_family_poisson, chain: 3, chain_seed: 70293, initialization_seed: 70253}
+  - {array_index: 12, profile: model_family_poisson, chain: 4, chain_seed: 70294, initialization_seed: 70254}
+  - {array_index: 13, profile: pandemic_interaction, chain: 1, chain_seed: 71291, initialization_seed: 71251}
+  - {array_index: 14, profile: pandemic_interaction, chain: 2, chain_seed: 71292, initialization_seed: 71252}
+  - {array_index: 15, profile: pandemic_interaction, chain: 3, chain_seed: 71293, initialization_seed: 71253}
+  - {array_index: 16, profile: pandemic_interaction, chain: 4, chain_seed: 71294, initialization_seed: 71254}
+  - {array_index: 17, profile: pandemic_exclusion, chain: 1, chain_seed: 72291, initialization_seed: 72251}
+  - {array_index: 18, profile: pandemic_exclusion, chain: 2, chain_seed: 72292, initialization_seed: 72252}
+  - {array_index: 19, profile: pandemic_exclusion, chain: 3, chain_seed: 72293, initialization_seed: 72253}
+  - {array_index: 20, profile: pandemic_exclusion, chain: 4, chain_seed: 72294, initialization_seed: 72254}
+  - {array_index: 21, profile: age_structure_age17, chain: 1, chain_seed: 73291, initialization_seed: 73251}
+  - {array_index: 22, profile: age_structure_age17, chain: 2, chain_seed: 73292, initialization_seed: 73252}
+  - {array_index: 23, profile: age_structure_age17, chain: 3, chain_seed: 73293, initialization_seed: 73253}
+  - {array_index: 24, profile: age_structure_age17, chain: 4, chain_seed: 73294, initialization_seed: 73254}
+comparison:
+  primary_parameters:
+    - primary_rurality_metro_other
+    - primary_rurality_nonmetro_adjacent
+    - primary_rurality_nonmetro_nonadjacent
+    - svi_quartile_Q2
+    - svi_quartile_Q3
+    - svi_quartile_Q4_highest
+    - z_pct_age65
+    - z_pct_male
+  interaction_periods:
+    - pre_pandemic_2019
+    - acute_pandemic_2020_2021
+    - later_period_2022_2024
+interpretation_boundary: Computational PASS supplements the frozen corrected primary evidence. It does not replace the primary estimand or authorize manuscript edits, repository publication, or submission.
+protected_trees:
+  - outputs/scientific_reports_v2/production_8chain
+  - outputs/scientific_reports_v2/spatial_residual_diagnostics

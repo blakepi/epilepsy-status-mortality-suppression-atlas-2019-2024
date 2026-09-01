@@ -1,0 +1,4 @@
+{
+  "purpose": "Apply the verified semantic reference-number corrections in the nonfinal Scientific Reports v2 manuscript and fail closed on noncontiguous or out-of-range numeric citations.",
+  "submission_package": false
+}

@@ -1,0 +1,8 @@
+{
+  "draws": 36000.0,
+  "importance_effective_sample_size": 30311.747737070487,
+  "importance_ess_fraction": 0.8419929926964024,
+  "maximum_normalized_weight": 0.0001630940165637795,
+  "minimum_normalized_weight": 7.425254447502993e-06,
+  "weight_coefficient_of_variation": 0.4332015153245745
+}

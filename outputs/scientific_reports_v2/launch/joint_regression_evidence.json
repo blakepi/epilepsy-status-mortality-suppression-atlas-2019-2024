@@ -1,0 +1,15 @@
+{
+  "command": ".venv/Scripts/python.exe -m pytest tests/ -p no:randomly",
+  "commit_tested": "24e41536904bfe0f3f2fc693710cb4635db4b798",
+  "duration_seconds": 344.55,
+  "errors": 0,
+  "exit_status": 0,
+  "failed": 0,
+  "interpretation_boundary": "Computational evidence only; it certifies the source tree, not any scientific result.",
+  "interpreter": "CPython 3.12.13 (win-amd64)",
+  "joint_regression_passed": true,
+  "passed": 311,
+  "schema_id": "sr_v2_joint_regression_evidence/v1",
+  "skipped": 2,
+  "warnings": "two expected PerfectSeparationWarning emissions from a synthetic prepare fixture"
+}

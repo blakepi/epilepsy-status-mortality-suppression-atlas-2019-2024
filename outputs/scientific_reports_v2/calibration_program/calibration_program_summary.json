@@ -1,0 +1,35 @@
+{
+  "batches": [
+    1,
+    2
+  ],
+  "coefficient_interval_coverage_exact_95_lower": 0.8943461454812877,
+  "coefficient_interval_coverage_exact_95_upper": 0.9814324132173309,
+  "coefficient_interval_coverage_fraction": 0.95,
+  "coefficient_interval_coverage_successes": 114,
+  "coefficient_interval_coverage_trials": 120,
+  "computational_gate_pass": true,
+  "descriptive_calibration_reporting_authorized": true,
+  "design_complete": true,
+  "generated_utc": "2026-08-12T22:09:43.263186+00:00",
+  "interpretation_boundary": "The 20-replicate program authorizes descriptive reporting of bias, RMSE, interval coverage, convergence, and exact binomial Monte Carlo intervals. It does not authorize a claim that coverage has been estimated precisely or proven equal to the nominal 95% level.",
+  "maximum_primary_rhat": 1.0343689196586123,
+  "minimum_primary_bulk_ess": 132.57317814188056,
+  "minimum_primary_tail_ess": 274.4170389589976,
+  "precise_nominal_coverage_claim_authorized": false,
+  "replicates": 20,
+  "replicates_by_batch": {
+    "1": 4,
+    "2": 16
+  },
+  "replicates_by_truth_scenario": {
+    "baseline_rate_3_4_kappa_10": 5,
+    "baseline_rate_3_4_kappa_4": 5,
+    "higher_rate_5_0_kappa_10": 5,
+    "lower_rate_2_4_kappa_10": 5
+  },
+  "replicates_passing_computational_gate": 20,
+  "suppressed_cell_pooled_rmse": 1.0058468326437904,
+  "suppressed_cell_weighted_coverage_95": 0.9937744985012682,
+  "suppressed_cells_total": 4337
+}

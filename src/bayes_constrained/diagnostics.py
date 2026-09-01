@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Sequence
+
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -132,6 +134,262 @@ def diagnostics_table(
             )
         (output_dir / "mcmc_diagnostics.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
     return diag
+
+
+def spatial_diagnostics_table(
+    scalar_draws: pd.DataFrame,
+    spatial_draws: dict[str, np.ndarray],
+    graph,
+    *,
+    parameter_schema: Sequence[str],
+    count_constraint_failures: int = 0,
+    spatial_constraint_failures: int = 0,
+) -> pd.DataFrame:
+    """Compute the frozen six-column spatial diagnostic universe."""
+
+    import arviz as az
+    from .spatial_bym2 import validate_structured_effect
+
+    if az.__version__ != "1.2.0":
+        raise ValueError("Spatial diagnostics require pinned ArviZ 1.2.0.")
+    if (
+        not isinstance(parameter_schema, (list, tuple))
+        or not parameter_schema
+        or any(
+            not isinstance(value, str)
+            or not value
+            or value.strip() != value
+            for value in parameter_schema
+        )
+        or len(set(parameter_schema)) != len(parameter_schema)
+    ):
+        raise ValueError(
+            "Spatial diagnostics require an exact ordered parameter schema."
+        )
+    expected_parameters = list(parameter_schema)
+    for value, label in (
+        (count_constraint_failures, "count_constraint_failures"),
+        (spatial_constraint_failures, "spatial_constraint_failures"),
+    ):
+        if isinstance(value, (bool, np.bool_)) or not isinstance(
+            value, (int, np.integer)
+        ):
+            raise ValueError(f"{label} must be an exact integer.")
+        if int(value) != 0:
+            raise ValueError("Spatial diagnostics require zero constraint failures.")
+
+    def exact_integer_array(values, *, label: str) -> np.ndarray:
+        array = np.asarray(values)
+        if (
+            array.ndim != 1
+            or np.issubdtype(array.dtype, np.bool_)
+            or not np.issubdtype(array.dtype, np.integer)
+        ):
+            raise ValueError(f"{label} must contain exact integers.")
+        return array.astype(np.int64)
+
+    def expected_epoch(draw_id: int) -> int:
+        for epoch, (start, end) in {
+            0: (1, 4_500),
+            1: (4_501, 7_500),
+            2: (7_501, 10_500),
+            3: (10_501, 13_500),
+        }.items():
+            if start <= draw_id <= end:
+                return epoch
+        raise ValueError("Spatial diagnostic draw id is outside the frozen schedule.")
+
+    scalar_columns = {
+        "chain_id",
+        "draw_id",
+        "extension_epoch",
+        "parameter",
+        "value",
+    }
+    if set(scalar_draws.columns) != scalar_columns:
+        raise ValueError("Spatial scalar diagnostics schema mismatch.")
+    required = {
+        "chain_id",
+        "draw_id",
+        "extension_epoch",
+        "structured",
+        "unstructured",
+    }
+    if set(spatial_draws) != required:
+        raise ValueError("Spatial diagnostic array schema mismatch.")
+    chain = exact_integer_array(spatial_draws["chain_id"], label="chain_id")
+    draw = exact_integer_array(spatial_draws["draw_id"], label="draw_id")
+    epoch = exact_integer_array(
+        spatial_draws["extension_epoch"], label="extension_epoch"
+    )
+    structured = np.asarray(spatial_draws["structured"])
+    unstructured = np.asarray(spatial_draws["unstructured"])
+    if (
+        chain.ndim != 1
+        or draw.shape != chain.shape
+        or epoch.shape != chain.shape
+        or structured.shape != unstructured.shape
+        or structured.ndim != 2
+        or structured.shape[0] != len(chain)
+        or structured.shape[1] != len(graph.counties)
+        or structured.dtype != np.float64
+        or unstructured.dtype != np.float64
+        or not np.isfinite(structured).all()
+        or not np.isfinite(unstructured).all()
+    ):
+        raise ValueError("Spatial diagnostic arrays are malformed or nonfinite.")
+    if not np.array_equal(
+        epoch,
+        np.asarray([expected_epoch(int(value)) for value in draw], dtype=np.int64),
+    ):
+        raise ValueError("Spatial diagnostic extension epochs disagree with draw ids.")
+    for row in structured:
+        validate_structured_effect(row, graph)
+    order = np.lexsort((draw, chain))
+    chain = chain[order]
+    draw = draw[order]
+    epoch = epoch[order]
+    structured = structured[order]
+    unstructured = unstructured[order]
+    chains = sorted(np.unique(chain).tolist())
+    if chains != [1, 2, 3, 4]:
+        raise ValueError("Spatial diagnostics require exactly chains 1..4.")
+    draw_ids = sorted(np.unique(draw).tolist())
+    if draw_ids != list(range(1, len(draw_ids) + 1)):
+        raise ValueError(
+            "Spatial diagnostic draw grid must be the exact prefix 1..N."
+        )
+    expected = [(chain_id, draw_id) for chain_id in chains for draw_id in draw_ids]
+    if list(zip(chain.tolist(), draw.tolist(), strict=True)) != expected:
+        raise ValueError("Spatial diagnostics require an exact equal-length chain/draw grid.")
+    chain_count = len(chains)
+    draw_count = len(draw_ids)
+    structured_3d = structured.reshape(chain_count, draw_count, -1)
+    unstructured_3d = unstructured.reshape(chain_count, draw_count, -1)
+
+    scalar = scalar_draws.copy()
+    scalar_chain = exact_integer_array(scalar["chain_id"], label="scalar chain_id")
+    scalar_draw = exact_integer_array(scalar["draw_id"], label="scalar draw_id")
+    scalar_epoch = exact_integer_array(
+        scalar["extension_epoch"], label="scalar extension_epoch"
+    )
+    if not scalar["parameter"].map(lambda value: isinstance(value, str)).all():
+        raise ValueError("Spatial scalar parameter names must be strings.")
+    if scalar["value"].dtype != np.float64:
+        raise ValueError("Spatial scalar diagnostic values must be float64.")
+    scalar_value = scalar["value"].to_numpy(dtype=np.float64)
+    if not np.isfinite(scalar_value).all():
+        raise ValueError("Spatial scalar diagnostics contain nonfinite values.")
+    scalar = pd.DataFrame(
+        {
+            "chain_id": scalar_chain,
+            "draw_id": scalar_draw,
+            "extension_epoch": scalar_epoch,
+            "parameter": scalar["parameter"].to_numpy(dtype=str),
+            "value": scalar_value,
+        }
+    )
+    if scalar.duplicated(["chain_id", "draw_id", "parameter"]).any():
+        raise ValueError("Spatial scalar diagnostics contain duplicate cells.")
+    if not np.array_equal(
+        scalar_epoch,
+        np.asarray([expected_epoch(int(value)) for value in scalar_draw], dtype=np.int64),
+    ):
+        raise ValueError("Spatial scalar extension epochs disagree with draw ids.")
+    expected_grid = {(chain_id, draw_id) for chain_id in chains for draw_id in draw_ids}
+    observed_parameters = set(scalar["parameter"].unique().tolist())
+    if observed_parameters != set(expected_parameters):
+        raise ValueError("Spatial scalar parameter schema mismatch.")
+    for parameter in expected_parameters:
+        cells = scalar.loc[
+            scalar["parameter"].eq(parameter), ["chain_id", "draw_id"]
+        ]
+        if set(map(tuple, cells.to_numpy().tolist())) != expected_grid:
+            raise ValueError(f"Spatial scalar grid is incomplete for {parameter}.")
+
+    def scalar_matrix(parameter: str) -> np.ndarray:
+        work = scalar.loc[
+            scalar["parameter"].eq(parameter),
+            ["chain_id", "draw_id", "value"],
+        ].copy()
+        wide = (
+            work.pivot(index="chain_id", columns="draw_id", values="value")
+            .reindex(index=chains, columns=draw_ids)
+        )
+        if wide.isna().any().any():
+            raise ValueError(f"Spatial scalar grid is incomplete for {parameter}.")
+        return wide.to_numpy(dtype=np.float64)
+
+    sigma = scalar_matrix("sigma_county")
+    phi = scalar_matrix("phi_structured")
+    if (
+        not np.isfinite(sigma).all()
+        or np.any(sigma <= 0)
+        or not np.isfinite(phi).all()
+        or np.any((phi <= 0) | (phi >= 1))
+    ):
+        raise ValueError("Spatial hyperparameter draws are outside their support.")
+    combined = sigma[:, :, None] * (
+        np.sqrt(phi)[:, :, None] * structured_3d
+        + np.sqrt(1.0 - phi)[:, :, None] * unstructured_3d
+    )
+
+    def diagnostic_row(parameter: str, values: np.ndarray) -> dict[str, object]:
+        row = {
+            "parameter": parameter,
+            "r_hat": float(az.rhat(values, method="rank")),
+            "ess_bulk": float(az.ess(values, method="bulk")),
+            "ess_tail": float(az.ess(values, method="tail", prob=[0.05, 0.95])),
+            "arviz_version": az.__version__,
+            "constraint_failures": 0,
+        }
+        if not np.isfinite(
+            [row["r_hat"], row["ess_bulk"], row["ess_tail"]]
+        ).all():
+            raise ValueError(f"Spatial diagnostics are nonfinite for {parameter}.")
+        return row
+
+    rows: list[dict[str, object]] = [
+        diagnostic_row(parameter, scalar_matrix(parameter))
+        for parameter in expected_parameters
+    ]
+    for county_index, county in enumerate(graph.counties):
+        if not bool(graph.singleton_mask[county_index]):
+            rows.append(
+                diagnostic_row(
+                    f"spatial_structured[{county}]",
+                    structured_3d[:, :, county_index],
+                )
+            )
+        rows.append(
+            diagnostic_row(
+                f"spatial_unstructured[{county}]",
+                unstructured_3d[:, :, county_index],
+            )
+        )
+        rows.append(
+            diagnostic_row(
+                f"county_combined[{county}]",
+                combined[:, :, county_index],
+            )
+        )
+    result = pd.DataFrame(rows)
+    columns = [
+        "parameter",
+        "r_hat",
+        "ess_bulk",
+        "ess_tail",
+        "arviz_version",
+        "constraint_failures",
+    ]
+    result = result.loc[:, columns]
+    if len(graph.counties) == 3_142:
+        expected_rows = 71 + 3_128 + 3_142 + 3_142
+        if len(expected_parameters) != 71 or len(result) != expected_rows:
+            raise ValueError("Production spatial diagnostic universe must have 9,483 rows.")
+        if draw_count not in {4_500, 7_500, 10_500, 13_500}:
+            raise ValueError("Production spatial diagnostics have an invalid draw count.")
+    return result
 
 
 def make_diagnostic_figures(parameter_draws: pd.DataFrame, diagnostics: pd.DataFrame) -> None:

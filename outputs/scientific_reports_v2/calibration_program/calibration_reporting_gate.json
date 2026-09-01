@@ -1,0 +1,15 @@
+{
+  "computational_gate_pass": true,
+  "gate": "descriptive_calibration_reporting",
+  "observed_replicates": 20,
+  "observed_replicates_by_truth_scenario": {
+    "baseline_rate_3_4_kappa_10": 5,
+    "baseline_rate_3_4_kappa_4": 5,
+    "higher_rate_5_0_kappa_10": 5,
+    "lower_rate_2_4_kappa_10": 5
+  },
+  "passed": true,
+  "precise_nominal_coverage_claim_authorized": false,
+  "required_replicates": 20,
+  "required_replicates_per_truth_scenario": 5
+}

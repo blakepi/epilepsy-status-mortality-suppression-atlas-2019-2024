@@ -1,0 +1,89 @@
+run:
+  n_chains: 8
+  n_iter: 300000
+  burn_in: 75000
+  thin: 50
+  count_move_sweeps_per_iter: 0.05
+  max_count_proposals_per_iter: 300
+  blocked_refresh_frequency: 25
+  blocked_refresh_attempts: 8
+  checkpoint_every: 500
+  random_seeds:
+  - 58291
+  - 58292
+  - 58293
+  - 58294
+  - 58295
+  - 58296
+  - 58297
+  - 58298
+  initialization_seeds:
+  - 57291
+  - 57292
+  - 57293
+  - 57294
+  - 57295
+  - 57296
+  - 57297
+  - 57298
+  move_weights:
+    state_year_transfer: 0.05
+    county_period_exploration: 0.3
+    interval_path_transfer: 0.25
+    swap_2x2: 0.3
+    cycle_swap: 0.1
+  proposal_scale_multipliers:
+    beta: 0.6
+    state: 1.3
+    year: 1.5
+    log_sigma_state: 5.0
+    log_sigma_year: 13.5
+    log_kappa: 2.4
+  max_cycle_half_length: 6
+  max_extensions: 4
+  extension_n_iter: 150000
+  extension_burn_in: 0
+  extension_thin: 50
+  target_acceptance_parameter_blocks:
+  - 0.2
+  - 0.45
+  validate_every_saved_latent_draw: true
+model:
+  outcome: MCOD G40/G41, 2019-2024
+  rurality_reference: metro_large
+  svi_reference: Q1_lowest
+  fixed_effect_prior_sd: 1.5
+  intercept_prior_sd: 5.0
+  sigma_state_prior_sd: 1.0
+  sigma_year_prior_sd: 1.0
+  log_kappa_prior_mean: 2.302585092994046
+  log_kappa_prior_sd: 1.5
+  centered_random_effect_dimension_correction: true
+diagnostics:
+  expected_parameters: 69
+  rhat_max_all: 1.01
+  ess_bulk_min_all: 400
+  ess_tail_min_all: 400
+  ess_bulk_min_primary: 1000
+  ess_tail_min_primary: 1000
+  latent_summary_rhat_max: 1.01
+  latent_summary_ess_bulk_min: 400
+  latent_summary_ess_tail_min: 400
+outputs:
+  root: outputs/scientific_reports_v2/production_8chain
+scientific_reports_v2:
+  frozen_baseline_tag: v1.1.1
+  frozen_baseline_commit: 50b468d212616ee80be55045dedf8a696db14df5
+  branch: scientific-reports-v2
+  preparation_commit: 11691bd882020f76e1b6eb6224e4789a6534f65c
+  exact_kernel_gate_pass: true
+  randomized_exact_kernel_gate_pass: true
+  extended_real_pilot_pass: true
+  calibration_design_pass: true
+  calibration_extension_computational_gate_pass: true
+  constraint_geometry:
+    latent_variables: 9695
+    independent_equalities: 1256
+    equality_nullity: 8439
+  interpretation_boundary: No corrected empirical estimate is authorized until the
+    eight-chain production gate passes and downstream summaries are frozen.

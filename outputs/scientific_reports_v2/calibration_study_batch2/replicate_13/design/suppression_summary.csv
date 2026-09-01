@@ -1,0 +1,14 @@
+group,status,cells,fraction
+overall,suppressed_1_9,222,0.5138888888888888
+overall,zero,171,0.3958333333333333
+overall,exact,39,0.09027777777777778
+nonmetro_nonadjacent,zero,82,0.5694444444444444
+nonmetro_nonadjacent,suppressed_1_9,62,0.4305555555555556
+metro_large,suppressed_1_9,57,0.5277777777777778
+metro_large,exact,38,0.35185185185185186
+metro_large,zero,13,0.12037037037037036
+nonmetro_adjacent,zero,63,0.525
+nonmetro_adjacent,suppressed_1_9,57,0.475
+metro_other,suppressed_1_9,46,0.7666666666666667
+metro_other,zero,13,0.21666666666666667
+metro_other,exact,1,0.016666666666666666

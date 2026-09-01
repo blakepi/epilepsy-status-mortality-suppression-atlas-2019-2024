@@ -1,0 +1,16 @@
+{
+  "chains_completed": 4,
+  "computational_gate_pass": true,
+  "diagnostic_tail_draws_per_chain": 1800,
+  "discarded_combined_draws_per_chain": 800,
+  "interpretation_boundary": "One synthetic replicate after tuned extension. Bias and coverage remain descriptive until a prespecified multi-replicate calibration study is completed.",
+  "maximum_all_parameter_rhat": 1.021967606648702,
+  "maximum_primary_rhat": 1.021967606648702,
+  "minimum_primary_bulk_ess": 152.5878092124334,
+  "minimum_primary_tail_ess": 290.81405753033016,
+  "primary_truth_coverage_fraction": 1.0,
+  "suppressed_cell_coverage_95": 1.0,
+  "suppressed_cell_rmse": 1.0432196844490744,
+  "total_retained_draws_per_chain": 2600,
+  "validation_failures": 0
+}

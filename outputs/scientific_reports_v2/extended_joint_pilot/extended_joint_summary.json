@@ -1,0 +1,24 @@
+{
+  "chains_completed": 4,
+  "diagnostic_tail_draws_per_chain": 650,
+  "discarded_combined_draws_per_chain": 300,
+  "interpretation_boundary": "Extended tuning pilot only; no corrected epidemiologic estimate is authorized.",
+  "maximum_all_parameter_rhat": 1.364523229452016,
+  "maximum_latent_summary_rhat": 1.0488629117702857,
+  "maximum_primary_rhat": 1.0631317259532127,
+  "median_final_fraction_free_cells_changed": 0.596028880866426,
+  "minimum_latent_summary_bulk_ess": 75.24158095623595,
+  "minimum_primary_bulk_ess": 73.16747911375178,
+  "minimum_primary_tail_ess": 160.27266743079045,
+  "pilot_pass": true,
+  "recommended_proposal_scale_multipliers": {
+    "beta": 0.6,
+    "log_kappa": 2.4,
+    "log_sigma_state": 5.0,
+    "log_sigma_year": 13.5,
+    "state": 1.3,
+    "year": 1.5
+  },
+  "total_retained_draws_per_chain": 950,
+  "validation_failures": 0
+}

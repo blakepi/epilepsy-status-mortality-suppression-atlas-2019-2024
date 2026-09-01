@@ -1,0 +1,213 @@
+{
+  "checks": [
+    {
+      "check": "python_ast:75_prepare_sr_v2_production.py",
+      "detail": "AST parse passed",
+      "passed": true
+    },
+    {
+      "check": "isolated_output_namespace:75_prepare_sr_v2_production.py",
+      "detail": "Scientific Reports v2 production namespace present",
+      "passed": true
+    },
+    {
+      "check": "python_ast:76_run_sr_v2_production_chain.py",
+      "detail": "AST parse passed",
+      "passed": true
+    },
+    {
+      "check": "isolated_output_namespace:76_run_sr_v2_production_chain.py",
+      "detail": "Scientific Reports v2 production namespace present",
+      "passed": true
+    },
+    {
+      "check": "python_ast:77_merge_sr_v2_production.py",
+      "detail": "AST parse passed",
+      "passed": true
+    },
+    {
+      "check": "isolated_output_namespace:77_merge_sr_v2_production.py",
+      "detail": "Scientific Reports v2 production namespace present",
+      "passed": true
+    },
+    {
+      "check": "python_ast:78_gate_sr_v2_production.py",
+      "detail": "AST parse passed",
+      "passed": true
+    },
+    {
+      "check": "isolated_output_namespace:78_gate_sr_v2_production.py",
+      "detail": "Scientific Reports v2 production namespace present",
+      "passed": true
+    },
+    {
+      "check": "array_has_eight_chains",
+      "detail": "expected 1-8%8",
+      "passed": true
+    },
+    {
+      "check": "array_uses_main_partition",
+      "detail": "main partition",
+      "passed": true
+    },
+    {
+      "check": "array_has_no_gpu_request",
+      "detail": "CPU-only",
+      "passed": true
+    },
+    {
+      "check": "array_uses_v2_runner",
+      "detail": "v2 chain runner",
+      "passed": true
+    },
+    {
+      "check": "array_uses_v2_sync",
+      "detail": "isolated result sync",
+      "passed": true
+    },
+    {
+      "check": "finalize_uses_v2_merger",
+      "detail": "v2 merger",
+      "passed": true
+    },
+    {
+      "check": "finalize_uses_v2_gate",
+      "detail": "v2 gate",
+      "passed": true
+    },
+    {
+      "check": "submission_has_afterok_dependency",
+      "detail": "fail-closed dependency",
+      "passed": true
+    },
+    {
+      "check": "submission_prepares_before_staging",
+      "detail": "prepare then stage",
+      "passed": true
+    },
+    {
+      "check": "sync_scope_is_v2_only",
+      "detail": "v2-only relative root",
+      "passed": true
+    },
+    {
+      "check": "legacy_sync_not_used",
+      "detail": "legacy sync excluded",
+      "passed": true
+    },
+    {
+      "check": "baseline_commit_guard",
+      "detail": "tag and commit guard",
+      "passed": true
+    },
+    {
+      "check": "branch_guard",
+      "detail": "scientific-reports-v2 branch guard",
+      "passed": true
+    },
+    {
+      "check": "extended_pilot_guard",
+      "detail": "extended pilot required",
+      "passed": true
+    },
+    {
+      "check": "calibration_guard",
+      "detail": "truth-known calibration required",
+      "passed": true
+    },
+    {
+      "check": "new_random_seeds",
+      "detail": "new v2 chain seeds",
+      "passed": false
+    },
+    {
+      "check": "new_initialization_seeds",
+      "detail": "new dispersed-start seeds",
+      "passed": false
+    },
+    {
+      "check": "all_parameter_gate",
+      "detail": "all-parameter convergence gate",
+      "passed": true
+    },
+    {
+      "check": "latent_summary_gate",
+      "detail": "latent aggregate convergence gate",
+      "passed": true
+    },
+    {
+      "check": "validation_gate",
+      "detail": "zero-failure constraint gate",
+      "passed": true
+    },
+    {
+      "check": "shell_has_shebang:sync_sr_v2_results_home.sh",
+      "detail": "login-shell shebang",
+      "passed": true
+    },
+    {
+      "check": "shell_fail_closed:sync_sr_v2_results_home.sh",
+      "detail": "strict shell mode",
+      "passed": true
+    },
+    {
+      "check": "shell_no_windows_path:sync_sr_v2_results_home.sh",
+      "detail": "portable paths",
+      "passed": true
+    },
+    {
+      "check": "shell_has_shebang:submit_sr_v2_production.sh",
+      "detail": "login-shell shebang",
+      "passed": true
+    },
+    {
+      "check": "shell_fail_closed:submit_sr_v2_production.sh",
+      "detail": "strict shell mode",
+      "passed": true
+    },
+    {
+      "check": "shell_no_windows_path:submit_sr_v2_production.sh",
+      "detail": "portable paths",
+      "passed": true
+    },
+    {
+      "check": "shell_has_shebang:60_sr_v2_production_chain_array.sbatch",
+      "detail": "login-shell shebang",
+      "passed": true
+    },
+    {
+      "check": "shell_fail_closed:60_sr_v2_production_chain_array.sbatch",
+      "detail": "strict shell mode",
+      "passed": true
+    },
+    {
+      "check": "shell_no_windows_path:60_sr_v2_production_chain_array.sbatch",
+      "detail": "portable paths",
+      "passed": true
+    },
+    {
+      "check": "shell_has_shebang:61_sr_v2_finalize_production.sbatch",
+      "detail": "login-shell shebang",
+      "passed": true
+    },
+    {
+      "check": "shell_fail_closed:61_sr_v2_finalize_production.sbatch",
+      "detail": "strict shell mode",
+      "passed": true
+    },
+    {
+      "check": "shell_no_windows_path:61_sr_v2_finalize_production.sbatch",
+      "detail": "portable paths",
+      "passed": true
+    },
+    {
+      "check": "frozen_config_deferred",
+      "detail": "config correctly deferred until pilot gates pass",
+      "passed": true
+    }
+  ],
+  "generated_utc": "2026-08-11T01:38:16.479870+00:00",
+  "interpretation_boundary": "Infrastructure audit only; no production chain was launched.",
+  "passed": false,
+  "production_launched": false
+}

@@ -1,0 +1,37 @@
+{"chains": 8, "county_summaries": 3142, "draws_per_chain": 4500, "generated_utc": "2026-08-14T23:14:52.412008+00:00", "latent_summary_parameters": 32, "latent_validation_failures": 0, "latent_validation_records": 489696, "parameter_draws": 36000, "parameters": 69, "representative_interval_counties": ["01007", "17117", "22095", "39015", "51007", "55109", "01001", "16053", "21127", "29135", "48035", "55123", "01005", "17057", "22081", "36023", "48133", "56031", "01023", "17049", "26033", "31061", "46041", "56045"], "status": "merged_not_yet_gated"}
+{"action": "freeze_corrected_results", "checks": [{"check": "eight_completed_chains", "detail": "chains=8 statuses=['completed']", "passed": true}, {"check": "expected_iterations", "detail": "iterations=[300000]", "passed": true}, {"check": "expected_draws_per_chain", "detail": "draws=[4500]", "passed": true}, {"check": "unique_prespecified_seeds", "detail": "seeds=[58291, 58292, 58293, 58294, 58295, 58296, 58297, 58298]", "passed": true}, {"check": "grand_total_preserved", "detail": "totals=[58380]", "passed": true}, {"check": "zero_constraint_failures", "detail": "failures=0 records=489696", "passed": true}, {"check": "complete_parameter_set", "detail": "parameters=69 expected=69", "passed": true}, {"check": "parameter_diagnostics_finite", "detail": "finite=True", "passed": true}, {"check": "all_parameter_rhat", "detail": "maximum=1.005976 threshold=1.01", "passed": true}, {"check": "all_parameter_bulk_ess", "detail": "minimum=1577.7 threshold=400", "passed": true}, {"check": "all_parameter_tail_ess", "detail": "minimum=2738.2 threshold=400", "passed": true}, {"check": "primary_bulk_ess", "detail": "minimum=4070.6 threshold=1000", "passed": true}, {"check": "primary_tail_ess", "detail": "minimum=9330.5 threshold=1000", "passed": true}, {"check": "latent_summary_diagnostics_finite", "detail": "stochastic=32 deterministic=0 finite=True", "passed": true}, {"check": "latent_summary_rhat", "detail": "maximum=1.001524 threshold=1.01", "passed": true}, {"check": "latent_summary_bulk_ess", "detail": "minimum=4467.1 threshold=400", "passed": true}, {"check": "latent_summary_tail_ess", "detail": "minimum=5805.8 threshold=400", "passed": true}, {"check": "exact_kernel_gate", "detail": "True", "passed": true}, {"check": "randomized_exact_kernel_gate", "detail": "True", "passed": true}, {"check": "constraint_geometry_recorded", "detail": "latent_variables=9695 rank=1256 nullity=8439", "passed": true}, {"check": "extended_real_pilot_gate", "detail": "True", "passed": true}, {"check": "calibration_design_gate", "detail": "True", "passed": true}, {"check": "tuned_calibration_extension_gate", "detail": "True", "passed": true}], "generated_utc": "2026-08-14T23:14:54.193173+00:00", "interpretation_boundary": "Passing this gate freezes corrected computational results. Scientific Reports submission still requires multi-replicate calibration, prespecified epidemiologic robustness analyses, and final manuscript-package QC.", "passed": true, "worst_parameter": {"ess_bulk": 2071.092918359349, "ess_tail": 4228.64193749443, "parameter": "state_effect[15]", "r_hat": 1.0059755719352546}, "worst_stochastic_latent_summary": {"ess_bulk": 5845.12580237215, "ess_tail": 9427.36171257711, "parameter": "latent_county_period[48035]", "r_hat": 1.0015237360444065}}
+
+Number of files: 4,914 (reg: 4,894, dir: 20)
+Number of created files: 18 (reg: 18)
+Number of deleted files: 0
+Number of regular files transferred: 18
+Total file size: 477,598,023 bytes
+Total transferred file size: 26,567,472 bytes
+Literal data: 26,567,472 bytes
+Matched data: 0 bytes
+File list size: 0
+File list generation time: 0.006 seconds
+File list transfer time: 0.000 seconds
+Total bytes sent: 26,672,350
+Total bytes received: 396
+
+sent 26,672,350 bytes  received 396 bytes  7,620,784.57 bytes/sec
+total size is 477,598,023  speedup is 17.91
+
+Number of files: 19 (reg: 18, dir: 1)
+Number of created files: 2 (reg: 2)
+Number of deleted files: 0
+Number of regular files transferred: 3
+Total file size: 23,796 bytes
+Total transferred file size: 6,365 bytes
+Literal data: 6,365 bytes
+Matched data: 0 bytes
+File list size: 0
+File list generation time: 0.006 seconds
+File list transfer time: 0.000 seconds
+Total bytes sent: 6,858
+Total bytes received: 76
+
+sent 6,858 bytes  received 76 bytes  13,868.00 bytes/sec
+total size is 23,796  speedup is 3.43
+synced_sr_v2_results_to=/home/pierpogb/EpilepsyMortalityOptionB-sr-v2/outputs/scientific_reports_v2/production_8chain

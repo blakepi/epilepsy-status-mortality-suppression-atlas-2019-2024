@@ -1,0 +1,172 @@
+{
+ "counties": 3142,
+ "interpretation_boundary": "County posterior rates are model-derived ecological estimates, not observed or recovered suppressed counts.",
+ "panel_b_interval": "box spans the interquartile range; whiskers span the 5th to 95th percentile across counties",
+ "production_gate_generated_utc": "2026-08-14T23:14:54.193173+00:00",
+ "rows": [
+  {
+   "contrast": "primary_rurality_metro_other",
+   "credible_interval_lower_95": 1.1049066814259227,
+   "credible_interval_upper_95": 1.1768467182385152,
+   "family": "Rurality",
+   "irr_posterior_mean": 1.1403338873342552,
+   "label": "Metropolitan, other",
+   "panel": "a"
+  },
+  {
+   "contrast": "primary_rurality_nonmetro_adjacent",
+   "credible_interval_lower_95": 1.2197775708824512,
+   "credible_interval_upper_95": 1.325443548503288,
+   "family": "Rurality",
+   "irr_posterior_mean": 1.2720275378038404,
+   "label": "Nonmetro, adjacent",
+   "panel": "a"
+  },
+  {
+   "contrast": "primary_rurality_nonmetro_nonadjacent",
+   "credible_interval_lower_95": 1.1680696759294398,
+   "credible_interval_upper_95": 1.3002371725831436,
+   "family": "Rurality",
+   "irr_posterior_mean": 1.2331827436306375,
+   "label": "Nonmetro, nonadjacent",
+   "panel": "a"
+  },
+  {
+   "contrast": "svi_quartile_Q2",
+   "credible_interval_lower_95": 1.0690457974861958,
+   "credible_interval_upper_95": 1.1581325474522626,
+   "family": "Social vulnerability",
+   "irr_posterior_mean": 1.1131905040235366,
+   "label": "SVI quartile 2",
+   "panel": "a"
+  },
+  {
+   "contrast": "svi_quartile_Q3",
+   "credible_interval_lower_95": 1.2009171462904047,
+   "credible_interval_upper_95": 1.3037033515592784,
+   "family": "Social vulnerability",
+   "irr_posterior_mean": 1.252062518362299,
+   "label": "SVI quartile 3",
+   "panel": "a"
+  },
+  {
+   "contrast": "svi_quartile_Q4_highest",
+   "credible_interval_lower_95": 1.3703909248911337,
+   "credible_interval_upper_95": 1.5002875019375106,
+   "family": "Social vulnerability",
+   "irr_posterior_mean": 1.434192939903933,
+   "label": "SVI quartile 4, highest",
+   "panel": "a"
+  },
+  {
+   "category": "metro_large",
+   "counties": 441,
+   "family": "Rurality",
+   "is_reference": true,
+   "label": "Metropolitan, large",
+   "panel": "b",
+   "rate_per_100k_median": 2.650322591590345,
+   "rate_per_100k_p5": 1.1676786548341629,
+   "rate_per_100k_p95": 5.149129256194302,
+   "rate_per_100k_q1": 1.8875565408975072,
+   "rate_per_100k_q3": 3.484363087591442
+  },
+  {
+   "category": "metro_other",
+   "counties": 738,
+   "family": "Rurality",
+   "is_reference": false,
+   "label": "Metropolitan, other",
+   "panel": "b",
+   "rate_per_100k_median": 3.013692004278587,
+   "rate_per_100k_p5": 0.8753956502011797,
+   "rate_per_100k_p95": 6.395476924615804,
+   "rate_per_100k_q1": 2.266678416244176,
+   "rate_per_100k_q3": 4.203416718532042
+  },
+  {
+   "category": "nonmetro_adjacent",
+   "counties": 1052,
+   "family": "Rurality",
+   "is_reference": false,
+   "label": "Nonmetro, adjacent",
+   "panel": "b",
+   "rate_per_100k_median": 3.508797688677097,
+   "rate_per_100k_p5": 0.0,
+   "rate_per_100k_p95": 8.17150073763593,
+   "rate_per_100k_q1": 2.456560395449578,
+   "rate_per_100k_q3": 5.1739690972572285
+  },
+  {
+   "category": "nonmetro_nonadjacent",
+   "counties": 911,
+   "family": "Rurality",
+   "is_reference": false,
+   "label": "Nonmetro, nonadjacent",
+   "panel": "b",
+   "rate_per_100k_median": 3.207304100536096,
+   "rate_per_100k_p5": 0.0,
+   "rate_per_100k_p95": 9.72822099947413,
+   "rate_per_100k_q1": 1.2542342240316002,
+   "rate_per_100k_q3": 5.298858988378886
+  },
+  {
+   "category": "Q1_lowest",
+   "counties": 793,
+   "family": "Social vulnerability",
+   "is_reference": true,
+   "label": "SVI quartile 1, lowest",
+   "panel": "b",
+   "rate_per_100k_median": 2.6251295332018265,
+   "rate_per_100k_p5": 0.0,
+   "rate_per_100k_p95": 7.620908178810761,
+   "rate_per_100k_q1": 1.4156314019413545,
+   "rate_per_100k_q3": 3.895499004953359
+  },
+  {
+   "category": "Q2",
+   "counties": 783,
+   "family": "Social vulnerability",
+   "is_reference": false,
+   "label": "SVI quartile 2",
+   "panel": "b",
+   "rate_per_100k_median": 2.946568884232021,
+   "rate_per_100k_p5": 0.0,
+   "rate_per_100k_p95": 7.416131669939199,
+   "rate_per_100k_q1": 2.0046061711116665,
+   "rate_per_100k_q3": 4.3939270107534
+  },
+  {
+   "category": "Q3",
+   "counties": 781,
+   "family": "Social vulnerability",
+   "is_reference": false,
+   "label": "SVI quartile 3",
+   "panel": "b",
+   "rate_per_100k_median": 3.310098984689381,
+   "rate_per_100k_p5": 0.0,
+   "rate_per_100k_p95": 8.02901811468298,
+   "rate_per_100k_q1": 2.346063832839412,
+   "rate_per_100k_q3": 4.647622211150418
+  },
+  {
+   "category": "Q4_highest",
+   "counties": 785,
+   "family": "Social vulnerability",
+   "is_reference": false,
+   "label": "SVI quartile 4, highest",
+   "panel": "b",
+   "rate_per_100k_median": 3.773775860013072,
+   "rate_per_100k_p5": 0.0,
+   "rate_per_100k_p95": 8.964271392528163,
+   "rate_per_100k_q1": 2.5818444696911778,
+   "rate_per_100k_q3": 5.51342272037055
+  }
+ ],
+ "schema_id": "sr_v2_figure_primary_associations/v1",
+ "sources": {
+  "county_posterior_summary": "production_8chain/county_posterior_summary.csv",
+  "posterior_primary_summary": "production_8chain/posterior_primary_summary.csv",
+  "production_gate": "production_8chain/production_gate.json"
+ }
+}

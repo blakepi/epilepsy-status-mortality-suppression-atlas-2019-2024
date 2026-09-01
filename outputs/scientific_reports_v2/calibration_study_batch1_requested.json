@@ -1,0 +1,10 @@
+{
+  "branch": "scientific-reports-v2",
+  "purpose": "Run four prespecified truth-known calibration replicates spanning lower, baseline, and higher event rates plus stronger negative-binomial overdispersion, with four corrected constrained chains per replicate.",
+  "replicates": 4,
+  "chains_per_replicate": 4,
+  "iterations_per_chain": 24000,
+  "burn_in": 6000,
+  "thin": 10,
+  "interpretation_boundary": "Method-calibration evidence only. Four replicates do not authorize a nominal coverage claim or any empirical epidemiologic estimate."
+}
